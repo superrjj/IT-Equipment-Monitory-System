@@ -94,7 +94,7 @@ const Header: React.FC<HeaderProps> = ({ currentUserName }) => {
               border: `1.5px solid ${brandBlue}`,
               background: "transparent",
               color: brandBlue,
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 600,
               cursor: "pointer",
               fontFamily: "'Poppins', sans-serif",
