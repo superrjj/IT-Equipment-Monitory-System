@@ -284,6 +284,71 @@ const styles = `
     transition: color 0.2s;
   }
   .lp-back:hover { color: #1a2e4a; }
+
+  .lp-keep-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.25rem;
+  }
+  .lp-keep-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: #4a5568;
+  }
+  .lp-keep-checkbox input {
+    width: 15px;
+    height: 15px;
+  }
+  .lp-create-link {
+    font-size: 0.8rem;
+    color: #0b5fa5;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .lp-create-link:hover {
+    color: #083766;
+  }
+
+  .lp-create-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.55rem;
+    font-weight: 500;
+    color: #1a2e4a;
+    margin-bottom: 0.4rem;
+  }
+  .lp-create-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: #eef2ff;
+    color: #3730a3;
+    border: 1px solid #e0e7ff;
+    margin-bottom: 0.85rem;
+  }
+  .lp-create-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem 0.8rem;
+  }
+  .lp-create-span2 { grid-column: span 2; }
+  @media (max-width: 540px) {
+    .lp-create-grid { grid-template-columns: 1fr; }
+    .lp-create-span2 { grid-column: span 1; }
+  }
 `;
 
 export default function LoginPage() {
@@ -306,6 +371,7 @@ export default function LoginPage() {
     password: "",
     confirmPassword: "",
   });
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const navigate = useNavigate();
 
   const supabase = createClient(
@@ -350,7 +416,8 @@ export default function LoginPage() {
 
       const token = base64Url(crypto.getRandomValues(new Uint8Array(32)));
       const token_hash = await sha256Hex(token);
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const ttlMs = keepSignedIn ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
+      const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
       const { error: sErr } = await supabase.from("user_sessions").insert({
         user_id: user.id,
@@ -517,17 +584,28 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button className="lp-btn" type="submit">Sign In</button>
+            <div className="lp-keep-row">
+              <label className="lp-keep-checkbox">
+                <input
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={e => setKeepSignedIn(e.target.checked)}
+                />
+                <span>Keep me signed in</span>
+              </label>
+            </div>
+
+            <button className="lp-btn" type="submit">Sign in</button>
           </form>
 
-          <div style={{ marginTop: "1.1rem", display: "flex", justifyContent: "center" }}>
+          <div style={{ marginTop: "1.1rem", display: "flex", justifyContent: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#6b7280" }}>
+            <span>Don&apos;t have an account?</span>
             <button
               type="button"
-              className="lp-forgot"
+              className="lp-create-link"
               onClick={() => setShowCreate(true)}
-              style={{ fontSize: "0.8rem" }}
             >
-              Create an account
+              Create one
             </button>
           </div>
         </div>
@@ -598,75 +676,77 @@ export default function LoginPage() {
             <div className="lp-dialog" role="dialog" aria-modal="true">
               <button className="lp-dialog-close" onClick={closeCreate} aria-label="Close">✕</button>
 
-              <div className="lp-dialog-icon">👤</div>
-
               {!createSent ? (
                 <>
-                  <h2 className="lp-dialog-title">Create account</h2>
+                  <span className="lp-create-pill">Admin approval required</span>
+                  <h2 className="lp-create-title">Request an account</h2>
                   <p className="lp-dialog-desc">
-                    Submit your details. Your account will be created after admin approval.
+                    Fill in your details below. Once an administrator approves your request,
+                    you&apos;ll be able to sign in using your username and password.
                   </p>
 
                   <form onSubmit={handleCreateAccount}>
-                    <div className="lp-dialog-field">
-                      <label className="lp-label" htmlFor="ca-fullname">Full name</label>
-                      <input
-                        id="ca-fullname"
-                        className="lp-input"
-                        type="text"
-                        placeholder="Juan Dela Cruz"
-                        value={create.full_name}
-                        onChange={e => setCreate(c => ({ ...c, full_name: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="lp-dialog-field">
-                      <label className="lp-label" htmlFor="ca-username">Username</label>
-                      <input
-                        id="ca-username"
-                        className="lp-input"
-                        type="text"
-                        placeholder="juan_dc"
-                        value={create.username}
-                        onChange={e => setCreate(c => ({ ...c, username: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="lp-dialog-field">
-                      <label className="lp-label" htmlFor="ca-email">Email</label>
-                      <input
-                        id="ca-email"
-                        className="lp-input"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={create.email}
-                        onChange={e => setCreate(c => ({ ...c, email: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="lp-dialog-field">
-                      <label className="lp-label" htmlFor="ca-password">Password</label>
-                      <input
-                        id="ca-password"
-                        className="lp-input"
-                        type="password"
-                        placeholder="••••••••"
-                        value={create.password}
-                        onChange={e => setCreate(c => ({ ...c, password: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="lp-dialog-field">
-                      <label className="lp-label" htmlFor="ca-confirm">Confirm password</label>
-                      <input
-                        id="ca-confirm"
-                        className="lp-input"
-                        type="password"
-                        placeholder="••••••••"
-                        value={create.confirmPassword}
-                        onChange={e => setCreate(c => ({ ...c, confirmPassword: e.target.value }))}
-                        required
-                      />
+                    <div className="lp-create-grid">
+                      <div className="lp-create-span2">
+                        <label className="lp-label" htmlFor="ca-fullname">Full name</label>
+                        <input
+                          id="ca-fullname"
+                          className="lp-input"
+                          type="text"
+                          placeholder="Juan Dela Cruz"
+                          value={create.full_name}
+                          onChange={e => setCreate(c => ({ ...c, full_name: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="lp-label" htmlFor="ca-username">Username</label>
+                        <input
+                          id="ca-username"
+                          className="lp-input"
+                          type="text"
+                          placeholder="juan_dc"
+                          value={create.username}
+                          onChange={e => setCreate(c => ({ ...c, username: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="lp-label" htmlFor="ca-email">Email</label>
+                        <input
+                          id="ca-email"
+                          className="lp-input"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={create.email}
+                          onChange={e => setCreate(c => ({ ...c, email: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="lp-label" htmlFor="ca-password">Password</label>
+                        <input
+                          id="ca-password"
+                          className="lp-input"
+                          type="password"
+                          placeholder="••••••••"
+                          value={create.password}
+                          onChange={e => setCreate(c => ({ ...c, password: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="lp-label" htmlFor="ca-confirm">Confirm password</label>
+                        <input
+                          id="ca-confirm"
+                          className="lp-input"
+                          type="password"
+                          placeholder="••••••••"
+                          value={create.confirmPassword}
+                          onChange={e => setCreate(c => ({ ...c, confirmPassword: e.target.value }))}
+                          required
+                        />
+                      </div>
                     </div>
 
                     {createError && (
