@@ -1,7 +1,7 @@
 // App.tsx
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import LoginPage from './components/login-page'
-import Dashboard from './components/ui/dashboard'
+import Dashboard from './components/dashboard/dashboard'
 
 function App() {
   return (

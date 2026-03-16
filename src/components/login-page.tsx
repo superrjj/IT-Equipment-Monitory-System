@@ -70,7 +70,7 @@ const styles = `
     line-height: 1.25;
   }
   .lp-subtitle {
-    font-size: 0.75rem;
+    font-size: 0.90rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: #8a95a3;
@@ -149,19 +149,20 @@ const styles = `
     padding: 0.88rem;
     border: none;
     border-radius: 9px;
-    background: #1a2e4a;
+    /* Brand blue (matches logo text) */
+    background: linear-gradient(120deg, #0b5fa5, #0a4c86);
     color: #fff;
     font-family: 'DM Sans', sans-serif;
     font-size: 0.88rem;
-    font-weight: 500;
-    letter-spacing: 0.1em;
+    font-weight: 600;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-    box-shadow: 0 6px 20px rgba(26,46,74,0.28);
+    transition: filter 0.18s, transform 0.12s, box-shadow 0.18s;
+    box-shadow: 0 16px 35px rgba(15, 23, 42, 0.35);
   }
-  .lp-btn:hover  { background: #243d61; box-shadow: 0 10px 28px rgba(26,46,74,0.38); transform: translateY(-1px); }
-  .lp-btn:active { transform: translateY(0); }
+  .lp-btn:hover  { filter: brightness(1.04); box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45); transform: translateY(-1px); }
+  .lp-btn:active { transform: translateY(0); filter: brightness(1); box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35); }
 
   /* ══════════════════════════════════
      FORGOT PASSWORD — RIGHT SIDE PANEL
