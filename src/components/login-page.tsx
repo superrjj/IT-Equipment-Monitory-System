@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createClient } from "@supabase/supabase-js";
+import bcrypt from "bcryptjs";
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -293,20 +295,78 @@ export default function LoginPage() {
   const [resetSent, setResetSent]   = useState(false);
   const [resetting, setResetting]   = useState(false);
   const [error, setError]           = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating]     = useState(false);
+  const [createSent, setCreateSent] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [create, setCreate] = useState({
+    full_name: "",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const supabase = createClient(
+    import.meta.env.VITE_SUPABASE_URL as string,
+    import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  );
+
+  const base64Url = (bytes: Uint8Array) => {
+    let s = "";
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    const b64 = btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    return b64;
+  };
+
+  const sha256Hex = async (text: string) => {
+    const enc = new TextEncoder().encode(text);
+    const buf = await crypto.subtle.digest("SHA-256", enc);
+    const bytes = new Uint8Array(buf);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    const ident = identifier.trim();
+    if (!ident || !password) { setError("Please enter your username/email and password."); return; }
 
-    // Predefined demo account
-    const demoUser = "admin";
-    const demoPass = "admin123";
+    try {
+      const { data, error: qErr } = await supabase
+        .from("user_accounts")
+        .select("id, username, full_name, email, role, is_active, password_hash")
+        .or(`username.ilike.${ident},email.ilike.${ident}`)
+        .limit(1);
 
-    if (identifier === demoUser && password === demoPass) {
-      setError(null);
+      if (qErr) throw new Error(qErr.message);
+      const user = (data ?? [])[0] as any | undefined;
+      if (!user) { setError("Invalid credentials."); return; }
+      if (!user.is_active) { setError("Account is inactive. Please contact the admin."); return; }
+
+      const ok = await bcrypt.compare(password, user.password_hash);
+      if (!ok) { setError("Invalid credentials."); return; }
+
+      const token = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+      const token_hash = await sha256Hex(token);
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      const { error: sErr } = await supabase.from("user_sessions").insert({
+        user_id: user.id,
+        token_hash,
+        expires_at: expiresAt,
+      });
+      if (sErr) throw new Error(sErr.message);
+
+      localStorage.setItem("session_token", token);
+      localStorage.setItem("session_user_id", user.id);
+      localStorage.setItem("session_user_full_name", user.full_name);
+      localStorage.setItem("session_user_role", user.role);
+
       navigate("/dashboard");
-    } else {
-      setError("Invalid credentials. Try admin / admin123.");
+    } catch (ex: any) {
+      setError(ex?.message ?? "Login failed.");
     }
   };
 
@@ -322,6 +382,55 @@ export default function LoginPage() {
   const closeForgot = () => {
     setShowForgot(false);
     setTimeout(() => { setResetEmail(""); setResetSent(false); }, 300);
+  };
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    setTimeout(() => {
+      setCreating(false);
+      setCreateSent(false);
+      setCreateError(null);
+      setCreate({ full_name: "", username: "", email: "", password: "", confirmPassword: "" });
+    }, 300);
+  };
+
+  const validateCreate = () => {
+    if (!create.full_name.trim()) return "Full name is required.";
+    const u = create.username.trim();
+    if (u.length < 3) return "Username must be at least 3 characters.";
+    if (u.length > 32) return "Username must be at most 32 characters.";
+    if (!/^[A-Za-z0-9_]+$/.test(u)) return "Username can only contain letters, numbers, and underscore.";
+    const email = create.email.trim();
+    if (!email) return "Email is required.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Email is invalid.";
+    if (create.password.length < 8) return "Password must be at least 8 characters.";
+    if (create.password.length > 72) return "Password is too long (max 72 characters for bcrypt).";
+    if (create.password !== create.confirmPassword) return "Passwords do not match.";
+    return "";
+  };
+
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    const err = validateCreate();
+    if (err) { setCreateError(err); return; }
+
+    setCreating(true);
+    try {
+      const password_hash = await bcrypt.hash(create.password, 10);
+      const { error: insertError } = await supabase.from("signup_requests").insert({
+        full_name: create.full_name.trim(),
+        username: create.username.trim(),
+        email: create.email.trim(),
+        password_hash,
+      });
+      if (insertError) throw new Error(insertError.message);
+      setCreateSent(true);
+    } catch (ex: any) {
+      setCreateError(ex?.message ?? "Unable to submit request.");
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -410,6 +519,17 @@ export default function LoginPage() {
 
             <button className="lp-btn" type="submit">Sign In</button>
           </form>
+
+          <div style={{ marginTop: "1.1rem", display: "flex", justifyContent: "center" }}>
+            <button
+              type="button"
+              className="lp-forgot"
+              onClick={() => setShowCreate(true)}
+              style={{ fontSize: "0.8rem" }}
+            >
+              Create an account
+            </button>
+          </div>
         </div>
 
         {/* ══ Forgot Password — slides in from RIGHT ══ */}
@@ -463,6 +583,122 @@ export default function LoginPage() {
                     Didn't receive it? Check your spam folder.
                   </div>
                   <button className="lp-back" onClick={closeForgot}>← Back to sign in</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══ Create Account — slides in from RIGHT ══ */}
+        {showCreate && (
+          <div
+            className="lp-overlay"
+            onClick={e => { if (e.target === e.currentTarget) closeCreate(); }}
+          >
+            <div className="lp-dialog" role="dialog" aria-modal="true">
+              <button className="lp-dialog-close" onClick={closeCreate} aria-label="Close">✕</button>
+
+              <div className="lp-dialog-icon">👤</div>
+
+              {!createSent ? (
+                <>
+                  <h2 className="lp-dialog-title">Create account</h2>
+                  <p className="lp-dialog-desc">
+                    Submit your details. Your account will be created after admin approval.
+                  </p>
+
+                  <form onSubmit={handleCreateAccount}>
+                    <div className="lp-dialog-field">
+                      <label className="lp-label" htmlFor="ca-fullname">Full name</label>
+                      <input
+                        id="ca-fullname"
+                        className="lp-input"
+                        type="text"
+                        placeholder="Juan Dela Cruz"
+                        value={create.full_name}
+                        onChange={e => setCreate(c => ({ ...c, full_name: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="lp-dialog-field">
+                      <label className="lp-label" htmlFor="ca-username">Username</label>
+                      <input
+                        id="ca-username"
+                        className="lp-input"
+                        type="text"
+                        placeholder="juan_dc"
+                        value={create.username}
+                        onChange={e => setCreate(c => ({ ...c, username: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="lp-dialog-field">
+                      <label className="lp-label" htmlFor="ca-email">Email</label>
+                      <input
+                        id="ca-email"
+                        className="lp-input"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={create.email}
+                        onChange={e => setCreate(c => ({ ...c, email: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="lp-dialog-field">
+                      <label className="lp-label" htmlFor="ca-password">Password</label>
+                      <input
+                        id="ca-password"
+                        className="lp-input"
+                        type="password"
+                        placeholder="••••••••"
+                        value={create.password}
+                        onChange={e => setCreate(c => ({ ...c, password: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="lp-dialog-field">
+                      <label className="lp-label" htmlFor="ca-confirm">Confirm password</label>
+                      <input
+                        id="ca-confirm"
+                        className="lp-input"
+                        type="password"
+                        placeholder="••••••••"
+                        value={create.confirmPassword}
+                        onChange={e => setCreate(c => ({ ...c, confirmPassword: e.target.value }))}
+                        required
+                      />
+                    </div>
+
+                    {createError && (
+                      <div style={{
+                        marginTop: "0.25rem",
+                        padding: "0.55rem 0.8rem",
+                        borderRadius: 8,
+                        backgroundColor: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        color: "#b91c1c",
+                        fontSize: "0.78rem",
+                      }}>
+                        {createError}
+                      </div>
+                    )}
+
+                    <button className="lp-dialog-btn" type="submit" disabled={creating}>
+                      {creating ? "Submitting…" : "Submit for approval"}
+                    </button>
+                  </form>
+                  <button className="lp-back" onClick={closeCreate}>← Back to sign in</button>
+                </>
+              ) : (
+                <>
+                  <h2 className="lp-dialog-title">Request submitted</h2>
+                  <p className="lp-dialog-desc">
+                    Your account request is pending admin approval.
+                  </p>
+                  <div className="lp-success-msg">
+                    You can sign in once an admin approves your request.
+                  </div>
+                  <button className="lp-back" onClick={closeCreate}>← Back to sign in</button>
                 </>
               )}
             </div>

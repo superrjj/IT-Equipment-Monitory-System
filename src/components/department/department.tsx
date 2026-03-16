@@ -220,7 +220,7 @@ const Departments: React.FC = () => {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; }
+        .departments-root, .departments-root * { box-sizing: border-box; }
         .dept-row:hover { background: #f8fafc !important; }
         .icon-btn:hover { background: #f1f5f9 !important; }
         .modal-overlay { animation: fadeIn 0.15s ease; }
@@ -229,7 +229,7 @@ const Departments: React.FC = () => {
         @keyframes slideUp { from { transform: translateY(16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
       `}</style>
 
-      <div style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+      <div className="departments-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
         {/* ── Toast ── */}
         {toast && (

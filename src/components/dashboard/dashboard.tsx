@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "./sidebar";
 import Header from "./header";
 import Departments from "../department/department";
+import UserAccounts from "../accounts/user-accounts";
 
 type StatCardProps = {
   label: string;
@@ -126,7 +128,13 @@ const DashboardHome: React.FC = () => (
 
 const Dashboard: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const currentUserName = "John Harvee Quirido";
+  const navigate = useNavigate();
+  const currentUserName = localStorage.getItem("session_user_full_name") || "User";
+
+  useEffect(() => {
+    const token = localStorage.getItem("session_token");
+    if (!token) navigate("/");
+  }, [navigate]);
 
   const renderPage = () => {
     switch (activeIndex) {
@@ -137,7 +145,7 @@ const Dashboard: React.FC = () => {
       case 4: return <ComingSoon label="Repairs" />;
       case 5: return <ComingSoon label="Repair History" />;
       case 6: return <ComingSoon label="Reports" />;
-      case 7: return <ComingSoon label="Accounts" />;
+      case 7: return <UserAccounts />;
       default: return <ComingSoon label="Page" />;
     }
   };

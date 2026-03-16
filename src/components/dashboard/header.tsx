@@ -37,7 +37,13 @@ const Header: React.FC<HeaderProps> = ({ currentUserName }) => {
     day: "numeric",
   });
 
-  const handleLogout = () => navigate("/");
+  const handleLogout = () => {
+    localStorage.removeItem("session_token");
+    localStorage.removeItem("session_user_id");
+    localStorage.removeItem("session_user_full_name");
+    localStorage.removeItem("session_user_role");
+    navigate("/");
+  };
 
   return (
     <>
