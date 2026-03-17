@@ -53,7 +53,7 @@ const styles = `
     margin-bottom: 2rem;
   }
   .lp-city-logo {
-    width: 150px;
+    width: 260px;
     height: auto;
     display: block;
     margin: 0 auto 1.25rem;
@@ -72,7 +72,7 @@ const styles = `
     text-transform: uppercase;
     color: #8a95a3;
     margin-top: 0.35rem;
-    font-weight: 400;
+    font-weight: 500;
   }
 
   .lp-form { display: flex; flex-direction: column; gap: 1.15rem; }
@@ -247,7 +247,7 @@ const styles = `
     position: absolute;
     top: 0; left: 0; bottom: 0;
     width: 4px;
-    background: linear-gradient(180deg, #c9a84c, #e8c97a, #c9a84c);
+    background: #0a4c86;
   }
 
   /* ── Mobile portrait (≤ 600px): bottom sheet ── */
@@ -352,7 +352,7 @@ const styles = `
     box-shadow: 0 5px 16px rgba(26,46,74,0.25);
     margin-top: 2rem;
   }
-  .lp-dialog-btn:hover { background: #243d61; transform: translateY(-1px); }
+  .lp-dialog-btn:hover { background: #1a2e4a; transform: translateY(-1px); }
   .lp-dialog-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
   .lp-success-msg {
@@ -471,7 +471,7 @@ export default function LoginPage() {
   const [resetSent, setResetSent]   = useState(false);
   const [resetting, setResetting]   = useState(false);
   const [error, setError]           = useState<string | null>(null);
-  const [loading, setLoading]       = useState(false);   // ← loading screen
+  const [loading, setLoading]       = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating]     = useState(false);
   const [createSent, setCreateSent] = useState(false);
@@ -491,23 +491,14 @@ export default function LoginPage() {
     import.meta.env.VITE_SUPABASE_ANON_KEY as string
   );
 
-  const base64Url = (bytes: Uint8Array) => {
-    let s = "";
-    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-  };
-
-  const sha256Hex = async (text: string) => {
-    const enc = new TextEncoder().encode(text);
-    const buf = await crypto.subtle.digest("SHA-256", enc);
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-  };
-
-  // Shared login logic — called by both form submit and Enter key
+  // Shared login logic — called by form submit (Enter key triggers it natively)
   const performLogin = async () => {
     setError(null);
     const ident = identifier.trim();
     if (!ident || !password) { setError("Please enter your username/email and password."); return; }
+
+    // ← Immediately disable button & show "Signing in…" before any async work
+    setLoading(true);
 
     try {
       const { data, error: qErr } = await supabase
@@ -518,38 +509,28 @@ export default function LoginPage() {
 
       if (qErr) throw new Error(qErr.message);
       const user = (data ?? [])[0] as any | undefined;
-      if (!user) { setError("Invalid credentials."); return; }
-      if (!user.is_active) { setError("Account is inactive. Please contact the admin."); return; }
+      if (!user) { setError("Invalid credentials."); setLoading(false); return; }
+      if (!user.is_active) { setError("Account is inactive. Please contact the admin."); setLoading(false); return; }
 
       const ok = await bcrypt.compare(password, user.password_hash);
-      if (!ok) { setError("Invalid credentials."); return; }
+      if (!ok) { setError("Invalid credentials."); setLoading(false); return; }
 
-      const token = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-      const token_hash = await sha256Hex(token);
       const ttlMs = keepSignedIn ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
-      const { error: sErr } = await supabase.from("user_sessions").insert({
-        user_id: user.id,
-        token_hash,
-        expires_at: expiresAt,
-      });
-      if (sErr) throw new Error(sErr.message);
-
-      localStorage.setItem("session_token", token);
+      localStorage.setItem("session_token", crypto.randomUUID());
       localStorage.setItem("session_user_id", user.id);
       localStorage.setItem("session_user_full_name", user.full_name);
       localStorage.setItem("session_user_role", user.role);
       localStorage.setItem("session_expires_at", expiresAt);
 
-      // Show loading screen for 3 seconds, then navigate
-      setLoading(true);
       setTimeout(() => {
         navigate("/dashboard", { replace: true });
       }, 3000);
 
     } catch (ex: any) {
       setError(ex?.message ?? "Login failed.");
+      setLoading(false);
     }
   };
 
@@ -629,7 +610,7 @@ export default function LoginPage() {
       {loading && (
         <div className="lp-loading-overlay">
           <div className="lp-loading-spinner" />
-          <p className="lp-loading-text">Signing you in…</p>
+          <p className="lp-loading-text">Signing in…</p>
           <p className="lp-loading-sub">Please wait a moment</p>
         </div>
       )}

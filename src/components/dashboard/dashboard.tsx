@@ -57,10 +57,10 @@ const DashboardHome: React.FC = () => (
     {/* Left column */}
     <section style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "0.9rem" }}>
-        <StatCard label="Total equipment"  value={120} accent="blue"   />
-        <StatCard label="Defective devices" value={8}  accent="red"    />
-        <StatCard label="Under repair"      value={5}  accent="yellow" />
-        <StatCard label="Active equipment"  value={107} accent="green" />
+        <StatCard label="Total equipment"  value={0} accent="blue"   />
+        <StatCard label="Defective devices" value={0}  accent="red"    />
+        <StatCard label="Under repair"      value={0}  accent="yellow" />
+        <StatCard label="Active equipment"  value={0} accent="green" />
       </div>
 
       <div style={{ background: "#ffffff", borderRadius: 18, padding: "1.2rem 1.3rem", boxShadow: "0 18px 40px rgba(15,23,42,0.08)", border: "1px solid #e5e7eb" }}>
