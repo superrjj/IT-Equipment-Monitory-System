@@ -11,7 +11,7 @@ const menuItems = [
   { label: "Dashboard",         icon: LayoutDashboard },
   { label: "Equipment",         icon: Monitor },
   { label: "Departments",       icon: Building2 },
-  { label: "Defective Reports", icon: AlertTriangle },
+  { label: "File Reports", icon: AlertTriangle },
   { label: "Repairs",           icon: Wrench },
   { label: "Repair History",    icon: ClipboardList },
   { label: "Reports",           icon: BarChart2 },

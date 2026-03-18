@@ -529,7 +529,7 @@ const Departments: React.FC = () => {
 
               <div style={{ overflowY: "auto", flex: 1 }}>
                 {eqLoading ? (
-                  <p style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}>Loading…</p>
+                  <p style={{ textAlign: "center", color: "#94a3b8", padding: "2rem", fontSize: 14 }}>Loading assigned equipment…</p>
                 ) : equipment.length === 0 ? (
                   <p style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}>No equipment assigned to this department.</p>
                 ) : (

@@ -5,6 +5,7 @@ import {
   ChevronUp, ChevronDown, X, AlertTriangle,
   ChevronLeft, ChevronRight, ShieldAlert,
   Monitor, Cpu, Wifi, Plug, HelpCircle, Building2,
+  ArrowDownCircle, ArrowUpCircle,
 } from "lucide-react";
 
 // ── Supabase client ────────────────────────────────────────────────────────────
@@ -15,46 +16,38 @@ const supabase = createClient(
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Category    = "Hardware" | "Software" | "Network / Internet" | "Peripheral" | "Other";
-type Severity    = "Low" | "Medium" | "High" | "Critical";
-type ReportStatus = "Open" | "In Progress" | "Resolved" | "Closed";
-type SortField   = "title" | "category" | "severity" | "status" | "created_at";
+type ReportType   = "Incoming" | "Outgoing";
+type SortField   = "title" | "category" | "report_type" | "reported_date";
 type SortDir     = "asc" | "desc";
 type ModalMode   = "add" | "edit" | "view" | null;
 
-type DefectiveReport = {
-  id:            string;
-  equipment_id:  string | null;
-  reported_by:   string | null;
-  department_id: string | null;
-  category:      Category;
-  title:         string;
-  description:   string;
-  severity:      Severity;
-  status:        ReportStatus;
-  resolved_at:   string | null;
-  created_at:    string;
-  updated_at:    string;
-  // joined
-  equipment_name?:   string;
-  equipment_serial?: string;
-  reporter_name?:    string;
-  department_name?:  string;
+type FileReport = {
+  id:                    string;
+  equipment_name:        string;
+  reported_by_name:      string;
+  reported_by_department: string;
+  category:              Category;
+  title:                 string;
+  description:           string;
+  report_type:           ReportType;
+  reported_date:         string;
+  resolved_at:           string | null;
+  created_at:            string;
+  updated_at:            string;
 };
 
-type EquipmentOption  = { id: string; name: string; serial_number: string };
-type UserOption       = { id: string; full_name: string; username: string };
-type DepartmentOption = { id: string; name: string };
+type Department = { id: string; name: string };
 
 type FormState = {
-  equipment_id:  string;
-  reported_by:   string;
-  department_id: string;
-  category:      Category;
-  title:         string;
-  description:   string;
-  severity:      Severity;
-  status:        ReportStatus;
-  resolved_at:   string;
+  equipment_name:        string;
+  reported_by_name:      string;
+  reported_by_department: string;
+  category:              Category;
+  title:                 string;
+  description:           string;
+  report_type:           ReportType;
+  reported_date:         string;
+  resolved_at:           string;
 };
 
 const BRAND     = "#0a4c86";
@@ -64,8 +57,7 @@ const CATEGORIES: Category[] = [
   "Hardware", "Software", "Network / Internet", "Peripheral", "Other",
 ];
 
-const SEVERITIES: Severity[]   = ["Low", "Medium", "High", "Critical"];
-const STATUSES: ReportStatus[] = ["Open", "In Progress", "Resolved", "Closed"];
+const REPORT_TYPES: ReportType[] = ["Incoming", "Outgoing"];
 
 // ── Category config ────────────────────────────────────────────────────────────
 const CATEGORY_CONFIG: Record<Category, {
@@ -82,7 +74,6 @@ const CATEGORY_CONFIG: Record<Category, {
   "Other":             { icon: <HelpCircle size={14}/>, bg: "#f8fafc", activeBg: "rgba(100,116,139,0.08)", color: "#475569", border: "#64748b" },
 };
 
-// Badge-specific (smaller icon)
 const CATEGORY_BADGE_CONFIG: Record<Category, { icon: React.ReactNode; bg: string; color: string }> = {
   "Hardware":          { icon: <Cpu size={11} />,      bg: "rgba(10,76,134,0.09)",   color: "#0a4c86" },
   "Software":          { icon: <Monitor size={11} />,  bg: "rgba(124,58,237,0.09)",  color: "#7c3aed" },
@@ -106,30 +97,29 @@ function validateForm(form: FormState): string {
   if (!title)              return "Title is required.";
   if (title.length < 5)   return "Title must be at least 5 characters.";
   if (title.length > 150) return "Title must be 150 characters or less.";
+  if (!form.equipment_name.trim()) return "Equipment name is required.";
+  if (form.equipment_name.trim().length > 100) return "Equipment name must be 100 characters or less.";
   if (form.description.trim().length > 2000)
                            return "Description must be 2000 characters or less.";
-  if (!form.reported_by)   return "Please select who is reporting this.";
-  if (!form.department_id) return "Please select the department filing this report.";
+  if (!form.reported_by_name.trim())      return "Reporter name is required.";
+  if (!form.reported_by_department)       return "Reporter department is required.";
   if (!CATEGORIES.includes(form.category))  return "Invalid category selected.";
-  if (!SEVERITIES.includes(form.severity))  return "Invalid severity selected.";
-  if (!STATUSES.includes(form.status))      return "Invalid status selected.";
-  if ((form.category === "Hardware" || form.category === "Peripheral") && !form.equipment_id)
-    return "Please select the affected equipment for Hardware / Peripheral reports.";
-  if ((form.status === "Resolved" || form.status === "Closed") && !form.resolved_at)
-    return "Please set a resolved date for Resolved / Closed reports.";
+  if (!form.reported_date) return "Reported date is required.";
+  if (form.report_type === "Outgoing" && !form.resolved_at)
+    return "Please set a resolved date for Outgoing reports.";
   return "";
 }
 
 const emptyForm = (): FormState => ({
-  equipment_id:  "",
-  reported_by:   "",
-  department_id: "",
-  category:      "Hardware",
-  title:         "",
-  description:   "",
-  severity:      "Low",
-  status:        "Open",
-  resolved_at:   "",
+  equipment_name:        "",
+  reported_by_name:      "",
+  reported_by_department: "",
+  category:              "Hardware",
+  title:                 "",
+  description:           "",
+  report_type:           "Incoming",
+  reported_date:         new Date().toISOString().slice(0, 10),
+  resolved_at:           "",
 });
 
 function friendlyError(msg: string): string {
@@ -155,57 +145,36 @@ const CategoryBadge: React.FC<{ category: string }> = ({ category }) => {
   );
 };
 
-const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
-  const map: Record<string, { bg: string; color: string }> = {
-    Low:      { bg: "rgba(22,163,74,0.10)",  color: "#15803d" },
-    Medium:   { bg: "rgba(234,179,8,0.12)",  color: "#a16207" },
-    High:     { bg: "rgba(249,115,22,0.12)", color: "#c2410c" },
-    Critical: { bg: "rgba(220,38,38,0.12)",  color: "#b91c1c" },
-  };
-  const s = map[severity] ?? { bg: "rgba(100,116,139,0.10)", color: "#475569" };
+const ReportTypeBadge: React.FC<{ type: string }> = ({ type }) => {
+  const isIncoming = type === "Incoming";
   return (
     <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
       padding: "2px 9px", borderRadius: 999, fontSize: 11,
       fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-      background: s.bg, color: s.color,
-    }}>{severity}</span>
-  );
-};
-
-const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  const map: Record<string, { bg: string; color: string }> = {
-    "Open":        { bg: "rgba(220,38,38,0.10)",   color: "#b91c1c" },
-    "In Progress": { bg: "rgba(234,179,8,0.12)",   color: "#a16207" },
-    "Resolved":    { bg: "rgba(22,163,74,0.10)",   color: "#15803d" },
-    "Closed":      { bg: "rgba(100,116,139,0.10)", color: "#475569" },
-  };
-  const s = map[status] ?? { bg: "rgba(100,116,139,0.10)", color: "#475569" };
-  return (
-    <span style={{
-      padding: "2px 9px", borderRadius: 999, fontSize: 11,
-      fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-      background: s.bg, color: s.color,
-    }}>{status}</span>
+      background: isIncoming ? "rgba(220,38,38,0.10)" : "rgba(22,163,74,0.10)",
+      color: isIncoming ? "#b91c1c" : "#15803d",
+    }}>
+      {isIncoming ? <ArrowDownCircle size={11} /> : <ArrowUpCircle size={11} />}
+      {type}
+    </span>
   );
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
-const DefectiveReports: React.FC = () => {
-  const [reports, setReports]         = useState<DefectiveReport[]>([]);
-  const [equipment, setEquipment]     = useState<EquipmentOption[]>([]);
-  const [users, setUsers]             = useState<UserOption[]>([]);
-  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+const FileReports: React.FC = () => {
+  const [reports, setReports]         = useState<FileReport[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
-  const [filterSeverity, setFilterSeverity] = useState("All");
-  const [filterStatus, setFilterStatus]     = useState("All");
-  const [sortField, setSortField]     = useState<SortField>("created_at");
+  const [filterType, setFilterType]         = useState("All");
+  const [sortField, setSortField]     = useState<SortField>("reported_date");
   const [sortDir, setSortDir]         = useState<SortDir>("desc");
   const [page, setPage]               = useState(1);
   const [modalMode, setModalMode]     = useState<ModalMode>(null);
-  const [selected, setSelected]       = useState<DefectiveReport | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DefectiveReport | null>(null);
+  const [selected, setSelected]       = useState<FileReport | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FileReport | null>(null);
   const [form, setForm]               = useState<FormState>(emptyForm());
   const [formError, setFormError]     = useState("");
   const [submitting, setSubmitting]   = useState(false);
@@ -220,64 +189,48 @@ const DefectiveReports: React.FC = () => {
   const fetchReports = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("defective_reports")
-      .select(`
-        id, equipment_id, reported_by, department_id, category, title, description,
-        severity, status, resolved_at, created_at, updated_at,
-        equipment ( name, serial_number ),
-        user_accounts ( full_name ),
-        departments ( name )
-      `)
+      .from("file_reports")
+      .select("*")
       .order(sortField, { ascending: sortDir === "asc" });
 
     if (error) {
       showToast(friendlyError(error.message), "error");
       setReports([]);
     } else {
-      setReports((data ?? []).map((r: any) => ({
-        ...r,
-        equipment_name:   r.equipment?.name          ?? null,
-        equipment_serial: r.equipment?.serial_number ?? null,
-        reporter_name:    r.user_accounts?.full_name ?? null,
-        department_name:  r.departments?.name        ?? null,
-      })));
+      setReports(data ?? []);
     }
     setLoading(false);
   };
 
-  const fetchDropdowns = async () => {
-    const [{ data: eq }, { data: ua }, { data: depts }] = await Promise.all([
-      supabase.from("equipment").select("id, name, serial_number").order("name"),
-      supabase.from("user_accounts").select("id, full_name, username").eq("is_active", true).order("full_name"),
-      supabase.from("departments").select("id, name").order("name"),
-    ]);
-    setEquipment((eq ?? []) as EquipmentOption[]);
-    setUsers((ua ?? []) as UserOption[]);
-    setDepartments((depts ?? []) as DepartmentOption[]);
+  const fetchDepartments = async () => {
+    const { data } = await supabase
+      .from("departments")
+      .select("id, name")
+      .order("name");
+    setDepartments((data ?? []) as Department[]);
   };
 
   useEffect(() => { fetchReports(); }, [sortField, sortDir]);
-  useEffect(() => { fetchDropdowns(); }, []);
+  useEffect(() => { fetchDepartments(); }, []);
 
   // ── Filter + paginate ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return reports.filter(r => {
       const matchSearch = !q || [
-        r.title, r.description, r.equipment_name ?? "",
-        r.reporter_name ?? "", r.department_name ?? "", r.category,
+        r.title, r.description, r.equipment_name,
+        r.reported_by_name, r.reported_by_department, r.category,
       ].some(v => v.toLowerCase().includes(q));
       const matchCat    = filterCategory === "All" || r.category === filterCategory;
-      const matchSev    = filterSeverity === "All" || r.severity === filterSeverity;
-      const matchStatus = filterStatus   === "All" || r.status   === filterStatus;
-      return matchSearch && matchCat && matchSev && matchStatus;
+      const matchType   = filterType     === "All" || r.report_type === filterType;
+      return matchSearch && matchCat && matchType;
     });
-  }, [reports, search, filterCategory, filterSeverity, filterStatus]);
+  }, [reports, search, filterCategory, filterType]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  useEffect(() => setPage(1), [search, filterCategory, filterSeverity, filterStatus]);
+  useEffect(() => setPage(1), [search, filterCategory, filterType]);
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   // ── Sort ───────────────────────────────────────────────────────────────────
@@ -294,11 +247,9 @@ const DefectiveReports: React.FC = () => {
 
   // ── Stat counts ────────────────────────────────────────────────────────────
   const counts = useMemo(() => ({
-    total:      reports.length,
-    open:       reports.filter(r => r.status === "Open").length,
-    inProgress: reports.filter(r => r.status === "In Progress").length,
-    resolved:   reports.filter(r => r.status === "Resolved" || r.status === "Closed").length,
-    critical:   reports.filter(r => r.severity === "Critical").length,
+    total:    reports.length,
+    incoming: reports.filter(r => r.report_type === "Incoming").length,
+    outgoing: reports.filter(r => r.report_type === "Outgoing").length,
   }), [reports]);
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
@@ -307,29 +258,25 @@ const DefectiveReports: React.FC = () => {
     setForm(emptyForm()); setFormError(""); setSubmitting(false);
   };
   const openAdd  = () => { closeModal(); setModalMode("add"); };
-  const openEdit = (r: DefectiveReport) => {
+  const openEdit = (r: FileReport) => {
     closeModal(); setSelected(r);
     setForm({
-      equipment_id:  r.equipment_id  ?? "",
-      reported_by:   r.reported_by   ?? "",
-      department_id: r.department_id ?? "",
-      category:      r.category,
-      title:         r.title,
-      description:   r.description,
-      severity:      r.severity,
-      status:        r.status,
-      resolved_at:   r.resolved_at ? r.resolved_at.slice(0, 10) : "",
+      equipment_name:        r.equipment_name,
+      reported_by_name:      r.reported_by_name,
+      reported_by_department: r.reported_by_department,
+      category:              r.category,
+      title:                 r.title,
+      description:           r.description,
+      report_type:           r.report_type,
+      reported_date:         r.reported_date.slice(0, 10),
+      resolved_at:           r.resolved_at ? r.resolved_at.slice(0, 10) : "",
     });
     setModalMode("edit");
   };
-  const openView = (r: DefectiveReport) => { setSelected(r); setModalMode("view"); };
+  const openView = (r: FileReport) => { setSelected(r); setModalMode("view"); };
 
   const handleCategoryChange = (cat: Category) => {
-    setForm(f => ({
-      ...f,
-      category:     cat,
-      equipment_id: (cat === "Hardware" || cat === "Peripheral") ? f.equipment_id : "",
-    }));
+    setForm(f => ({ ...f, category: cat }));
     setFormError("");
   };
 
@@ -340,25 +287,24 @@ const DefectiveReports: React.FC = () => {
     setSubmitting(true);
 
     const payload = {
-      equipment_id: (form.category === "Hardware" || form.category === "Peripheral")
-                      ? (form.equipment_id || null) : null,
-      reported_by:   form.reported_by   || null,
-      department_id: form.department_id || null,
-      category:      form.category,
-      title:         sanitize(form.title),
-      description:   sanitize(form.description),
-      severity:      form.severity,
-      status:        form.status,
-      resolved_at:   (form.status === "Resolved" || form.status === "Closed") && form.resolved_at
-                       ? new Date(form.resolved_at).toISOString() : null,
+      equipment_name:        sanitize(form.equipment_name),
+      reported_by_name:      sanitize(form.reported_by_name),
+      reported_by_department: form.reported_by_department,
+      category:              form.category,
+      title:                 sanitize(form.title),
+      description:           sanitize(form.description),
+      report_type:           form.report_type,
+      reported_date:         new Date(form.reported_date).toISOString(),
+      resolved_at:           form.report_type === "Outgoing" && form.resolved_at
+                               ? new Date(form.resolved_at).toISOString() : null,
     };
 
     if (modalMode === "add") {
-      const { error } = await supabase.from("defective_reports").insert(payload);
+      const { error } = await supabase.from("file_reports").insert(payload);
       if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
-      showToast("Defective report filed successfully.", "success");
+      showToast("Report filed successfully.", "success");
     } else if (modalMode === "edit" && selected) {
-      const { error } = await supabase.from("defective_reports").update(payload).eq("id", selected.id);
+      const { error } = await supabase.from("file_reports").update(payload).eq("id", selected.id);
       if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
       showToast("Report updated successfully.", "success");
     }
@@ -371,7 +317,7 @@ const DefectiveReports: React.FC = () => {
   // ── Delete ─────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const { error } = await supabase.from("defective_reports").delete().eq("id", deleteTarget.id);
+    const { error } = await supabase.from("file_reports").delete().eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
     else showToast(`Report "${deleteTarget.title}" deleted.`, "success");
     setDeleteTarget(null);
@@ -388,7 +334,12 @@ const DefectiveReports: React.FC = () => {
     fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4, display: "block",
   };
   const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
-  const needsEquipment = form.category === "Hardware" || form.category === "Peripheral";
+
+  // Get department name from ID
+  const getDepartmentName = (deptId: string) => {
+    const dept = departments.find(d => d.id === deptId);
+    return dept?.name ?? deptId;
+  };
 
   return (
     <>
@@ -404,7 +355,6 @@ const DefectiveReports: React.FC = () => {
         .dr-filter { padding: 0.4rem 0.65rem; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 12px; font-family: 'Poppins', sans-serif; color: #475569; outline: none; cursor: pointer; }
         .dr-filter:focus { border-color: #0a4c86; }
 
-        /* ── Category pill selector ── */
         .dr-cat-pills { display: flex; flex-wrap: wrap; gap: 8px; }
         .dr-cat-pill {
           display: inline-flex; align-items: center; gap: 6px;
@@ -423,7 +373,7 @@ const DefectiveReports: React.FC = () => {
 
         .dr-detail-row { display: flex; gap: 8px; font-size: 13px; padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
         .dr-detail-row:last-child { border-bottom: none; }
-        .dr-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 130px; flex-shrink: 0; }
+        .dr-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 150px; flex-shrink: 0; }
       `}</style>
 
       <div className="dr-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
@@ -444,10 +394,10 @@ const DefectiveReports: React.FC = () => {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 2, display: "flex", alignItems: "center", gap: 8 }}>
-              <ShieldAlert size={20} color="#dc2626" /> Defective Reports
+              <ShieldAlert size={20} color="#dc2626" /> File Reports
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
-              Track hardware faults, software issues, network problems, and more.
+              Track incoming and outgoing equipment reports.
             </p>
           </div>
           <button onClick={openAdd} style={{
@@ -461,17 +411,20 @@ const DefectiveReports: React.FC = () => {
         </div>
 
         {/* ── Stat cards ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
-            { label: "Total Reports", value: counts.total,      color: BRAND     },
-            { label: "Open",          value: counts.open,       color: "#b91c1c" },
-            { label: "In Progress",   value: counts.inProgress, color: "#a16207" },
-            { label: "Resolved",      value: counts.resolved,   color: "#15803d" },
-            { label: "Critical",      value: counts.critical,   color: "#c2410c" },
+            { label: "Total Reports", value: counts.total,    color: BRAND,     icon: <ShieldAlert size={18} /> },
+            { label: "Incoming",      value: counts.incoming, color: "#b91c1c", icon: <ArrowDownCircle size={18} /> },
+            { label: "Outgoing",      value: counts.outgoing, color: "#15803d", icon: <ArrowUpCircle size={18} /> },
           ].map(c => (
-            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.85rem 1rem", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.05)" }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{c.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: c.color }}>{c.value}</div>
+            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "1rem 1.2rem", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.05)", display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: `${c.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color }}>
+                {c.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{c.label}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: c.color }}>{c.value}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -490,13 +443,9 @@ const DefectiveReports: React.FC = () => {
               <option value="All">All Categories</option>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select className="dr-filter" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
-              <option value="All">All Severities</option>
-              {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="dr-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="All">All Statuses</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            <select className="dr-filter" value={filterType} onChange={e => setFilterType(e.target.value)}>
+              <option value="All">All Types</option>
+              {REPORT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
               Page {page}/{totalPages}
@@ -509,14 +458,14 @@ const DefectiveReports: React.FC = () => {
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                   {([
-                    { label: "Title",       field: "title"      as SortField },
-                    { label: "Category",    field: "category"   as SortField },
+                    { label: "Title",       field: "title"         as SortField },
+                    { label: "Category",    field: "category"      as SortField },
                     { label: "Equipment",   field: null },
+                    { label: "Reporter",    field: null },
                     { label: "Department",  field: null },
-                    { label: "Reported By", field: null },
-                    { label: "Severity",    field: "severity"   as SortField },
-                    { label: "Status",      field: "status"     as SortField },
-                    { label: "Filed",       field: "created_at" as SortField },
+                    { label: "Type",        field: "report_type"   as SortField },
+                    { label: "Reported",    field: "reported_date" as SortField },
+                    { label: "Resolved",    field: null },
                     { label: "Actions",     field: null },
                   ] as { label: string; field: SortField | null }[]).map(col => (
                     <th key={col.label}
@@ -536,36 +485,24 @@ const DefectiveReports: React.FC = () => {
                 {loading ? (
                   <tr><td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
                 ) : paginated.length === 0 ? (
-                  <tr><td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No defective reports found.</td></tr>
+                  <tr><td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No reports found.</td></tr>
                 ) : paginated.map(r => (
                   <tr key={r.id} className="dr-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
                     <td style={{ padding: "0.75rem 1rem", fontWeight: 600, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</td>
                     <td style={{ padding: "0.75rem 1rem" }}><CategoryBadge category={r.category} /></td>
+                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.equipment_name}</td>
+                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.reported_by_name}</td>
                     <td style={{ padding: "0.75rem 1rem" }}>
-                      {r.equipment_name
-                        ? <div>
-                            <div style={{ fontWeight: 600, fontSize: 13 }}>{r.equipment_name}</div>
-                            {r.equipment_serial && <div style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{r.equipment_serial}</div>}
-                          </div>
-                        : <span style={{ color: "#cbd5e1" }}>—</span>
-                      }
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#0a4c86", background: "rgba(10,76,134,0.07)", padding: "2px 9px", borderRadius: 999 }}>
+                        <Building2 size={11} /> {getDepartmentName(r.reported_by_department)}
+                      </span>
                     </td>
-                    {/* ── Department column ── */}
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      {r.department_name
-                        ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#0a4c86", background: "rgba(10,76,134,0.07)", padding: "2px 9px", borderRadius: 999 }}>
-                            <Building2 size={11} /> {r.department_name}
-                          </span>
-                        : <span style={{ color: "#cbd5e1" }}>—</span>
-                      }
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>
-                      {r.reporter_name ?? <span style={{ color: "#cbd5e1" }}>—</span>}
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem" }}><SeverityBadge severity={r.severity} /></td>
-                    <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={r.status} /></td>
+                    <td style={{ padding: "0.75rem 1rem" }}><ReportTypeBadge type={r.report_type} /></td>
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                      {new Date(r.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                      {new Date(r.reported_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
+                      {r.resolved_at ? new Date(r.resolved_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : <span style={{ color: "#cbd5e1" }}>—</span>}
                     </td>
                     <td style={{ padding: "0.75rem 1rem" }}>
                       <div style={{ display: "flex", gap: 6 }}>
@@ -614,18 +551,18 @@ const DefectiveReports: React.FC = () => {
         {/* ══ Add / Edit Modal ══ */}
         {(modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-dr" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-            <div className="modal-box-dr" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 580, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <div className="modal-box-dr" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 600, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-                  {modalMode === "add" ? "File Defective Report" : "Edit Report"}
+                  {modalMode === "add" ? "File New Report" : "Edit Report"}
                 </h2>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
 
-                {/* ── Category — pill selector (wraps cleanly, no overlap) ── */}
+                {/* ── Category pills ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Category <span style={{ color: "#dc2626" }}>*</span></label>
                   <div className="dr-cat-pills">
@@ -656,103 +593,74 @@ const DefectiveReports: React.FC = () => {
                   <label style={labelStyle}>Title <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.title}
                     onChange={e => { setForm(f => ({ ...f, title: e.target.value })); setFormError(""); }}
-                    placeholder={
-                      form.category === "Software"           ? "e.g. Microsoft Word crashes on startup" :
-                      form.category === "Network / Internet" ? "e.g. No internet connection since this morning" :
-                      form.category === "Peripheral"         ? "e.g. USB keyboard not detected" :
-                      "e.g. Monitor not displaying output"
-                    }
+                    placeholder="Brief description of the issue"
                     maxLength={150}
                     style={{ ...inputStyle, borderColor: formError && !form.title.trim() ? "#fca5a5" : "#e2e8f0" }}
                   />
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>{form.title.length}/150</div>
                 </div>
 
-                {/* Equipment — required for Hardware / Peripheral */}
-                {needsEquipment ? (
-                  <div style={{ gridColumn: "span 2" }}>
-                    <label style={labelStyle}>
-                      Equipment <span style={{ color: "#dc2626" }}>*</span>
-                      <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400, marginLeft: 4 }}>(required for {form.category})</span>
-                    </label>
-                    <select value={form.equipment_id}
-                      onChange={e => { setForm(f => ({ ...f, equipment_id: e.target.value })); setFormError(""); }}
-                      style={{ ...selectStyle, borderColor: formError && !form.equipment_id ? "#fca5a5" : "#e2e8f0" }}>
-                      <option value="">— Select equipment —</option>
-                      {equipment.map(eq => (
-                        <option key={eq.id} value={eq.id}>
-                          {eq.name}{eq.serial_number ? ` (${eq.serial_number})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div style={{ gridColumn: "span 2" }}>
-                    <label style={labelStyle}>
-                      Affected Equipment
-                      <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400, marginLeft: 4 }}>(optional)</span>
-                    </label>
-                    <select value={form.equipment_id}
-                      onChange={e => setForm(f => ({ ...f, equipment_id: e.target.value }))}
-                      style={selectStyle}>
-                      <option value="">— None / Not applicable —</option>
-                      {equipment.map(eq => (
-                        <option key={eq.id} value={eq.id}>
-                          {eq.name}{eq.serial_number ? ` (${eq.serial_number})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Reported By */}
-                <div>
-                  <label style={labelStyle}>Reported By <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select value={form.reported_by}
-                    onChange={e => { setForm(f => ({ ...f, reported_by: e.target.value })); setFormError(""); }}
-                    style={{ ...selectStyle, borderColor: formError && !form.reported_by ? "#fca5a5" : "#e2e8f0" }}>
-                    <option value="">— Select user —</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.full_name} (@{u.username})</option>)}
-                  </select>
+                {/* Equipment Name */}
+                <div style={{ gridColumn: "span 2" }}>
+                  <label style={labelStyle}>Equipment Name <span style={{ color: "#dc2626" }}>*</span></label>
+                  <input value={form.equipment_name}
+                    onChange={e => { setForm(f => ({ ...f, equipment_name: e.target.value })); setFormError(""); }}
+                    placeholder="e.g. Epson Printer L3110"
+                    maxLength={100}
+                    style={{ ...inputStyle, borderColor: formError && !form.equipment_name.trim() ? "#fca5a5" : "#e2e8f0" }}
+                  />
                 </div>
 
-                {/* Department */}
+                {/* Reporter Name */}
                 <div>
-                  <label style={labelStyle}>Department <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select value={form.department_id}
-                    onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); setFormError(""); }}
-                    style={{ ...selectStyle, borderColor: formError && !form.department_id ? "#fca5a5" : "#e2e8f0" }}>
+                  <label style={labelStyle}>Reporter Name <span style={{ color: "#dc2626" }}>*</span></label>
+                  <input value={form.reported_by_name}
+                    onChange={e => { setForm(f => ({ ...f, reported_by_name: e.target.value })); setFormError(""); }}
+                    placeholder="e.g. Juan Dela Cruz"
+                    style={{ ...inputStyle, borderColor: formError && !form.reported_by_name.trim() ? "#fca5a5" : "#e2e8f0" }}
+                  />
+                </div>
+
+                {/* Reporter Department */}
+                <div>
+                  <label style={labelStyle}>Reporter Department <span style={{ color: "#dc2626" }}>*</span></label>
+                  <select value={form.reported_by_department}
+                    onChange={e => { setForm(f => ({ ...f, reported_by_department: e.target.value })); setFormError(""); }}
+                    style={{ ...selectStyle, borderColor: formError && !form.reported_by_department ? "#fca5a5" : "#e2e8f0" }}>
                     <option value="">— Select department —</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 </div>
 
-                {/* Severity */}
+                {/* Report Type */}
                 <div>
-                  <label style={labelStyle}>Severity <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select value={form.severity}
-                    onChange={e => setForm(f => ({ ...f, severity: e.target.value as Severity }))}
-                    style={selectStyle}>
-                    {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                {/* Status */}
-                <div>
-                  <label style={labelStyle}>Status <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select value={form.status}
+                  <label style={labelStyle}>Report Type <span style={{ color: "#dc2626" }}>*</span></label>
+                  <select value={form.report_type}
                     onChange={e => {
-                      const s = e.target.value as ReportStatus;
-                      setForm(f => ({ ...f, status: s, resolved_at: (s !== "Resolved" && s !== "Closed") ? "" : f.resolved_at }));
+                      const t = e.target.value as ReportType;
+                      setForm(f => ({ ...f, report_type: t, resolved_at: t === "Incoming" ? "" : f.resolved_at }));
                       setFormError("");
                     }}
                     style={selectStyle}>
-                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {REPORT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>
+                    {form.report_type === "Incoming" ? "Unit coming in for repair" : "Unit resolved and going out"}
+                  </div>
                 </div>
 
-                {/* Resolved date */}
-                {(form.status === "Resolved" || form.status === "Closed") && (
+                {/* Reported Date */}
+                <div>
+                  <label style={labelStyle}>Reported Date <span style={{ color: "#dc2626" }}>*</span></label>
+                  <input type="date" value={form.reported_date}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={e => { setForm(f => ({ ...f, reported_date: e.target.value })); setFormError(""); }}
+                    style={{ ...inputStyle, borderColor: formError && !form.reported_date ? "#fca5a5" : "#e2e8f0" }}
+                  />
+                </div>
+
+                {/* Resolved date - only for Outgoing */}
+                {form.report_type === "Outgoing" && (
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={labelStyle}>Resolved Date <span style={{ color: "#dc2626" }}>*</span></label>
                     <input type="date" value={form.resolved_at}
@@ -770,12 +678,7 @@ const DefectiveReports: React.FC = () => {
                   </label>
                   <textarea value={form.description}
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder={
-                      form.category === "Software"           ? "e.g. Error message shown, steps to reproduce, software version…" :
-                      form.category === "Network / Internet" ? "e.g. Which rooms are affected, whether Wi-Fi or wired, ISP ticket number…" :
-                      form.category === "Peripheral"         ? "e.g. Tried different USB ports, tested on another PC…" :
-                      "Describe the defect in detail…"
-                    }
+                    placeholder="Describe the issue or resolution details..."
                     rows={4} maxLength={2000}
                     style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
                   />
@@ -804,14 +707,13 @@ const DefectiveReports: React.FC = () => {
         {/* ══ View Modal ══ */}
         {modalMode === "view" && selected && (
           <div className="modal-overlay-dr" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-            <div className="modal-box-dr" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 520, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <div className="modal-box-dr" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 540, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.2rem" }}>
                 <div>
                   <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8 }}>{selected.title}</h2>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <CategoryBadge category={selected.category} />
-                    <SeverityBadge severity={selected.severity} />
-                    <StatusBadge   status={selected.status} />
+                    <ReportTypeBadge type={selected.report_type} />
                   </div>
                 </div>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", flexShrink: 0 }}><X size={18} /></button>
@@ -819,10 +721,11 @@ const DefectiveReports: React.FC = () => {
 
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {[
-                  { label: "Equipment",   value: selected.equipment_name ? `${selected.equipment_name}${selected.equipment_serial ? ` — ${selected.equipment_serial}` : ""}` : "—" },
-                  { label: "Department",  value: selected.department_name ?? "—" },
-                  { label: "Reported By", value: selected.reporter_name ?? "—" },
-                  { label: "Filed",       value: new Date(selected.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) },
+                  { label: "Equipment",   value: selected.equipment_name },
+                  { label: "Reporter",    value: selected.reported_by_name },
+                  { label: "Department",  value: getDepartmentName(selected.reported_by_department) },
+                  { label: "Report Type", value: selected.report_type },
+                  { label: "Reported",    value: new Date(selected.reported_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) },
                   { label: "Resolved",    value: selected.resolved_at ? new Date(selected.resolved_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "—" },
                 ].map(row => (
                   <div key={row.label} className="dr-detail-row">
@@ -884,4 +787,4 @@ const DefectiveReports: React.FC = () => {
   );
 };
 
-export default DefectiveReports;
+export default FileReports;
