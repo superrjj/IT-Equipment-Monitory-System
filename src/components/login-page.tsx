@@ -627,7 +627,7 @@ export default function LoginPage() {
               alt="Masaya sa Tarlac City"
               className="lp-city-logo"
             />
-            <p className="lp-subtitle">IT Equipment Monitoring</p>
+            <p className="lp-subtitle">IT Service & Asset Management</p>
           </div>
 
           <form className="lp-form" onSubmit={handleLogin}>

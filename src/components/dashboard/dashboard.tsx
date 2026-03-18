@@ -268,10 +268,10 @@ const Dashboard: React.FC = () => {
   const renderPage = () => {
     switch (activeIndex) {
       case 0: return <DashboardHome />;
-      case 1: return <Equipment />;
-      case 2: return <Departments />;
-      case 3: return <FileReports />;
-      case 4: return <Repairs />;
+      case 1: return <FileReports />;
+      case 2: return <Repairs />;
+      case 3: return <Equipment />;
+      case 4: return <Departments />;
       case 5: return <ComingSoon label="Repair History" />;
       case 6: return <ComingSoon label="Reports" />;
       case 7: return <UserAccounts />;

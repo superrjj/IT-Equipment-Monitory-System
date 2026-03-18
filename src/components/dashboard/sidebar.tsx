@@ -9,10 +9,10 @@ const hoverBlue = "#0d5fa3";
 
 const menuItems = [
   { label: "Dashboard",         icon: LayoutDashboard },
-  { label: "Equipment",         icon: Monitor },
-  { label: "Departments",       icon: Building2 },
   { label: "File Reports", icon: AlertTriangle },
   { label: "Repairs",           icon: Wrench },
+  { label: "Equipment",         icon: Monitor },
+  { label: "Departments",       icon: Building2 },
   { label: "Repair History",    icon: ClipboardList },
   { label: "Reports",           icon: BarChart2 },
   { label: "Accounts",          icon: User },
