@@ -292,7 +292,7 @@ const Departments: React.FC = () => {
         {/* ── Table card ── */}
         <div style={{
           background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0",
-          boxShadow: "0 4px 24px rgba(15,23,42,0.07)", overflow: "hidden",
+          overflow: "hidden",
         }}>
           {/* Search bar */}
           <div style={{ padding: "1rem 1.2rem", borderBottom: "1px solid #f1f5f9" }}>

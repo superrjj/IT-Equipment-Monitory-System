@@ -276,7 +276,14 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+        /* Thin scrollbars to reduce shadow-like appearance */
+        .adm-scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
+        .adm-scroll-area::-webkit-scrollbar-track { background: transparent; }
+        .adm-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .adm-scroll-area::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
       <div style={{
         height: "100vh",
         minHeight: 0,
@@ -305,7 +312,7 @@ const Dashboard: React.FC = () => {
           <div style={{ flexShrink: 0 }}>
             <Header currentUserName={currentUserName} userRole={userRole} />
           </div>
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div className="adm-scroll-area" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             {PAGE_MAP[activeLabel] ?? <DashboardHome />}
           </div>
         </div>

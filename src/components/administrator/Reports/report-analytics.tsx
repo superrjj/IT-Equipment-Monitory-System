@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 
 const brandBlue = "#0a4c86";
-const cardShadow = "0 18px 45px rgba(15,23,42,0.10), 0 1px 4px rgba(15,23,42,0.08)";
 
 const raStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -25,16 +24,10 @@ const raStyles = `
     background: #ffffff;
     border-radius: 18px;
     padding: 1.25rem 1.4rem;
-    box-shadow: ${cardShadow};
-    border: 1px solid rgba(15,23,42,0.07);
+    border: 1px solid #e2e8f0;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    transition: transform 0.18s, box-shadow 0.18s;
-  }
-  .ra-stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 24px 55px rgba(15,23,42,0.14), 0 2px 6px rgba(15,23,42,0.10);
   }
 
   /* ── Panel ── */
@@ -42,8 +35,7 @@ const raStyles = `
     background: #ffffff;
     border-radius: 18px;
     padding: 1.3rem 1.4rem;
-    box-shadow: 0 18px 40px rgba(15,23,42,0.08);
-    border: 1px solid #e5e7eb;
+    border: 1px solid #e2e8f0;
   }
 
   .ra-panel-title {

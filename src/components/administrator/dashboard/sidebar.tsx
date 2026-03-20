@@ -109,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeLabel, onNavigate, userRole }) 
         </div>
 
         {/* Sectioned Nav - scrollable when menu overflows */}
-        <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+        <nav className="adm-scroll-area" style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
           {menuSections.map((section, sIdx) => {
             // Pre-filter: only keep items the current role can see
             const visibleItems = section.items.filter(({ label }) =>
