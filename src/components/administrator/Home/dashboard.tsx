@@ -278,8 +278,10 @@ const Dashboard: React.FC = () => {
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');`}</style>
       <div style={{
-        minHeight: "100vh",
+        height: "100vh",
+        minHeight: 0,
         display: "flex",
+        overflow: "hidden",
         background: "#f4f5fb",
         fontFamily: "'Poppins', sans-serif",
         color: "#0f172a",
@@ -292,14 +294,20 @@ const Dashboard: React.FC = () => {
 
         <div style={{
           flex: 1,
+          minHeight: 0,
           padding: "1.4rem 1.8rem 1.8rem",
           display: "flex",
           flexDirection: "column",
           gap: "1.2rem",
+          overflow: "hidden",
         }}>
           {/* Pass both name and role to Header */}
-          <Header currentUserName={currentUserName} userRole={userRole} />
-          {PAGE_MAP[activeLabel] ?? <DashboardHome />}
+          <div style={{ flexShrink: 0 }}>
+            <Header currentUserName={currentUserName} userRole={userRole} />
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            {PAGE_MAP[activeLabel] ?? <DashboardHome />}
+          </div>
         </div>
       </div>
     </>

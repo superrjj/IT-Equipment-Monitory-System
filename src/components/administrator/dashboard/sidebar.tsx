@@ -85,7 +85,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeLabel, onNavigate, userRole }) 
       <aside
         style={{
           width: 230,
-          minHeight: "100vh",
+          height: "100vh",
+          minHeight: 0,
           background: "#ffffff",
           color: "#1e293b",
           padding: "1.4rem 1.4rem 1.6rem",
@@ -95,10 +96,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeLabel, onNavigate, userRole }) 
           borderRight: "1px solid #e2e8f0",
           fontFamily: "'Poppins', sans-serif",
           flexShrink: 0,
+          overflow: "hidden",
         }}
       >
         {/* Logo */}
-        <div>
+        <div style={{ flexShrink: 0 }}>
           <img
             src="/masaya-sa-tarlac-city.png"
             alt="Masaya sa Tarlac City"
@@ -106,8 +108,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeLabel, onNavigate, userRole }) 
           />
         </div>
 
-        {/* Sectioned Nav */}
-        <nav style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+        {/* Sectioned Nav - scrollable when menu overflows */}
+        <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
           {menuSections.map((section, sIdx) => {
             // Pre-filter: only keep items the current role can see
             const visibleItems = section.items.filter(({ label }) =>
