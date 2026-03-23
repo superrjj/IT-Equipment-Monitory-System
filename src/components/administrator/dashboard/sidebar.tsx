@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import {
   Home,
   Building2,
-  ClipboardList,
   BarChart2,
   User,
   CircleArrowDown,
@@ -31,7 +30,6 @@ const adminMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "Submit Ticket", icon: TicketIcon },
-      { label: "Repair History", icon: ClipboardList },
     ],
   },
   {

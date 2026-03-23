@@ -92,7 +92,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem" }}>
         <ScrollText size={22} color={BRAND} />
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Activity Log</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 1 }}>Activity Log</h2>
           <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
             {isAdmin ? "Recent actions across the system." : "Actions you performed while signed in."}
           </p>

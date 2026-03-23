@@ -288,7 +288,7 @@ const MyTickets: React.FC = () => {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, letterSpacing: 1 }}>
               <Ticket size={20} color={BRAND} /> My Tickets
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>
