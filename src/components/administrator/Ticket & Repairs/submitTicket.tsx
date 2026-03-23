@@ -15,7 +15,7 @@ const supabase = createClient(
 );
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type IssueType = "Hardware" | "Software" | "Network / Internet";
+type IssueType = "Hardware" | "Software" | "Internet";
 type Status    = "Pending" | "In Progress" | "Resolved";
 type SortField = "title" | "issue_type" | "status" | "date_submitted";
 type SortDir   = "asc" | "desc";
@@ -25,7 +25,8 @@ type FileReport = {
   id:             string;
   employee_name:  string;
   department_id:  string;
-  issue_type:     IssueType;
+  /** DB allows Hardware, Software, Internet; legacy rows may still read as Network / Internet until migrated. */
+  issue_type:     IssueType | "Network / Internet";
   title:          string;
   description:    string; 
   status:         Status;
@@ -57,19 +58,23 @@ type FormState = AdminForm;
 const BRAND     = "#0a4c86";
 const PAGE_SIZE = 10;
 
-const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Network / Internet"];
+const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
 
 const ISSUE_TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; activeBg: string; color: string; border: string }> = {
   "Hardware":           { icon: <Cpu size={14} />,     bg: "#f8fafc", activeBg: "rgba(10,76,134,0.08)",  color: "#0a4c86", border: "#0a4c86" },
   "Software":           { icon: <Monitor size={14} />, bg: "#f8fafc", activeBg: "rgba(124,58,237,0.08)", color: "#7c3aed", border: "#7c3aed" },
-  "Network / Internet": { icon: <Wifi size={14} />,    bg: "#f8fafc", activeBg: "rgba(6,182,212,0.08)",  color: "#0891b2", border: "#0891b2" },
+  "Internet": { icon: <Wifi size={14} />, bg: "#f8fafc", activeBg: "rgba(6,182,212,0.08)", color: "#0891b2", border: "#0891b2" },
 };
 
-const ISSUE_TYPE_BADGE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color: string }> = {
-  "Hardware":           { icon: <Cpu size={11} />,     bg: "rgba(10,76,134,0.09)",  color: "#0a4c86" },
-  "Software":           { icon: <Monitor size={11} />, bg: "rgba(124,58,237,0.09)", color: "#7c3aed" },
-  "Network / Internet": { icon: <Wifi size={11} />,    bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
+const ISSUE_TYPE_BADGE_CONFIG: Record<
+  IssueType | "Network / Internet",
+  { icon: React.ReactNode; bg: string; color: string }
+> = {
+  Hardware: { icon: <Cpu size={11} />, bg: "rgba(10,76,134,0.09)", color: "#0a4c86" },
+  Software: { icon: <Monitor size={11} />, bg: "rgba(124,58,237,0.09)", color: "#7c3aed" },
+  Internet: { icon: <Wifi size={11} />, bg: "rgba(6,182,212,0.09)", color: "#0891b2" },
+  "Network / Internet": { icon: <Wifi size={11} />, bg: "rgba(6,182,212,0.09)", color: "#0891b2" },
 };
 
 const STATUS_CONFIG: Record<Status, { icon: React.ReactNode; bg: string; color: string }> = {
@@ -121,11 +126,13 @@ const fmtDate = (iso: string | null | undefined) =>
 
 // ── Badges ─────────────────────────────────────────────────────────────────────
 const IssueTypeBadge: React.FC<{ type: string }> = ({ type }) => {
-  const cfg = ISSUE_TYPE_BADGE_CONFIG[type as IssueType]
+  const lookup = type === "Network / Internet" ? "Internet" : type;
+  const cfg =
+    ISSUE_TYPE_BADGE_CONFIG[lookup as IssueType | "Network / Internet"]
     ?? { icon: <Cpu size={11} />, bg: "rgba(10,76,134,0.09)", color: "#0a4c86" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", background: cfg.bg, color: cfg.color }}>
-      {cfg.icon} {type}
+      {cfg.icon} {lookup}
     </span>
   );
 };
@@ -309,7 +316,7 @@ const SubmitTicket: React.FC = () => {
     setForm({
       employee_name:  r.employee_name,
       department_id:  r.department_id,
-      issue_type:     r.issue_type,
+      issue_type:     r.issue_type === "Network / Internet" ? "Internet" : (r.issue_type as IssueType),
       title:          r.title,
       description:    r.description,
       date_submitted: r.date_submitted.slice(0, 10),

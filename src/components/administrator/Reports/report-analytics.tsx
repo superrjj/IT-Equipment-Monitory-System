@@ -1,15 +1,39 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   BarChart2,
   TrendingUp,
   CheckCircle2,
   Clock,
-  AlertTriangle,
   Download,
   Calendar,
+  Loader,
 } from "lucide-react";
 
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL as string,
+  import.meta.env.VITE_SUPABASE_ANON_KEY as string
+);
+
 const brandBlue = "#0a4c86";
+
+const DEPT_BAR_COLORS = [
+  brandBlue,
+  "#0369a1",
+  "#0891b2",
+  "#16a34a",
+  "#ca8a04",
+  "#9333ea",
+  "#dc2626",
+  "#64748b",
+];
+
+const ISSUE_DONUT_COLORS: Record<string, string> = {
+  Hardware: brandBlue,
+  Software: "#0891b2",
+  Internet: "#16a34a",
+  "Network / Internet": "#16a34a",
+};
 
 const raStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -19,7 +43,6 @@ const raStyles = `
     color: #0f172a;
   }
 
-  /* ── Stat cards ── */
   .ra-stat-card {
     background: #ffffff;
     border-radius: 18px;
@@ -30,7 +53,6 @@ const raStyles = `
     gap: 0.3rem;
   }
 
-  /* ── Panel ── */
   .ra-panel {
     background: #ffffff;
     border-radius: 18px;
@@ -48,7 +70,6 @@ const raStyles = `
     gap: 0.5rem;
   }
 
-  /* ── Bar chart ── */
   .ra-bar-row {
     display: flex;
     align-items: center;
@@ -86,7 +107,6 @@ const raStyles = `
     flex-shrink: 0;
   }
 
-  /* ── Status badge ── */
   .ra-badge {
     display: inline-flex;
     align-items: center;
@@ -98,7 +118,6 @@ const raStyles = `
     text-transform: uppercase;
   }
 
-  /* ── Filter tabs ── */
   .ra-tab {
     padding: 0.38rem 0.85rem;
     border-radius: 8px;
@@ -118,7 +137,6 @@ const raStyles = `
     color: #ffffff;
   }
 
-  /* ── Export button ── */
   .ra-export-btn {
     display: flex;
     align-items: center;
@@ -139,7 +157,6 @@ const raStyles = `
     color: #ffffff;
   }
 
-  /* ── Recent table ── */
   .ra-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .ra-table th {
     text-align: left;
@@ -160,7 +177,6 @@ const raStyles = `
   .ra-table tr:last-child td { border-bottom: none; }
   .ra-table tr:hover td { background: #f9fafb; }
 
-  /* ── Donut chart ── */
   .ra-donut-legend {
     display: flex;
     flex-direction: column;
@@ -196,63 +212,111 @@ const raStyles = `
   }
 `;
 
-// ── Static mock data (swap with Supabase queries) ─────────────────────────────
+type PeriodTab = "This Week" | "This Month" | "This Quarter" | "This Year";
 
-const statCards = [
-  { label: "Total Tickets",    value: 128, accent: brandBlue,  icon: BarChart2,    delta: "+12 this month" },
-  { label: "Resolved",         value: 94,  accent: "#16a34a",  icon: CheckCircle2, delta: "73% resolution rate" },
-  { label: "Pending",          value: 21,  accent: "#ca8a04",  icon: Clock,        delta: "Avg. 2.4 days open" },
-  { label: "Critical Issues",  value: 13,  accent: "#dc2626",  icon: AlertTriangle, delta: "Needs attention" },
-];
+function getPeriodRange(tab: PeriodTab): { start: Date; end: Date } {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
 
-const deptTickets = [
-  { name: "Mayor's Office",      count: 24, color: brandBlue },
-  { name: "Treasury",            count: 19, color: "#0369a1" },
-  { name: "Engineering",         count: 17, color: "#0891b2" },
-  { name: "Civil Registry",      count: 14, color: "#16a34a" },
-  { name: "HRMO",                count: 12, color: "#ca8a04" },
-  { name: "Budget Office",       count: 9,  color: "#9333ea" },
-  { name: "Health Office",       count: 7,  color: "#dc2626" },
-];
+  if (tab === "This Week") {
+    const day = start.getDay();
+    const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+    start.setDate(diff);
+    start.setHours(0, 0, 0, 0);
+  } else if (tab === "This Month") {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  } else if (tab === "This Quarter") {
+    const q = Math.floor(start.getMonth() / 3);
+    start.setMonth(q * 3, 1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setMonth(0, 1);
+    start.setHours(0, 0, 0, 0);
+  }
 
-const maxDept = Math.max(...deptTickets.map(d => d.count));
+  return { start, end };
+}
 
-const recentTickets = [
-  { id: "TKT-041", equipment: "Desktop PC",     dept: "Treasury",        issue: "Blue screen on startup",     status: "Resolved",    date: "Mar 18" },
-  { id: "TKT-040", equipment: "Printer",        dept: "Mayor's Office",  issue: "Paper jam, roller worn out", status: "In Progress", date: "Mar 17" },
-  { id: "TKT-039", equipment: "UPS",            dept: "Engineering",     issue: "Battery not holding charge", status: "Pending",     date: "Mar 16" },
-  { id: "TKT-038", equipment: "Laptop",         dept: "HRMO",            issue: "Keyboard keys unresponsive", status: "Resolved",    date: "Mar 15" },
-  { id: "TKT-037", equipment: "Network Switch", dept: "Budget Office",   issue: "Port 4 not passing traffic", status: "Pending",     date: "Mar 14" },
-];
+function toISO(d: Date): string {
+  return d.toISOString();
+}
 
-const statusColors: Record<string, { bg: string; color: string }> = {
-  Resolved:    { bg: "rgba(22,163,74,0.12)",  color: "#15803d" },
-  "In Progress": { bg: "rgba(234,179,8,0.12)", color: "#a16207" },
-  Pending:     { bg: "rgba(220,38,38,0.12)",  color: "#b91c1c" },
+type FileReportRow = {
+  id: string;
+  ticket_number: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  department_id: string;
+  issue_type: string | null;
+  date_submitted: string;
+  created_at: string;
 };
 
-const donutData = [
-  { label: "Hardware",  value: 52, color: brandBlue },
-  { label: "Software",  value: 31, color: "#0891b2" },
-  { label: "Network",   value: 15, color: "#16a34a" },
-  { label: "Others",    value: 8,  color: "#ca8a04" },
-];
-const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
+function normalizeIssueCategory(raw: string | null): string {
+  if (!raw) return "Others";
+  if (raw === "Network / Internet") return "Internet";
+  if (raw === "Hardware" || raw === "Software" || raw === "Internet") return raw;
+  return "Others";
+}
 
-// ── SVG donut ─────────────────────────────────────────────────────────────────
-const DonutChart: React.FC = () => {
-  const cx = 60, cy = 60, r = 48, strokeW = 14;
+function fmtTableDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-PH", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "Asia/Manila",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+const statusColors: Record<string, { bg: string; color: string }> = {
+  Resolved: { bg: "rgba(22,163,74,0.12)", color: "#15803d" },
+  "In Progress": { bg: "rgba(234,179,8,0.12)", color: "#a16207" },
+  Pending: { bg: "rgba(220,38,38,0.12)", color: "#b91c1c" },
+};
+
+type DonutSeg = { label: string; value: number; color: string };
+
+const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
+  const total = segments.reduce((s, d) => s + d.value, 0);
+  const cx = 60,
+    cy = 60,
+    r = 48,
+    strokeW = 14;
   const circ = 2 * Math.PI * r;
 
-  const segments = donutData.map((seg, i) => {
-    const dash = (seg.value / donutTotal) * circ;
+  if (total === 0) {
+    return (
+      <svg width={120} height={120} viewBox="0 0 120 120">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={strokeW} />
+        <text
+          x={cx}
+          y={cy + 4}
+          textAnchor="middle"
+          fontSize={12}
+          fill="#94a3b8"
+          fontFamily="Poppins,sans-serif"
+        >
+          No data
+        </text>
+      </svg>
+    );
+  }
+
+  const circles = segments.map((seg, i) => {
+    const dash = (seg.value / total) * circ;
     const gap = circ - dash;
-    const offset = donutData
-      .slice(0, i)
-      .reduce((sum, s) => sum + (s.value / donutTotal) * circ + 1.5, 0);
+    const offset =
+      segments.slice(0, i).reduce((sum, s) => sum + (s.value / total) * circ + 1.5, 0);
     return (
       <circle
-        key={i}
+        key={seg.label + i}
         cx={cx}
         cy={cy}
         r={r}
@@ -271,42 +335,215 @@ const DonutChart: React.FC = () => {
   return (
     <svg width={120} height={120} viewBox="0 0 120 120">
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={strokeW} />
-      {segments}
-      <text x={cx} y={cy - 6} textAnchor="middle" fontSize={18} fontWeight={700} fill="#111827" fontFamily="Poppins,sans-serif">
-        {donutTotal}
+      {circles}
+      <text
+        x={cx}
+        y={cy - 6}
+        textAnchor="middle"
+        fontSize={18}
+        fontWeight={700}
+        fill="#111827"
+        fontFamily="Poppins,sans-serif"
+      >
+        {total}
       </text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fill="#94a3b8" fontFamily="Poppins,sans-serif" letterSpacing="0.08em">
+      <text
+        x={cx}
+        y={cy + 10}
+        textAnchor="middle"
+        fontSize={9}
+        fill="#94a3b8"
+        fontFamily="Poppins,sans-serif"
+        letterSpacing="0.08em"
+      >
         TOTAL
       </text>
     </svg>
   );
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
 const ReportAnalytics: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("This Month");
-  const tabs = ["This Week", "This Month", "This Quarter", "This Year"];
+  const [activeTab, setActiveTab] = useState<PeriodTab>("This Month");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<FileReportRow[]>([]);
+  const [deptNameById, setDeptNameById] = useState<Record<string, string>>({});
+
+  const tabs: PeriodTab[] = ["This Week", "This Month", "This Quarter", "This Year"];
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    const { start, end } = getPeriodRange(activeTab);
+    const startISO = toISO(start);
+    const endISO = toISO(end);
+
+    const [{ data: depts, error: deptErr }, { data: reports, error: repErr }] = await Promise.all([
+      supabase.from("departments").select("id, name").order("name"),
+      supabase
+        .from("file_reports")
+        .select(
+          "id, ticket_number, title, description, status, department_id, issue_type, date_submitted, created_at"
+        )
+        .gte("date_submitted", startISO)
+        .lte("date_submitted", endISO)
+        .order("date_submitted", { ascending: false }),
+    ]);
+
+    if (deptErr) {
+      setLoadError(deptErr.message);
+      setTickets([]);
+      setLoading(false);
+      return;
+    }
+    if (repErr) {
+      setLoadError(repErr.message);
+      setTickets([]);
+      setLoading(false);
+      return;
+    }
+
+    const map: Record<string, string> = {};
+    (depts ?? []).forEach((d: { id: string; name: string }) => {
+      map[d.id] = d.name;
+    });
+    setDeptNameById(map);
+    setTickets((reports ?? []) as FileReportRow[]);
+    setLoading(false);
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const stats = useMemo(() => {
+    const total = tickets.length;
+    const resolved = tickets.filter(t => t.status === "Resolved").length;
+    const pending = tickets.filter(t => t.status === "Pending").length;
+    const inProgress = tickets.filter(t => t.status === "In Progress").length;
+    const resolutionPct = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    return { total, resolved, pending, inProgress, resolutionPct };
+  }, [tickets]);
+
+  const statCards = useMemo(
+    () => [
+      {
+        label: "Total Tickets",
+        value: stats.total,
+        accent: brandBlue,
+        icon: BarChart2,
+        delta: `In ${activeTab.toLowerCase()}`,
+      },
+      {
+        label: "Resolved",
+        value: stats.resolved,
+        accent: "#16a34a",
+        icon: CheckCircle2,
+        delta: stats.total > 0 ? `${stats.resolutionPct}% resolution rate` : "No tickets in period",
+      },
+      {
+        label: "Pending",
+        value: stats.pending,
+        accent: "#ca8a04",
+        icon: Clock,
+        delta: stats.total > 0 ? `${Math.round((stats.pending / stats.total) * 100)}% of total` : "—",
+      },
+      {
+        label: "In Progress",
+        value: stats.inProgress,
+        accent: "#0369a1",
+        icon: Loader,
+        delta: "Actively assigned",
+      },
+    ],
+    [stats, activeTab]
+  );
+
+  const deptTickets = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tickets.forEach(t => {
+      const id = t.department_id || "unknown";
+      counts[id] = (counts[id] ?? 0) + 1;
+    });
+    const rows = Object.entries(counts)
+      .map(([id, count]) => ({
+        id,
+        name: deptNameById[id] ?? (id === "unknown" ? "Unassigned" : "Unknown dept"),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+    return rows.map((row, i) => ({
+      name: row.name,
+      count: row.count,
+      color: DEPT_BAR_COLORS[i % DEPT_BAR_COLORS.length],
+    }));
+  }, [tickets, deptNameById]);
+
+  const maxDept = Math.max(1, ...deptTickets.map(d => d.count));
+
+  const donutData = useMemo(() => {
+    const bucket: Record<string, number> = { Hardware: 0, Software: 0, Internet: 0, Others: 0 };
+    tickets.forEach(t => {
+      const cat = normalizeIssueCategory(t.issue_type);
+      if (cat in bucket) bucket[cat] += 1;
+      else bucket.Others += 1;
+    });
+    return (["Hardware", "Software", "Internet", "Others"] as const)
+      .map(label => ({
+        label,
+        value: bucket[label],
+        color: ISSUE_DONUT_COLORS[label] ?? "#ca8a04",
+      }))
+      .filter(s => s.value > 0);
+  }, [tickets]);
+
+  const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
+
+  const recentTickets = useMemo(() => {
+    return tickets.slice(0, 8).map(t => ({
+      rowId: t.id,
+      id: t.ticket_number?.trim() || `TKT-${t.id.slice(0, 8).toUpperCase()}`,
+      title: t.title,
+      dept: deptNameById[t.department_id] ?? "—",
+      issue: (t.description ?? "").trim() || "—",
+      status: t.status,
+      date: fmtTableDate(t.date_submitted),
+    }));
+  }, [tickets, deptNameById]);
 
   return (
     <>
       <style>{raStyles}</style>
-      <div className="ra-root" style={{ display: "flex", flexDirection: "column", gap: "1.2rem", paddingRight: "1rem" }}>
-
-        {/* ── Top bar ── */}
-        <div className="ra-top-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+      <div
+        className="ra-root"
+        style={{ display: "flex", flexDirection: "column", gap: "1.2rem", paddingRight: "1rem" }}
+      >
+        <div
+          className="ra-top-bar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
           <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0, letterSpacing: 2 }}>Reports & Analytics</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0, letterSpacing: 2 }}>
+              Reports & Analytics
+            </h1>
             <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 0", fontWeight: 400 }}>
-              IT Helpdesk performance overview — Tarlac City Government
+              IT Helpdesk ticket metrics by period (live data).
             </p>
           </div>
 
           <div className="ra-tabs-wrap" style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            {/* Period tabs */}
             <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
               {tabs.map(t => (
                 <button
                   key={t}
+                  type="button"
                   className={`ra-tab${activeTab === t ? " active" : ""}`}
                   onClick={() => setActiveTab(t)}
                 >
@@ -314,123 +551,192 @@ const ReportAnalytics: React.FC = () => {
                 </button>
               ))}
             </div>
-
-            {/* Export */}
-            <button className="ra-export-btn">
+            <button type="button" className="ra-export-btn">
               <Download size={13} strokeWidth={2.2} />
               Export PDF
             </button>
           </div>
         </div>
 
-        {/* ── Stat cards ── */}
-        <div className="ra-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: "0.9rem" }}>
-          {statCards.map(({ label, value, accent, icon: Icon, delta }) => (
-            <div key={label} className="ra-stat-card">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#64748b", fontWeight: 600 }}>
-                  {label}
-                </span>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Icon size={15} strokeWidth={2} color={accent} />
-                </div>
-              </div>
-              <span style={{ fontSize: 28, fontWeight: 700, color: accent, lineHeight: 1.1 }}>{value}</span>
-              <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>{delta}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Middle row: bar chart + donut ── */}
-        <div className="ra-middle-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1.1rem" }}>
-
-          {/* Tickets by Department */}
-          <div className="ra-panel">
-            <div className="ra-panel-title">
-              <TrendingUp size={15} color={brandBlue} strokeWidth={2.2} />
-              Tickets by Department
-            </div>
-            {deptTickets.map(dept => (
-              <div key={dept.name} className="ra-bar-row">
-                <span className="ra-bar-label">{dept.name}</span>
-                <div className="ra-bar-track">
-                  <div
-                    className="ra-bar-fill"
-                    style={{
-                      width: `${(dept.count / maxDept) * 100}%`,
-                      background: dept.color,
-                    }}
-                  />
-                </div>
-                <span className="ra-bar-value">{dept.count}</span>
-              </div>
-            ))}
+        {loadError && (
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              borderRadius: 10,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#b91c1c",
+              fontSize: 13,
+            }}
+          >
+            Could not load reports: {loadError}
           </div>
+        )}
 
-          {/* Issue Categories donut */}
-          <div className="ra-panel" style={{ display: "flex", flexDirection: "column" }}>
-            <div className="ra-panel-title">
-              <BarChart2 size={15} color={brandBlue} strokeWidth={2.2} />
-              Issue Categories
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", marginTop: "0.25rem" }}>
-              <DonutChart />
-            </div>
-            <div className="ra-donut-legend">
-              {donutData.map(seg => (
-                <div key={seg.label} className="ra-donut-legend-row">
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span className="ra-donut-dot" style={{ background: seg.color }} />
-                    <span style={{ color: "#475569", fontWeight: 500 }}>{seg.label}</span>
-                  </div>
-                  <span style={{ fontWeight: 600, color: "#111827" }}>
-                    {seg.value}
-                    <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 11 }}>
-                      {" "}({Math.round((seg.value / donutTotal) * 100)}%)
+        {loading ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              padding: "3rem",
+              color: "#94a3b8",
+              fontSize: 14,
+            }}
+          >
+            <Loader size={22} className="ra-spin" style={{ animation: "spin 0.9s linear infinite" }} />
+            Loading analytics…
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : (
+          <>
+            <div
+              className="ra-stat-grid"
+              style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: "0.9rem" }}
+            >
+              {statCards.map(({ label, value, accent, icon: Icon, delta }) => (
+                <div key={label} className="ra-stat-card">
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {label}
                     </span>
-                  </span>
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        background: `${accent}18`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Icon size={15} strokeWidth={2} color={accent} />
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: accent, lineHeight: 1.1 }}>{value}</span>
+                  <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>{delta}</span>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* ── Recent tickets table ── */}
-        <div className="ra-panel">
-          <div className="ra-panel-title" style={{ marginBottom: "0.5rem" }}>
-            <Calendar size={15} color={brandBlue} strokeWidth={2.2} />
-            Recent Tickets
-          </div>
-          <table className="ra-table">
-            <thead>
-              <tr>
-                {["Ticket ID", "Equipment", "Department", "Issue", "Status", "Date"].map(h => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentTickets.map(t => {
-                const { bg, color } = statusColors[t.status] ?? { bg: "#f1f5f9", color: "#64748b" };
-                return (
-                  <tr key={t.id}>
-                    <td style={{ fontWeight: 600, color: brandBlue }}>{t.id}</td>
-                    <td>{t.equipment}</td>
-                    <td style={{ color: "#6b7280" }}>{t.dept}</td>
-                    <td style={{ color: "#4b5563", maxWidth: 220 }}>{t.issue}</td>
-                    <td>
-                      <span className="ra-badge" style={{ background: bg, color }}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td style={{ color: "#94a3b8", fontSize: 12 }}>{t.date}</td>
+            <div className="ra-middle-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1.1rem" }}>
+              <div className="ra-panel">
+                <div className="ra-panel-title">
+                  <TrendingUp size={15} color={brandBlue} strokeWidth={2.2} />
+                  Tickets by Department
+                </div>
+                {deptTickets.length === 0 ? (
+                  <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>No tickets in this period.</p>
+                ) : (
+                  deptTickets.map(dept => (
+                    <div key={dept.name} className="ra-bar-row">
+                      <span className="ra-bar-label">{dept.name}</span>
+                      <div className="ra-bar-track">
+                        <div
+                          className="ra-bar-fill"
+                          style={{
+                            width: `${(dept.count / maxDept) * 100}%`,
+                            background: dept.color,
+                          }}
+                        />
+                      </div>
+                      <span className="ra-bar-value">{dept.count}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="ra-panel" style={{ display: "flex", flexDirection: "column" }}>
+                <div className="ra-panel-title">
+                  <BarChart2 size={15} color={brandBlue} strokeWidth={2.2} />
+                  Issue type
+                </div>
+                <div style={{ display: "flex", justifyContent: "center", marginTop: "0.25rem" }}>
+                  <DonutChart segments={donutData} />
+                </div>
+                <div className="ra-donut-legend">
+                  {donutTotal === 0 ? (
+                    <span style={{ fontSize: 12, color: "#94a3b8" }}>No tickets in this period.</span>
+                  ) : (
+                    donutData.map(seg => (
+                      <div key={seg.label} className="ra-donut-legend-row">
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <span className="ra-donut-dot" style={{ background: seg.color }} />
+                          <span style={{ color: "#475569", fontWeight: 500 }}>{seg.label}</span>
+                        </div>
+                        <span style={{ fontWeight: 600, color: "#111827" }}>
+                          {seg.value}
+                          <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 11 }}>
+                            {" "}
+                            ({Math.round((seg.value / donutTotal) * 100)}%)
+                          </span>
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="ra-panel">
+              <div className="ra-panel-title" style={{ marginBottom: "0.5rem" }}>
+                <Calendar size={15} color={brandBlue} strokeWidth={2.2} />
+                Recent Tickets
+              </div>
+              <table className="ra-table">
+                <thead>
+                  <tr>
+                    {["Ticket ID", "Title", "Department", "Description", "Status", "Date"].map(h => (
+                      <th key={h}>{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
+                </thead>
+                <tbody>
+                  {recentTickets.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>
+                        No tickets in this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    recentTickets.map(t => {
+                      const { bg, color } = statusColors[t.status] ?? {
+                        bg: "#f1f5f9",
+                        color: "#64748b",
+                      };
+                      return (
+                        <tr key={t.rowId}>
+                          <td style={{ fontWeight: 600, color: brandBlue }}>{t.id}</td>
+                          <td style={{ maxWidth: 160 }}>{t.title}</td>
+                          <td style={{ color: "#6b7280" }}>{t.dept}</td>
+                          <td style={{ color: "#4b5563", maxWidth: 220, wordBreak: "break-word" }}>
+                            {t.issue.length > 120 ? `${t.issue.slice(0, 120)}…` : t.issue}
+                          </td>
+                          <td>
+                            <span className="ra-badge" style={{ background: bg, color }}>
+                              {t.status}
+                            </span>
+                          </td>
+                          <td style={{ color: "#94a3b8", fontSize: 12 }}>{t.date}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

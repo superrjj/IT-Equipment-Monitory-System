@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
-import Sidebar from "../dashboard/sidebar";
-import Header from "../dashboard/header";
+import Sidebar from "../Dashboard/sidebar";
+import Header from "../Dashboard/header";
 import Departments from "../Management/department";
 import FileReports from "../Ticket & Repairs/submitTicket";
 import ReportAnalytics from "../Reports/report-analytics";
 import UserAccounts from "../Management/user-accounts";
+import IncomingUnits from "../Units/incomingUnits";
+import OutgoingUnits from "../Units/outgoingUnits";
 
 // ── Supabase client ────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -279,8 +281,8 @@ const Dashboard: React.FC = () => {
     "Home":                 <DashboardHome />,
     "Submit Ticket":        <FileReports />,
     "Repair History":       <ComingSoon label="Repair History" />,
-    "Incoming Units":       <ComingSoon label="Incoming Units" />,
-    "Outgoing Units":       <ComingSoon label="Outgoing Units" />,
+    "Incoming Units":       <IncomingUnits />,
+    "Outgoing Units":       <OutgoingUnits />,
     "Departments":          <Departments />,
     "User Accounts":        isAdmin ? <UserAccounts /> : <DashboardHome />,
     "Reports & Analytics":  isAdmin ? <ReportAnalytics /> : <DashboardHome />,
