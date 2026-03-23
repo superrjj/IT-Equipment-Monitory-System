@@ -4,7 +4,7 @@ import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
   ChevronLeft, ChevronRight, Package,
-  Clock, User, Users, Inbox,
+  Clock, User, Users, Inbox, Cable, Phone,
 } from "lucide-react";
 
 const supabase = createClient(
@@ -20,6 +20,8 @@ type IncomingUnitRow = {
   id: string;
   date_received: string;
   unit_name: string;
+  unit_cable: string | null;
+  contact_number: string | null;
   reported_by: string;
   received_by_user_id: string | null;
   issue_description: string;
@@ -32,6 +34,8 @@ type UserOption = { id: string; full_name: string; role: string };
 type FormState = {
   date_received: string;
   unit_name: string;
+  unit_cable: string;
+  contact_number: string;
   reported_by: string;
   received_by_user_id: string;
   issue_description: string;
@@ -60,6 +64,12 @@ function validateForm(form: FormState): string {
   if (!unit) return "Unit name is required.";
   if (unit.length < 2) return "Unit name must be at least 2 characters.";
   if (unit.length > 200) return "Unit name must be 200 characters or less.";
+
+  if (form.unit_cable.trim().length > 200)
+    return "Unit cable must be 200 characters or less.";
+
+  if (form.contact_number.trim().length > 50)
+    return "Contact number must be 50 characters or less.";
 
   const reporter = form.reported_by.trim();
   if (!reporter) return "Reported by (employee name) is required.";
@@ -96,6 +106,8 @@ const fmtDate = (iso: string | null | undefined) =>
 const emptyForm = (): FormState => ({
   date_received: new Date().toISOString().slice(0, 10),
   unit_name: "",
+  unit_cable: "",
+  contact_number: "",
   reported_by: "",
   received_by_user_id: "",
   issue_description: "",
@@ -121,7 +133,7 @@ const StaffSinglePicker: React.FC<{
     }}
   >
     {users.length === 0 ? (
-      <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT staff found.</div>
+      <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Technician found.</div>
     ) : (
       users.map(u => {
         const active = selectedId === u.id;
@@ -202,9 +214,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const userMap = useMemo(() => {
     const m: Record<string, UserOption> = {};
-    itStaff.forEach(u => {
-      m[u.id] = u;
-    });
+    itStaff.forEach(u => { m[u.id] = u; });
     return m;
   }, [itStaff]);
 
@@ -231,9 +241,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchAll();
-  }, [sortField, sortDir]);
+  useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
   const rowsWithNames = useMemo(
     () =>
@@ -250,7 +258,14 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     const q = search.trim().toLowerCase();
     return rowsWithNames.filter(r => {
       if (!q) return true;
-      const blob = [r.unit_name, r.reported_by, r.issue_description, r.receiver_name ?? ""]
+      const blob = [
+        r.unit_name,
+        r.reported_by,
+        r.issue_description,
+        r.receiver_name ?? "",
+        r.unit_cable ?? "",
+        r.contact_number ?? "",
+      ]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -261,16 +276,11 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => setPage(1), [search]);
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortField(field);
-      setSortDir("asc");
-    }
+    else { setSortField(field); setSortDir("asc"); }
   };
 
   const SortIcon = ({ field }: { field: SortField }) => (
@@ -288,10 +298,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setSubmitting(false);
   };
 
-  const openAdd = () => {
-    closeModal();
-    setModalMode("add");
-  };
+  const openAdd = () => { closeModal(); setModalMode("add"); };
 
   const openEdit = (r: IncomingUnitRow) => {
     closeModal();
@@ -299,6 +306,8 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setForm({
       date_received: r.date_received.slice(0, 10),
       unit_name: r.unit_name,
+      unit_cable: r.unit_cable ?? "",
+      contact_number: r.contact_number ?? "",
       reported_by: r.reported_by,
       received_by_user_id: r.received_by_user_id ?? "",
       issue_description: r.issue_description,
@@ -306,24 +315,20 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setModalMode("edit");
   };
 
-  const openView = (r: IncomingUnitRow) => {
-    setSelected(r);
-    setModalMode("view");
-  };
+  const openView = (r: IncomingUnitRow) => { setSelected(r); setModalMode("view"); };
 
   const today = new Date().toISOString().slice(0, 10);
 
   const handleSubmit = async () => {
     const err = validateForm(form);
-    if (err) {
-      setFormError(err);
-      return;
-    }
+    if (err) { setFormError(err); return; }
     setSubmitting(true);
 
     const basePayload = {
       date_received: new Date(form.date_received).toISOString(),
       unit_name: sanitize(form.unit_name),
+      unit_cable: form.unit_cable.trim() ? sanitize(form.unit_cable) : null,
+      contact_number: form.contact_number.trim() ? sanitize(form.contact_number) : null,
       reported_by: sanitize(form.reported_by),
       received_by_user_id: form.received_by_user_id || null,
       issue_description: sanitize(form.issue_description),
@@ -331,25 +336,14 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
     if (modalMode === "add") {
       const { error } = await supabase.from("incoming_units").insert(basePayload);
-      if (error) {
-        setFormError(friendlyError(error.message));
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
       showToast("Incoming unit recorded successfully.", "success");
     } else if (modalMode === "edit" && selected) {
       const { error } = await supabase
         .from("incoming_units")
-        .update({
-          ...basePayload,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...basePayload, updated_at: new Date().toISOString() })
         .eq("id", selected.id);
-      if (error) {
-        setFormError(friendlyError(error.message));
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
       showToast("Record updated successfully.", "success");
     }
 
@@ -386,6 +380,9 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     marginBottom: 4,
     display: "block",
   };
+  const optionalBadge = (
+    <span style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8", marginLeft: 4 }}>(optional)</span>
+  );
 
   return (
     <>
@@ -426,28 +423,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "1rem",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-          }}
-        >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                margin: 0,
-                letterSpacing: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8 }}>
               <Inbox size={20} color={BRAND} /> Incoming Units
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
@@ -460,18 +439,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             <button
               onClick={openAdd}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                padding: "0.5rem 1rem",
-                borderRadius: 10,
-                border: "none",
-                background: BRAND,
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                fontFamily: "'Poppins', sans-serif",
+                display: "flex", alignItems: "center", gap: "0.4rem",
+                padding: "0.5rem 1rem", borderRadius: 10, border: "none",
+                background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "'Poppins', sans-serif",
               }}
             >
               <Plus size={15} /> Log incoming unit
@@ -479,105 +450,35 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           )}
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: "0.75rem",
-            marginBottom: "1.2rem",
-          }}
-        >
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
-            {
-              label: "Total logged",
-              value: rows.length,
-              color: BRAND,
-              icon: <Package size={16} />,
-            },
-            {
-              label: "This list (filtered)",
-              value: filtered.length,
-              color: "#475569",
-              icon: <Search size={16} />,
-            },
+            { label: "Total logged", value: rows.length, color: BRAND, icon: <Package size={16} /> },
+            { label: "This list (filtered)", value: filtered.length, color: "#475569", icon: <Search size={16} /> },
           ].map(c => (
-            <div
-              key={c.label}
-              style={{
-                background: "#fff",
-                borderRadius: 14,
-                padding: "0.9rem 1rem",
-                border: "1px solid #e2e8f0",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-              }}
-            >
+            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: `${c.color}15`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: c.color,
-                  }}
-                >
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${c.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color }}>
                   {c.icon}
                 </div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: c.color }}>{c.value}</div>
               </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "#64748b",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 {c.label}
               </div>
             </div>
           ))}
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 18,
-            border: "1px solid #e2e8f0",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "0.9rem 1.2rem",
-              borderBottom: "1px solid #f1f5f9",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.65rem",
-              alignItems: "center",
-            }}
-          >
+        {/* Table card */}
+        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 320 }}>
-              <Search
-                size={14}
-                style={{
-                  position: "absolute",
-                  left: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94a3b8",
-                }}
-              />
+              <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search unit, employee, receiver, issue…"
+                placeholder="Search unit, employee, cable, contact…"
                 style={{ ...inputStyle, paddingLeft: 32 }}
               />
             </div>
@@ -592,11 +493,13 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                   {(
                     [
-                      { label: "Date received", field: "date_received" as SortField },
-                      { label: "Unit name", field: "unit_name" as SortField },
-                      { label: "Reported by", field: "reported_by" as SortField },
-                      { label: "Received by", field: null },
-                      { label: "Issue", field: null },
+                      { label: "Date", field: "date_received" as SortField },
+                      { label: "Unit", field: "unit_name" as SortField },
+                      { label: "Unit cable", field: null },
+                      { label: "Contact no.", field: null },
+                      { label: "Name of Employee", field: "reported_by" as SortField },
+                      { label: "Person In Charge", field: null },
+                      { label: "Problem", field: null },
                       { label: "Logged", field: "created_at" as SortField },
                       { label: "Actions", field: null },
                     ] as { label: string; field: SortField | null }[]
@@ -626,55 +529,23 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>
-                      Loading…
-                    </td>
+                    <td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td>
                   </tr>
                 ) : paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>
-                      No incoming units found.
-                    </td>
+                    <td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No incoming units found.</td>
                   </tr>
                 ) : (
                   paginated.map(r => (
-                    <tr
-                      key={r.id}
-                      className="iu-row"
-                      style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}
-                    >
-                      <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                        {fmtDate(r.date_received)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.75rem 1rem",
-                          fontWeight: 600,
-                          maxWidth: 180,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {r.unit_name}
-                      </td>
+                    <tr key={r.id} className="iu-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
+                      <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>{fmtDate(r.date_received)}</td>
+                      <td style={{ padding: "0.75rem 1rem", fontWeight: 600, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.unit_name}</td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>{r.unit_cable || <span style={{ color: "#cbd5e1" }}>—</span>}</td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>{r.contact_number || <span style={{ color: "#cbd5e1" }}>—</span>}</td>
                       <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.reported_by}</td>
                       <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.receiver_name}</td>
-                      <td
-                        style={{
-                          padding: "0.75rem 1rem",
-                          color: "#64748b",
-                          maxWidth: 220,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {r.issue_description}
-                      </td>
-                      <td style={{ padding: "0.75rem 1rem", color: "#94a3b8", fontSize: 12, whiteSpace: "nowrap" }}>
-                        {fmtDate(r.created_at)}
-                      </td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#64748b", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.issue_description}</td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#94a3b8", fontSize: 12, whiteSpace: "nowrap" }}>{fmtDate(r.created_at)}</td>
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           {(
@@ -683,12 +554,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                               : [
                                   { icon: <Eye size={14} />, title: "View", fn: () => openView(r), color: BRAND },
                                   { icon: <Pencil size={14} />, title: "Edit", fn: () => openEdit(r), color: BRAND },
-                                  {
-                                    icon: <Trash2 size={14} />,
-                                    title: "Delete",
-                                    fn: () => setDeleteTarget(r),
-                                    color: "#dc2626",
-                                  },
+                                  { icon: <Trash2 size={14} />, title: "Delete", fn: () => setDeleteTarget(r), color: "#dc2626" },
                                 ]
                           ).map((btn, i) => (
                             <button
@@ -697,17 +563,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                               className="icon-btn-iu"
                               onClick={btn.fn}
                               style={{
-                                width: 30,
-                                height: 30,
-                                borderRadius: 8,
-                                border: "1px solid #e2e8f0",
-                                background: "#fff",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: btn.color,
-                                transition: "background 0.15s",
+                                width: 30, height: 30, borderRadius: 8,
+                                border: "1px solid #e2e8f0", background: "#fff",
+                                cursor: "pointer", display: "flex", alignItems: "center",
+                                justifyContent: "center", color: btn.color, transition: "background 0.15s",
                               }}
                             >
                               {btn.icon}
@@ -722,35 +581,16 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             </table>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0.75rem 1.2rem",
-              borderTop: "1px solid #f1f5f9",
-            }}
-          >
+          {/* Pagination */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.2rem", borderTop: "1px solid #f1f5f9" }}>
             <span style={{ fontSize: 12, color: "#64748b" }}>
-              Showing {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–
-              {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+              Showing {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
             </span>
             <div style={{ display: "flex", gap: 6 }}>
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                  background: "#fff",
-                  cursor: page === 1 ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: page === 1 ? "#cbd5e1" : "#475569",
-                }}
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}
               >
                 <ChevronLeft size={14} />
               </button>
@@ -758,18 +598,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 <button
                   key={n}
                   onClick={() => setPage(n)}
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 8,
-                    border: "1px solid #e2e8f0",
-                    background: n === page ? BRAND : "#fff",
-                    color: n === page ? "#fff" : "#475569",
-                    fontWeight: n === page ? 600 : 400,
-                    cursor: "pointer",
-                    fontSize: 12,
-                    fontFamily: "'Poppins', sans-serif",
-                  }}
+                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: n === page ? BRAND : "#fff", color: n === page ? "#fff" : "#475569", fontWeight: n === page ? 600 : 400, cursor: "pointer", fontSize: 12, fontFamily: "'Poppins', sans-serif" }}
                 >
                   {n}
                 </button>
@@ -777,18 +606,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                  background: "#fff",
-                  cursor: page === totalPages ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: page === totalPages ? "#cbd5e1" : "#475569",
-                }}
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}
               >
                 <ChevronRight size={14} />
               </button>
@@ -796,198 +614,134 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         </div>
 
+        {/* Add / Edit Modal */}
         {!readOnly && (modalMode === "add" || modalMode === "edit") && (
           <div
             className="modal-overlay-iu"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(15,23,42,0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-              padding: 16,
-            }}
+            style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}
           >
             <div
               className="modal-box-iu"
-              style={{
-                background: "#fff",
-                borderRadius: 18,
-                padding: "1.6rem",
-                width: "100%",
-                maxWidth: 620,
-                maxHeight: "calc(100vh - 32px)",
-                overflowY: "auto",
-                boxShadow: "0 24px 60px rgba(15,23,42,0.2)",
-              }}
+              style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "1.2rem",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
                   {modalMode === "add" ? "Log incoming unit" : "Edit incoming unit"}
                 </h2>
-                <button
-                  onClick={closeModal}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
-                >
+                <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
                   <X size={18} />
                 </button>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
+                {/* Date */}
                 <div>
-                  <label style={labelStyle}>
-                    Date received <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
+                  <label style={labelStyle}>Date <span style={{ color: "#dc2626" }}>*</span></label>
                   <input
                     type="date"
                     value={form.date_received}
                     max={today}
-                    onChange={e => {
-                      setForm(f => ({ ...f, date_received: e.target.value }));
-                      setFormError("");
-                    }}
-                    style={{
-                      ...inputStyle,
-                      borderColor:
-                        formError && !form.date_received ? "#fca5a5" : "#e2e8f0",
-                    }}
+                    onChange={e => { setForm(f => ({ ...f, date_received: e.target.value })); setFormError(""); }}
+                    style={{ ...inputStyle, borderColor: formError && !form.date_received ? "#fca5a5" : "#e2e8f0" }}
                   />
                 </div>
                 <div />
 
+                {/* Unit name */}
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>
-                    Unit name <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
+                  <label style={labelStyle}>Unit <span style={{ color: "#dc2626" }}>*</span></label>
                   <input
                     value={form.unit_name}
-                    onChange={e => {
-                      setForm(f => ({ ...f, unit_name: e.target.value }));
-                      setFormError("");
-                    }}
+                    onChange={e => { setForm(f => ({ ...f, unit_name: e.target.value })); setFormError(""); }}
                     placeholder="e.g. Dell Latitude 5420 — Asset tag AT-1024"
                     maxLength={200}
-                    style={{ ...inputStyle }}
+                    style={inputStyle}
                   />
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>
-                    {form.unit_name.length}/200
-                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>{form.unit_name.length}/200</div>
                 </div>
 
-                <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>
-                    Reported by <span style={{ color: "#dc2626" }}>*</span>
+                {/* Unit cable */}
+                <div>
+                  <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Cable size={13} color="#475569" /> Unit cable {optionalBadge}
                   </label>
                   <input
-                    value={form.reported_by}
-                    onChange={e => {
-                      setForm(f => ({ ...f, reported_by: e.target.value }));
-                      setFormError("");
-                    }}
-                    placeholder="Employee who brought or reported the unit"
-                    maxLength={100}
-                    style={{ ...inputStyle }}
+                    value={form.unit_cable}
+                    onChange={e => { setForm(f => ({ ...f, unit_cable: e.target.value })); setFormError(""); }}
+                    placeholder="e.g. Power cord, VGA cable"
+                    maxLength={200}
+                    style={inputStyle}
                   />
                 </div>
 
+                {/* Contact number */}
+                <div>
+                  <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Phone size={13} color="#475569" /> Contact no. {optionalBadge}
+                  </label>
+                  <input
+                    value={form.contact_number}
+                    onChange={e => { setForm(f => ({ ...f, contact_number: e.target.value })); setFormError(""); }}
+                    placeholder="e.g. 09171234567"
+                    maxLength={50}
+                    style={inputStyle}
+                  />
+                </div>
+
+                {/* Reported by */}
+                <div style={{ gridColumn: "span 2" }}>
+                  <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
+                  <input
+                    value={form.reported_by}
+                    onChange={e => { setForm(f => ({ ...f, reported_by: e.target.value })); setFormError(""); }}
+                    placeholder="Employee who brought or reported the unit"
+                    maxLength={100}
+                    style={inputStyle}
+                  />
+                </div>
+
+                {/* Received by */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Users size={13} color="#475569" />
-                    Received by (IT staff) <span style={{ color: "#dc2626" }}>*</span>
+                    <Users size={13} color="#475569" /> Received by (IT Technician) <span style={{ color: "#dc2626" }}>*</span>
                   </label>
                   <StaffSinglePicker
                     users={itStaff}
                     selectedId={form.received_by_user_id}
-                    onChange={id => {
-                      setForm(f => ({ ...f, received_by_user_id: id }));
-                      setFormError("");
-                    }}
+                    onChange={id => { setForm(f => ({ ...f, received_by_user_id: id })); setFormError(""); }}
                     hasError={!!(formError && !form.received_by_user_id)}
                   />
                 </div>
 
+                {/* Issue description */}
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>
-                    Issue description <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
+                  <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
                   <textarea
                     value={form.issue_description}
-                    onChange={e => {
-                      setForm(f => ({ ...f, issue_description: e.target.value }));
-                      setFormError("");
-                    }}
+                    onChange={e => { setForm(f => ({ ...f, issue_description: e.target.value })); setFormError(""); }}
                     placeholder="Describe the problem or service requested…"
                     rows={4}
                     maxLength={2000}
                     style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
                   />
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>
-                    {form.issue_description.length}/2000
-                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>{form.issue_description.length}/2000</div>
                 </div>
               </div>
 
               {formError && (
-                <div
-                  style={{
-                    marginTop: "0.85rem",
-                    padding: "0.55rem 0.8rem",
-                    borderRadius: 8,
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    color: "#b91c1c",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
+                <div style={{ marginTop: "0.85rem", padding: "0.55rem 0.8rem", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                   <AlertTriangle size={13} /> {formError}
                 </div>
               )}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
-                <button
-                  onClick={closeModal}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: 8,
-                    border: "1px solid #e2e8f0",
-                    background: "#fff",
-                    color: "#475569",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    fontFamily: "'Poppins', sans-serif",
-                  }}
-                >
+                <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  style={{
-                    padding: "0.5rem 1.2rem",
-                    borderRadius: 8,
-                    border: "none",
-                    background: BRAND,
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: submitting ? "not-allowed" : "pointer",
-                    fontFamily: "'Poppins', sans-serif",
-                    opacity: submitting ? 0.7 : 1,
-                  }}
+                  style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1 }}
                 >
                   {submitting ? "Saving…" : modalMode === "add" ? "Save record" : "Save changes"}
                 </button>
@@ -996,169 +750,66 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
+        {/* View Modal */}
         {modalMode === "view" && selected && (
           <div
             className="modal-overlay-iu"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(15,23,42,0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-              padding: 16,
-            }}
+            style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}
           >
             <div
               className="modal-box-iu"
-              style={{
-                background: "#fff",
-                borderRadius: 18,
-                padding: "1.6rem",
-                width: "100%",
-                maxWidth: 560,
-                maxHeight: "calc(100vh - 32px)",
-                overflowY: "auto",
-                boxShadow: "0 24px 60px rgba(15,23,42,0.2)",
-              }}
+              style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  marginBottom: "1.2rem",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.2rem" }}>
                 <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8 }}>
-                    {selected.unit_name}
-                  </h2>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: BRAND,
-                      background: `${BRAND}12`,
-                      padding: "2px 10px",
-                      borderRadius: 999,
-                    }}
-                  >
+                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8 }}>{selected.unit_name}</h2>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: BRAND, background: `${BRAND}12`, padding: "2px 10px", borderRadius: 999 }}>
                     Incoming unit
                   </span>
                 </div>
-                <button
-                  onClick={closeModal}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "#94a3b8",
-                    flexShrink: 0,
-                  }}
-                >
+                <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", flexShrink: 0 }}>
                   <X size={18} />
                 </button>
               </div>
 
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: BRAND,
-                  marginBottom: 4,
-                }}
-              >
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>
                 Receipt details
               </div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
                   { label: "Date received", value: fmtDate(selected.date_received), icon: <Clock size={12} /> },
-                  { label: "Reported by", value: selected.reported_by, icon: <User size={12} /> },
+                  { label: "Unit cable", value: selected.unit_cable || "—", icon: <Cable size={12} /> },
+                  { label: "Contact no.", value: selected.contact_number || "—", icon: <Phone size={12} /> },
+                  { label: "Name of Employee", value: selected.reported_by, icon: <User size={12} /> },
                   {
                     label: "Received by",
-                    value: selected.received_by_user_id
-                      ? userMap[selected.received_by_user_id]?.full_name ?? "—"
-                      : "—",
+                    value: selected.received_by_user_id ? userMap[selected.received_by_user_id]?.full_name ?? "—" : "—",
                     icon: <Users size={12} />,
                   },
-                  {
-                    label: "Logged on",
-                    value: fmtDate(selected.created_at),
-                    icon: <Clock size={12} />,
-                  },
+                  { label: "Logged on", value: fmtDate(selected.created_at), icon: <Clock size={12} /> },
                 ].map(row => (
                   <div key={row.label} className="iu-detail-row">
-                    <span className="iu-detail-label">
-                      {row.icon} {row.label}
-                    </span>
+                    <span className="iu-detail-label">{row.icon} {row.label}</span>
                     <span style={{ color: "#0f172a", flex: 1 }}>{row.value}</span>
                   </div>
                 ))}
               </div>
 
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 6 }}>
-                Issue description
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 8,
-                  padding: "0.75rem",
-                  lineHeight: 1.7,
-                  color: "#374151",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  fontSize: 13,
-                  marginBottom: "1rem",
-                }}
-              >
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 6 }}>Issue description</div>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "0.75rem", lineHeight: 1.7, color: "#374151", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13, marginBottom: "1rem" }}>
                 {selected.issue_description}
               </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
                 {!readOnly && (
                   <button
-                    onClick={() => {
-                      closeModal();
-                      openEdit(selected);
-                    }}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      borderRadius: 8,
-                      border: `1.5px solid ${BRAND}`,
-                      background: "#fff",
-                      color: BRAND,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "'Poppins', sans-serif",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
+                    onClick={() => { closeModal(); openEdit(selected); }}
+                    style={{ padding: "0.5rem 1rem", borderRadius: 8, border: `1.5px solid ${BRAND}`, background: "#fff", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", display: "flex", alignItems: "center", gap: 6 }}
                   >
                     <Pencil size={13} /> Edit
                   </button>
                 )}
-                <button
-                  onClick={closeModal}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: 8,
-                    border: "1px solid #e2e8f0",
-                    background: "#fff",
-                    color: "#475569",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    fontFamily: "'Poppins', sans-serif",
-                  }}
-                >
+                <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Close
                 </button>
               </div>
@@ -1166,43 +817,17 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
+        {/* Delete Confirm Modal */}
         {!readOnly && deleteTarget && (
           <div
             className="modal-overlay-iu"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(15,23,42,0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
+            style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
           >
             <div
               className="modal-box-iu"
-              style={{
-                background: "#fff",
-                borderRadius: 18,
-                padding: "1.6rem",
-                width: "100%",
-                maxWidth: 380,
-                boxShadow: "0 24px 60px rgba(15,23,42,0.2)",
-                textAlign: "center",
-              }}
+              style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}
             >
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  background: "#fee2e2",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 1rem",
-                }}
-              >
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
                 <AlertTriangle size={22} color="#dc2626" />
               </div>
               <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete record?</h2>
@@ -1210,36 +835,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 Permanently remove <strong>&quot;{deleteTarget.unit_name}&quot;</strong>? This cannot be undone.
               </p>
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  style={{
-                    padding: "0.5rem 1.1rem",
-                    borderRadius: 8,
-                    border: "1px solid #e2e8f0",
-                    background: "#fff",
-                    color: "#475569",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    fontFamily: "'Poppins', sans-serif",
-                  }}
-                >
+                <button onClick={() => setDeleteTarget(null)} style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Cancel
                 </button>
-                <button
-                  onClick={confirmDelete}
-                  style={{
-                    padding: "0.5rem 1.1rem",
-                    borderRadius: 8,
-                    border: "none",
-                    background: "#dc2626",
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "'Poppins', sans-serif",
-                  }}
-                >
+                <button onClick={confirmDelete} style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Delete
                 </button>
               </div>
