@@ -1,5 +1,18 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
+import Sidebar from "../dashboard/sidebar";
+import Header from "../dashboard/header";
+import Departments from "../Management/department";
+import FileReports from "../Ticket & Repairs/submitTicket";
+import ReportAnalytics from "../Reports/report-analytics";
+import UserAccounts from "../Management/user-accounts";
+import IncomingUnits from "../Units/incomingUnits";
+import OutgoingUnits from "../Units/outgoingUnits";
+import Repairs from "../repairs/repairs";
+import TechnicianDashboardHome from "../../technician/technician-dashboard-home";
+import MyTickets from "../../technician/my-tickets";
+import ActivityLogPanel from "../../technician/activity-log-panel";
 import {
   Ticket, Clock, CheckCircle, CircleArrowDown,
   CircleArrowUp, TrendingUp, Activity, Zap,
@@ -11,6 +24,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 function useCountUp(target: number, duration = 900) {
@@ -31,9 +45,9 @@ function useCountUp(target: number, duration = 900) {
   return val;
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 type IssueCount = { type: string; count: number };
 type DeptRow    = { name: string; tickets: number; repairs: number };
-
 type DashData = {
   totalTickets:      number;
   pendingTickets:    number;
@@ -73,17 +87,13 @@ const KPI: React.FC<{
       transition: `opacity 0.45s ease ${delay}ms, transform 0.45s ease ${delay}ms`,
       boxShadow: "0 2px 12px rgba(10,76,134,0.05)",
     }}>
-      {/* Accent bar */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: "20px 20px 0 0" }} />
-      {/* Glow blob */}
       <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: accent, opacity: 0.06 }} />
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
         <div style={{ width: 38, height: 38, borderRadius: 12, background: `${accent}15`, display: "flex", alignItems: "center", justifyContent: "center", color: accent }}>
           {icon}
         </div>
       </div>
-
       <div>
         <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1px", fontFamily: "'DM Sans', sans-serif" }}>
           {displayed}
@@ -125,7 +135,6 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
   const r = 52, cx = 64, cy = 64, stroke = 18;
   const circ = 2 * Math.PI * r;
   let offset = 0;
-
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "1.4rem" }}>
       <svg width={128} height={128} viewBox="0 0 128 128">
@@ -168,7 +177,6 @@ const HorizBar: React.FC<{ label: string; value: number; max: number; color: str
     const t = setTimeout(() => setWidth((value / Math.max(max, 1)) * 100), rank * 120 + 200);
     return () => clearTimeout(t);
   }, [value, max, rank]);
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -184,14 +192,13 @@ const HorizBar: React.FC<{ label: string; value: number; max: number; color: str
 
 // ── Dashboard Home ────────────────────────────────────────────────────────────
 const DashboardHome: React.FC = () => {
-  const [data, setData]         = useState<DashData | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [data, setData]           = useState<DashData | null>(null);
+  const [loading, setLoading]     = useState(true);
   const [refreshed, setRefreshed] = useState(false);
 
   const load = async () => {
     setLoading(true);
     const today = new Date();
-
     const [
       { data: tickets },
       { data: repairs },
@@ -251,15 +258,13 @@ const DashboardHome: React.FC = () => {
     setTimeout(() => setRefreshed(false), 600);
   };
 
-  if (loading) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid #e2e8f0", borderTopColor: "#0a4c86", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>Loading dashboard…</span>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 12 }}>
+      <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid #e2e8f0", borderTopColor: "#0a4c86", animation: "spin 0.8s linear infinite" }} />
+      <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>Loading dashboard…</span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   if (!data) return null;
 
@@ -268,7 +273,6 @@ const DashboardHome: React.FC = () => {
     { label: "In Progress", value: data.inProgressTickets, color: "#3b82f6" },
     { label: "Resolved",    value: data.resolvedTickets,   color: "#10b981" },
   ];
-
   const issueColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b", "#ef4444"];
   const maxIssue = Math.max(...data.issueBreakdown.map(i => i.count), 1);
 
@@ -292,7 +296,6 @@ const DashboardHome: React.FC = () => {
 
       <div className="dash-new" style={{ color: "#0f172a", paddingRight: 8 }}>
 
-        {/* Refresh button only — no duplicate title/date */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
           <button className="refresh-btn" onClick={handleRefresh} style={{
             display: "flex", alignItems: "center", gap: 6,
@@ -325,8 +328,6 @@ const DashboardHome: React.FC = () => {
 
         {/* Mid row */}
         <div className="dash-mid-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "1rem", marginBottom: "1rem" }}>
-
-          {/* Ticket Status Donut */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#0a4c8615", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -337,7 +338,6 @@ const DashboardHome: React.FC = () => {
             <DonutChart data={donutData} />
           </div>
 
-          {/* Weekly Activity */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.1rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -366,8 +366,6 @@ const DashboardHome: React.FC = () => {
 
         {/* Bottom row */}
         <div className="dash-bot-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-
-          {/* Recurring Issues — no medals */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#ef444415", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -386,7 +384,6 @@ const DashboardHome: React.FC = () => {
             )}
           </div>
 
-          {/* Top Departments */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#8b5cf615", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -431,4 +428,101 @@ const DashboardHome: React.FC = () => {
   );
 };
 
-export default DashboardHome;
+// ── Dashboard shell ───────────────────────────────────────────────────────────
+const Dashboard: React.FC = () => {
+  const [activeLabel, setActiveLabel] = useState("Home");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navigate = useNavigate();
+  const openSidebar  = useCallback(() => setSidebarOpen(true), []);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const currentUserName = localStorage.getItem("session_user_full_name") || "User";
+  const userRole        = localStorage.getItem("session_user_role") || "";
+  const isAdmin         = userRole === "Administrator";
+  const isTechnician    = userRole === "IT Technician";
+
+  useEffect(() => {
+    const token = localStorage.getItem("session_token");
+    if (!token) navigate("/");
+  }, [navigate]);
+
+  const PAGE_MAP: Record<string, React.ReactNode> = {
+    "Home":                isTechnician ? <TechnicianDashboardHome /> : <DashboardHome />,
+    "Submit Ticket":       <FileReports />,
+    "Repair History":      <Repairs />,
+    "My Tickets":          <MyTickets />,
+    "Incoming Units":      <IncomingUnits readOnly={isTechnician} />,
+    "Outgoing Units":      <OutgoingUnits readOnly={isTechnician} />,
+    "Departments":         <Departments />,
+    "User Accounts":       isAdmin ? <UserAccounts />    : <DashboardHome />,
+    "Reports & Analytics": isAdmin ? <ReportAnalytics /> : <DashboardHome />,
+    "Activity Log":        <ActivityLogPanel isAdmin={isAdmin} />,
+  };
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+        .adm-scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
+        .adm-scroll-area::-webkit-scrollbar-track { background: transparent; }
+        .adm-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .adm-scroll-area::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @media (max-width: 1024px) {
+          .adm-main-wrap { padding: 1rem 1rem 1.2rem !important; }
+        }
+        @media (max-width: 640px) {
+          .adm-main-wrap { padding: 0.75rem 0.75rem 1rem !important; }
+        }
+      `}</style>
+      <div style={{
+        height: "100vh",
+        minHeight: 0,
+        display: "flex",
+        overflow: "hidden",
+        background: "#f4f5fb",
+        fontFamily: "'Poppins', sans-serif",
+        color: "#0f172a",
+      }}>
+        <Sidebar
+          activeLabel={activeLabel}
+          onNavigate={setActiveLabel}
+          userRole={userRole}
+          isMobileOpen={sidebarOpen}
+          onMobileClose={closeSidebar}
+        />
+
+        <div className="adm-main-wrap" style={{
+          flex: 1,
+          minHeight: 0,
+          padding: "1.4rem 1.8rem 1.8rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.2rem",
+          overflow: "hidden",
+        }}>
+          <div style={{ flexShrink: 0 }}>
+            <Header
+              currentUserName={currentUserName}
+              userRole={userRole}
+              onMenuClick={openSidebar}
+              onNotificationNavigate={
+                isTechnician
+                  ? (entityType: string, entityId: string | null) => {
+                      if (entityType === "file_report") {
+                        if (entityId) localStorage.setItem("focus_ticket_id", entityId);
+                        setActiveLabel("My Tickets");
+                      }
+                    }
+                  : undefined
+              }
+            />
+          </div>
+          <div className="adm-scroll-area" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "0.5rem" }}>
+            {PAGE_MAP[activeLabel] ?? <DashboardHome />}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default Dashboard;
