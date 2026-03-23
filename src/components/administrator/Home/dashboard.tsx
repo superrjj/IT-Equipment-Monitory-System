@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
-import Sidebar from "../Dashboard/sidebar";
-import Header from "../Dashboard/header";
+import Sidebar from "../dashboard/sidebar";
+import Header from "../dashboard/header";
 import Departments from "../Management/department";
 import FileReports from "../Ticket & Repairs/submitTicket";
 import ReportAnalytics from "../Reports/report-analytics";
