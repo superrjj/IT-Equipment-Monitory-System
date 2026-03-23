@@ -516,7 +516,7 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
                 padding: "0.75rem",
               }}
             >
-              <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Notifications</div>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Notifications</div>
               {notifLoading ? (
                 <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem" }}>Loading...</div>
               ) : notifs.length === 0 ? (
