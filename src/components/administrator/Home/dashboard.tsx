@@ -139,9 +139,8 @@ const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data, color })
   );
 };
 
-// ── Donut Chart ───────────────────────────────────────────────────────────────
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
-  const total = data.reduce((s, d) => s + d.value, 0) || 1;
+  const total = data.reduce((s, d) => s + d.value, 0); // ← remove || 1
   const r = 52, cx = 64, cy = 64, stroke = 18;
   const circ = 2 * Math.PI * r;
   let offset = 0;
@@ -149,7 +148,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
     <div style={{ display: "flex", alignItems: "center", gap: "1.4rem" }}>
       <svg width={128} height={128} viewBox="0 0 128 128">
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
-        {data.map((d, i) => {
+        {total > 0 && data.map((d, i) => {   // ← only render arcs when total > 0
           const pct = d.value / total;
           const dash = pct * circ;
           const gap  = circ - dash;
@@ -164,7 +163,9 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
           offset += pct;
           return el;
         })}
-        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight={800} fill="#0f172a" fontFamily="'DM Sans', sans-serif">{total}</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight={800} fill="#0f172a" fontFamily="'DM Sans', sans-serif">
+          {total}   {/* ← now correctly shows 0 */}
+        </text>
         <text x={cx} y={cy + 12} textAnchor="middle" fontSize={9} fill="#94a3b8" fontWeight={600} letterSpacing="1">TOTAL</text>
       </svg>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -179,7 +180,6 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
     </div>
   );
 };
-
 // ── Horizontal Bar ────────────────────────────────────────────────────────────
 const HorizBar: React.FC<{ label: string; value: number; max: number; color: string; rank: number }> = ({ label, value, max, color, rank }) => {
   const [width, setWidth] = useState(0);
@@ -221,10 +221,26 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
       supabase.from("departments").select("id, name").order("name"),
     ]);
 
+    // Build a Mon–Sun bucket for the CURRENT week (Mon = index 0)
     const weeklyTickets = Array(7).fill(0);
     (tickets ?? []).forEach(t => {
-      const diff = Math.floor((today.getTime() - new Date(t.date_submitted).getTime()) / 86400000);
-      if (diff >= 0 && diff < 7) weeklyTickets[6 - diff]++;
+      const submitted = new Date(t.date_submitted);
+      const submittedDay = submitted.getDay(); // 0=Sun,1=Mon,...,6=Sat
+      // Convert to Mon-based index: Mon=0 ... Sun=6
+      const monBasedIndex = (submittedDay + 6) % 7;
+
+      // Only count if it falls within the current Mon–Sun week
+      const startOfWeek = new Date(today);
+      const todayMonBased = (today.getDay() + 6) % 7;
+      startOfWeek.setDate(today.getDate() - todayMonBased);
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+      if (submitted >= startOfWeek && submitted < endOfWeek) {
+        weeklyTickets[monBasedIndex]++;
+      }
     });
 
     const typeCounts: Record<string, number> = {};
