@@ -127,6 +127,17 @@ const Departments: React.FC = () => {
 
   useEffect(() => { fetchDepartments(); }, [sortField, sortDir]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel(`departments_sync_${sortField}_${sortDir}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchDepartments(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchDepartments(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [sortField, sortDir]);
+
   // ── Toast helper ─────────────────────────────────────────────────────────────
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });

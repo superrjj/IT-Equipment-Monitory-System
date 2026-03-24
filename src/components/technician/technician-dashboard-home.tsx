@@ -191,6 +191,17 @@ const TechnicianDashboardHome: React.FC = () => {
 
   useEffect(() => { load(); }, [userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`technician_dashboard_sync_${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void load(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);

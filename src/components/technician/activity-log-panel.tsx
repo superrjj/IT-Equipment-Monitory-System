@@ -85,6 +85,15 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       setLoading(false);
     };
     run();
+
+    const channel = supabase
+      .channel(`activity_log_sync_${isAdmin ? "admin" : userId ?? "guest"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, () => { void run(); })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [isAdmin, userId]);
 
   return (

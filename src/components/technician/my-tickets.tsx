@@ -129,6 +129,18 @@ const MyTickets: React.FC = () => {
   useEffect(() => { fetchAll(); }, [userId]);
 
   useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`my_tickets_sync_${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchAll(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  useEffect(() => {
     const targetId = localStorage.getItem("focus_ticket_id");
     if (!targetId || rows.length === 0) return;
     const target = rows.find(r => r.id === targetId);

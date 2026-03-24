@@ -160,6 +160,17 @@ export default function UserAccounts() {
 
   useEffect(() => { fetchUsers(); fetchPending(); }, []);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("user_accounts_sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void fetchUsers(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "signup_requests" }, () => { void fetchPending(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;

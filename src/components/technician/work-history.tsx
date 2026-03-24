@@ -82,6 +82,18 @@ const WorkHistory: React.FC = () => {
 
   useEffect(() => { fetchAll(); }, [userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`work_history_sync_${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchAll(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;

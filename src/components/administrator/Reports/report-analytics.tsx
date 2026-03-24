@@ -416,6 +416,17 @@ const ReportAnalytics: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel(`report_analytics_sync_${activeTab.replace(/\s+/g, "_").toLowerCase()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchData(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchData(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeTab, fetchData]);
+
   const stats = useMemo(() => {
     const total = tickets.length;
     const resolved = tickets.filter(t => t.status === "Resolved").length;

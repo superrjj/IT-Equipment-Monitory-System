@@ -241,6 +241,18 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel(`outgoing_units_sync_${sortField}_${sortDir}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "outgoing_units" }, () => { void fetchAll(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void fetchAll(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [sortField, sortDir]);
+
   const rowsEnriched = useMemo(
     () => rows.map(r => ({
       ...r,
