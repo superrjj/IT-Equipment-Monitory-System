@@ -32,10 +32,9 @@ type FileReport = {
   ticket_number?: string | null;
   employee_name:  string;
   department_id:  string;
-  /** DB allows Hardware, Software, Internet; legacy rows may still read as Network / Internet until migrated. */
   issue_type:     IssueType | "Network / Internet";
   title:          string;
-  description:    string; 
+  description:    string;
   status:         Status;
   date_submitted: string;
   assigned_to:    string[];
@@ -69,23 +68,23 @@ const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
 
 const ISSUE_TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; activeBg: string; color: string; border: string }> = {
-  "Hardware":           { icon: <Cpu size={14} />,     bg: "#f8fafc", activeBg: "rgba(10,76,134,0.08)",  color: "#0a4c86", border: "#0a4c86" },
-  "Software":           { icon: <Monitor size={14} />, bg: "#f8fafc", activeBg: "rgba(124,58,237,0.08)", color: "#7c3aed", border: "#7c3aed" },
-  "Internet": { icon: <Wifi size={14} />, bg: "#f8fafc", activeBg: "rgba(6,182,212,0.08)", color: "#0891b2", border: "#0891b2" },
+  "Hardware": { icon: <Cpu size={14} />,     bg: "#f8fafc", activeBg: "rgba(10,76,134,0.08)",  color: "#0a4c86", border: "#0a4c86" },
+  "Software": { icon: <Monitor size={14} />, bg: "#f8fafc", activeBg: "rgba(124,58,237,0.08)", color: "#7c3aed", border: "#7c3aed" },
+  "Internet": { icon: <Wifi size={14} />,    bg: "#f8fafc", activeBg: "rgba(6,182,212,0.08)",  color: "#0891b2", border: "#0891b2" },
 };
 
 const ISSUE_TYPE_BADGE_CONFIG: Record<
   IssueType | "Network / Internet",
   { icon: React.ReactNode; bg: string; color: string }
 > = {
-  Hardware: { icon: <Cpu size={11} />, bg: "rgba(10,76,134,0.09)", color: "#0a4c86" },
-  Software: { icon: <Monitor size={11} />, bg: "rgba(124,58,237,0.09)", color: "#7c3aed" },
-  Internet: { icon: <Wifi size={11} />, bg: "rgba(6,182,212,0.09)", color: "#0891b2" },
-  "Network / Internet": { icon: <Wifi size={11} />, bg: "rgba(6,182,212,0.09)", color: "#0891b2" },
+  Hardware:           { icon: <Cpu size={11} />,     bg: "rgba(10,76,134,0.09)",  color: "#0a4c86" },
+  Software:           { icon: <Monitor size={11} />, bg: "rgba(124,58,237,0.09)", color: "#7c3aed" },
+  Internet:           { icon: <Wifi size={11} />,    bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
+  "Network / Internet": { icon: <Wifi size={11} />, bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
 };
 
 const STATUS_CONFIG: Record<Status, { icon: React.ReactNode; bg: string; color: string }> = {
-  "Pending":        { icon: <AlertCircle size={11} />, bg: "rgba(59,130,246,0.10)", color: "#475569" },
+  "Pending":     { icon: <AlertCircle size={11} />, bg: "rgba(59,130,246,0.10)", color: "#475569" },
   "In Progress": { icon: <Loader size={11} />,      bg: "rgba(234,179,8,0.11)",  color: "#a16207" },
   "Resolved":    { icon: <CheckCircle size={11} />, bg: "rgba(22,163,74,0.10)",  color: "#15803d" },
 };
@@ -127,7 +126,6 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
-// ✅ CHANGED: full month name, Philippine timezone
 const fmtDate = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }) : "—";
 
@@ -260,7 +258,6 @@ const SubmitTicket: React.FC = () => {
       supabase.from("departments").select("id, name").order("name"),
       supabase.from("user_accounts").select("id, full_name, role").eq("is_active", true).eq("role", "IT Technician").order("full_name"),
     ]);
-    // Set lookup tables first so names resolve immediately when reports render
     setDepartments((depts ?? []) as Department[]);
     setItStaff((staff ?? []) as UserOption[]);
     if (reportError) { showToast(friendlyError(reportError.message), "error"); setReports([]); }
@@ -268,7 +265,80 @@ const SubmitTicket: React.FC = () => {
     setLoading(false);
   };
 
+  // ── Initial load + re-fetch when sort changes ──────────────────────────────
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
+
+  // ── Supabase Realtime auto-sync ────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel("file_reports_realtime", {
+        config: { broadcast: { self: false } },
+      })
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "file_reports" },
+        (payload) => {
+          const newRow = payload.new as FileReport;
+          setReports(prev => {
+            if (prev.some(r => r.id === newRow.id)) return prev;
+            const row: FileReport = {
+              ...newRow,
+              assigned_to: Array.isArray(newRow.assigned_to) ? newRow.assigned_to : [],
+            };
+            // prepend so newest shows first (matches default desc sort)
+            return [row, ...prev];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "file_reports" },
+        (payload) => {
+          const updated = payload.new as FileReport;
+          setReports(prev =>
+            prev.map(r =>
+              r.id === updated.id
+                ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
+                : r
+            )
+          );
+          // Also refresh the "selected" view modal if it's open for this record
+          setSelected(prev =>
+            prev && prev.id === updated.id
+              ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
+              : prev
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "file_reports" },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id;
+          setReports(prev => prev.filter(r => r.id !== deletedId));
+          // Close view/edit modal if the deleted record was open
+          setSelected(prev => (prev?.id === deletedId ? null : prev));
+          setModalMode(prev => {
+            // We can't easily close without knowing selected here, so we rely on selected becoming null
+            return prev;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // mount once — no deps needed, uses setReports functional updater
+
+  // Close modal when selected becomes null due to realtime DELETE
+  useEffect(() => {
+    if (!selected && (modalMode === "view" || modalMode === "edit")) {
+      setModalMode(null);
+      setForm(emptyForm());
+      setFormError("");
+    }
+  }, [selected]);
 
   const reportsWithNames = useMemo(() =>
     reports.map(r => ({
@@ -404,6 +474,8 @@ const SubmitTicket: React.FC = () => {
 
     setSubmitting(false);
     closeModal();
+    // No manual fetchAll() needed — Realtime will push the change automatically.
+    // But we still call it here to ensure sort order is correct after edits.
     fetchAll();
   };
 
@@ -413,7 +485,7 @@ const SubmitTicket: React.FC = () => {
     if (error) showToast(friendlyError(error.message), "error");
     else showToast(`Ticket "${deleteTarget.title}" deleted.`, "success");
     setDeleteTarget(null);
-    fetchAll();
+    // Realtime DELETE event will remove it from state automatically
   };
 
   const inputStyle: React.CSSProperties = {
@@ -452,6 +524,9 @@ const SubmitTicket: React.FC = () => {
         .ticket-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 140px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
         @media (max-width: 1024px) { .ticket-stat-cards { grid-template-columns: repeat(2, 1fr) !important; } }
         @media (max-width: 480px) { .ticket-stat-cards { grid-template-columns: 1fr !important; } .ticket-header-row { flex-direction: column; align-items: flex-start !important; } }
+        /* Row flash when updated via realtime */
+        @keyframes rowFlash { 0% { background: rgba(10,76,134,0.08); } 100% { background: transparent; } }
+        .ticket-row-flash { animation: rowFlash 1.2s ease-out; }
       `}</style>
 
       <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
@@ -482,7 +557,7 @@ const SubmitTicket: React.FC = () => {
         <div className="ticket-stat-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
             { label: "Total Tickets", value: counts.total,      color: BRAND,     icon: <Ticket size={16} /> },
-            { label: "Pending",          value: counts.open,       color: "#475569", icon: <FileText size={16} /> },
+            { label: "Pending",       value: counts.open,       color: "#475569", icon: <FileText size={16} /> },
             { label: "In Progress",   value: counts.inProgress, color: "#a16207", icon: <Loader size={16} /> },
             { label: "Resolved",      value: counts.resolved,   color: "#15803d", icon: <CheckCircle size={16} /> },
           ].map(c => (
@@ -515,6 +590,8 @@ const SubmitTicket: React.FC = () => {
               <option value="All">All Statuses</option>
               {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+
+
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
               Page {page}/{totalPages}
             </div>
@@ -561,7 +638,6 @@ const SubmitTicket: React.FC = () => {
                       <TechnicianCell names={r.technician_names ?? []} />
                     </td>
                     <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={r.status} /></td>
-                    {/* ✅ CHANGED: full month name, Philippine timezone */}
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
                       {new Date(r.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" })}
                     </td>
@@ -623,7 +699,6 @@ const SubmitTicket: React.FC = () => {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
 
-                {/* Issue Type pills — 3 options only */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Issue Type <span style={{ color: "#dc2626" }}>*</span></label>
                   <div className="ticket-issue-pills">
@@ -640,7 +715,6 @@ const SubmitTicket: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Title */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.title} onChange={e => { setForm(f => ({ ...f, title: e.target.value })); setFormError(""); }}
@@ -649,7 +723,6 @@ const SubmitTicket: React.FC = () => {
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>{form.title.length}/150</div>
                 </div>
 
-                {/* Employee Name */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.employee_name} onChange={e => { setForm(f => ({ ...f, employee_name: e.target.value })); setFormError(""); }}
@@ -657,7 +730,6 @@ const SubmitTicket: React.FC = () => {
                     style={{ ...inputStyle, borderColor: formError && !form.employee_name.trim() ? "#fca5a5" : "#e2e8f0" }} />
                 </div>
 
-                {/* Department */}
                 <div>
                   <label style={labelStyle}>Department/Office <span style={{ color: "#dc2626" }}>*</span></label>
                   <select value={form.department_id} onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); setFormError(""); }}
@@ -667,7 +739,6 @@ const SubmitTicket: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Date Submitted */}
                 <div>
                   <label style={labelStyle}>Date Submitted <span style={{ color: "#dc2626" }}>*</span></label>
                   <input type="date" value={form.date_submitted} max={today}
@@ -675,7 +746,6 @@ const SubmitTicket: React.FC = () => {
                     style={{ ...inputStyle, borderColor: formError && !form.date_submitted ? "#fca5a5" : "#e2e8f0" }} />
                 </div>
 
-                {/* Assign IT Staff */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color="#475569" /> Assign IT Technician <span style={{ color: "#dc2626" }}>*</span>
@@ -693,7 +763,6 @@ const SubmitTicket: React.FC = () => {
                   />
                 </div>
 
-                {/* Description */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>
                     Description <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>(optional)</span>
@@ -741,10 +810,9 @@ const SubmitTicket: React.FC = () => {
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Ticket Information</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
-                  { label: "Name of Employee",    value: selected.employee_name, icon: <User size={12} /> },
-                  { label: "Department/Office",  value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
+                  { label: "Name of Employee",  value: selected.employee_name, icon: <User size={12} /> },
+                  { label: "Department/Office", value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
                   {
-                    //full month name, Philippine timezone
                     label: "Submitted",
                     value: new Date(selected.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }),
                     icon: <Clock size={12} />,
@@ -770,7 +838,7 @@ const SubmitTicket: React.FC = () => {
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#15803d", marginBottom: 4, marginTop: "0.5rem" }}>IT Technician Response</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
-                  { label: "Start Date", value: fmtDate(selected.started_at),  icon: <Clock size={12} /> },
+                  { label: "Start Date", value: fmtDate(selected.started_at),   icon: <Clock size={12} /> },
                   { label: "End Date",   value: fmtDate(selected.completed_at), icon: <Clock size={12} /> },
                 ].map(row => (
                   <div key={row.label} className="ticket-detail-row">

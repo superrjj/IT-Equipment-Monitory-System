@@ -253,6 +253,50 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
+  // ── Supabase Realtime auto-sync ─────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel("incoming_units_realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "incoming_units" },
+        (payload) => {
+          const newRow = payload.new as IncomingUnitRow;
+          setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "incoming_units" },
+        (payload) => {
+          const updated = payload.new as IncomingUnitRow;
+          setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
+          setSelected(prev => prev?.id === updated.id ? updated : prev);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "incoming_units" },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id;
+          setRows(prev => prev.filter(r => r.id !== deletedId));
+          setSelected(prev => prev?.id === deletedId ? null : prev);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Close modal if selected record was deleted via realtime
+  useEffect(() => {
+    if (!selected && (modalMode === "view" || modalMode === "edit")) {
+      setModalMode(null);
+      setForm(emptyForm());
+      setFieldErrors({});
+    }
+  }, [selected]);
+
   const rowsEnriched = useMemo(
     () => rows.map(r => ({
       ...r,
@@ -262,14 +306,24 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     [rows, userMap, deptMap]
   );
 
+  // Client-side sort (realtime prepends rows; re-sort to keep order consistent)
+  const rowsSorted = useMemo(() => {
+    return [...rowsEnriched].sort((a, b) => {
+      const aVal = a[sortField] ?? "";
+      const bVal = b[sortField] ?? "";
+      const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [rowsEnriched, sortField, sortDir]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rowsEnriched.filter(r => {
+    return rowsSorted.filter(r => {
       if (!q) return true;
       return [r.unit_name, r.reported_by, r.issue_description, r.receiver_name, r.unit_cable ?? "", r.contact_number ?? "", r.department_name]
         .join(" ").toLowerCase().includes(q);
     });
-  }, [rowsEnriched, search]);
+  }, [rowsSorted, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -354,7 +408,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
     setSubmitting(false);
     closeModal();
-    fetchAll();
+    // No manual fetchAll() needed — Realtime handles state updates automatically
   };
 
   const confirmDelete = async () => {
@@ -363,7 +417,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     if (error) showToast(friendlyError(error.message), "error");
     else showToast(`Removed "${deleteTarget.unit_name}" from incoming units.`, "success");
     setDeleteTarget(null);
-    fetchAll();
+    // Realtime DELETE event removes it from state automatically
   };
 
   const inputStyle = (hasErr?: boolean): React.CSSProperties => ({
@@ -551,8 +605,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
-
-                {/* Date + Unit */}
                 <div>
                   <label style={labelStyle}>Date <span style={{ color: "#dc2626" }}>*</span></label>
                   <input type="date" value={form.date_received} max={today}
@@ -568,7 +620,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.unit_name} />
                 </div>
 
-                {/* Cable + Contact */}
                 <div>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Cable size={13} color="#475569" /> Unit cable {optionalBadge}
@@ -587,7 +638,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.contact_number} />
                 </div>
 
-                {/* Employee */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.reported_by} onChange={e => { setForm(f => ({ ...f, reported_by: e.target.value })); clearError("reported_by"); }}
@@ -595,7 +645,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.reported_by} />
                 </div>
 
-                {/* Department */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Building2 size={13} color="#475569" /> Office / Department <span style={{ color: "#dc2626" }}>*</span>
@@ -608,7 +657,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.department_id} />
                 </div>
 
-                {/* IT Staff */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color="#475569" /> Received by (IT Technician) <span style={{ color: "#dc2626" }}>*</span>
@@ -622,7 +670,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.received_by_user_id} />
                 </div>
 
-                {/* Problem */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
                   <textarea value={form.issue_description} onChange={e => { setForm(f => ({ ...f, issue_description: e.target.value })); clearError("issue_description"); }}
@@ -635,7 +682,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 </div>
               </div>
 
-              {/* DB-level error only */}
               {submitError && (
                 <div style={{ marginTop: "0.85rem", padding: "0.55rem 0.8rem", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                   <AlertTriangle size={13} /> {submitError}

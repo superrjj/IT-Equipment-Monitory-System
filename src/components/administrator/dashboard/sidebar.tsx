@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import {
-  Home,
+  LayoutDashboard,
   Building2,
   BarChart2,
   User,
@@ -10,6 +10,7 @@ import {
   X,
   ScrollText,
 } from "lucide-react";
+import Dashboard from "../Home/dashboard";
 
 const baseBlue = "#0a4c86";
 const hoverBlue = "#0d5fa3";
@@ -25,7 +26,7 @@ type MenuSection = {
 };
 
 const adminMenuSections: MenuSection[] = [
-  { items: [{ label: "Home", icon: Home }] },
+  { items: [{ label: "Dashboard", icon: LayoutDashboard }] },
   {
     heading: "Tickets & Repairs",
     items: [
@@ -59,7 +60,7 @@ const adminMenuSections: MenuSection[] = [
 ];
 
 const technicianMenuSections: MenuSection[] = [
-  { items: [{ label: "Home", icon: Home }] },
+  { items: [{ label: "Dashboard", icon: LayoutDashboard }] },
   {
     heading: "Tickets & Repairs",
     items: [

@@ -140,7 +140,7 @@ const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data, color })
 };
 
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
-  const total = data.reduce((s, d) => s + d.value, 0); // ← remove || 1
+  const total = data.reduce((s, d) => s + d.value, 0);
   const r = 52, cx = 64, cy = 64, stroke = 18;
   const circ = 2 * Math.PI * r;
   let offset = 0;
@@ -148,7 +148,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
     <div style={{ display: "flex", alignItems: "center", gap: "1.4rem" }}>
       <svg width={128} height={128} viewBox="0 0 128 128">
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
-        {total > 0 && data.map((d, i) => {   // ← only render arcs when total > 0
+        {total > 0 && data.map((d, i) => {
           const pct = d.value / total;
           const dash = pct * circ;
           const gap  = circ - dash;
@@ -164,7 +164,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
           return el;
         })}
         <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight={800} fill="#0f172a" fontFamily="'DM Sans', sans-serif">
-          {total}   {/* ← now correctly shows 0 */}
+          {total}
         </text>
         <text x={cx} y={cy + 12} textAnchor="middle" fontSize={9} fill="#94a3b8" fontWeight={600} letterSpacing="1">TOTAL</text>
       </svg>
@@ -180,6 +180,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
     </div>
   );
 };
+
 // ── Horizontal Bar ────────────────────────────────────────────────────────────
 const HorizBar: React.FC<{ label: string; value: number; max: number; color: string; rank: number }> = ({ label, value, max, color, rank }) => {
   const [width, setWidth] = useState(0);
@@ -200,79 +201,139 @@ const HorizBar: React.FC<{ label: string; value: number; max: number; color: str
   );
 };
 
+// ── Helper: derive DashData from raw ticket/unit arrays ───────────────────────
+function buildDashData(
+  tickets: any[],
+  incoming: any[],
+  outgoing: any[],
+  depts: any[],
+): DashData {
+  const today = new Date();
+  const weeklyTickets = Array(7).fill(0);
+
+  tickets.forEach(t => {
+    const submitted = new Date(t.date_submitted);
+    const todayMonBased = (today.getDay() + 6) % 7;
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - todayMonBased);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+    if (submitted >= startOfWeek && submitted < endOfWeek) {
+      const monBasedIndex = (submitted.getDay() + 6) % 7;
+      weeklyTickets[monBasedIndex]++;
+    }
+  });
+
+  const typeCounts: Record<string, number> = {};
+  tickets.forEach(t => {
+    const k = t.issue_type === "Network / Internet" ? "Internet" : (t.issue_type ?? "Other");
+    typeCounts[k] = (typeCounts[k] ?? 0) + 1;
+  });
+  const issueBreakdown: IssueCount[] = Object.entries(typeCounts)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const deptRows: DeptRow[] = (depts ?? []).map((dept: any) => ({
+    name: dept.name,
+    tickets: tickets.filter(t => t.department_id === dept.id).length,
+    repairs: 0,
+  })).filter((d: DeptRow) => d.tickets > 0).sort((a: DeptRow, b: DeptRow) => b.tickets - a.tickets).slice(0, 5);
+
+  return {
+    totalTickets:      tickets.length,
+    pendingTickets:    tickets.filter(t => t.status === "Pending").length,
+    resolvedTickets:   tickets.filter(t => t.status === "Resolved").length,
+    inProgressTickets: tickets.filter(t => t.status === "In Progress").length,
+    incomingUnits:     incoming.length,
+    outgoingUnits:     outgoing.length,
+    issueBreakdown,
+    deptRows,
+    weeklyTickets,
+  };
+}
+
 // ── Dashboard Home ────────────────────────────────────────────────────────────
 const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNavigate }) => {
   const [data, setData]           = useState<DashData | null>(null);
   const [loading, setLoading]     = useState(true);
   const [refreshed, setRefreshed] = useState(false);
 
+  // Keep raw data in refs so realtime handlers can patch without re-fetching everything
+  const ticketsRef  = useRef<any[]>([]);
+  const incomingRef = useRef<any[]>([]);
+  const outgoingRef = useRef<any[]>([]);
+  const deptsRef    = useRef<any[]>([]);
+
+  const recompute = useCallback(() => {
+    setData(buildDashData(ticketsRef.current, incomingRef.current, outgoingRef.current, deptsRef.current));
+  }, []);
+
   const load = async () => {
     setLoading(true);
-    const today = new Date();
     const [
       { data: tickets },
       { data: incoming },
       { data: outgoing },
       { data: depts },
     ] = await Promise.all([
-      supabase.from("file_reports").select("status, issue_type, date_submitted, department_id"),
+      supabase.from("file_reports").select("status, issue_type, date_submitted, department_id, id"),
       supabase.from("incoming_units").select("id"),
       supabase.from("outgoing_units").select("id"),
       supabase.from("departments").select("id, name").order("name"),
     ]);
 
-    // Build a Mon–Sun bucket for the CURRENT week (Mon = index 0)
-    const weeklyTickets = Array(7).fill(0);
-    (tickets ?? []).forEach(t => {
-      const submitted = new Date(t.date_submitted);
-      const submittedDay = submitted.getDay(); // 0=Sun,1=Mon,...,6=Sat
-      // Convert to Mon-based index: Mon=0 ... Sun=6
-      const monBasedIndex = (submittedDay + 6) % 7;
+    ticketsRef.current  = tickets  ?? [];
+    incomingRef.current = incoming ?? [];
+    outgoingRef.current = outgoing ?? [];
+    deptsRef.current    = depts    ?? [];
 
-      // Only count if it falls within the current Mon–Sun week
-      const startOfWeek = new Date(today);
-      const todayMonBased = (today.getDay() + 6) % 7;
-      startOfWeek.setDate(today.getDate() - todayMonBased);
-      startOfWeek.setHours(0, 0, 0, 0);
-
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 7);
-
-      if (submitted >= startOfWeek && submitted < endOfWeek) {
-        weeklyTickets[monBasedIndex]++;
-      }
-    });
-
-    const typeCounts: Record<string, number> = {};
-    (tickets ?? []).forEach(t => {
-      const k = t.issue_type === "Network / Internet" ? "Internet" : (t.issue_type ?? "Other");
-      typeCounts[k] = (typeCounts[k] ?? 0) + 1;
-    });
-    const issueBreakdown: IssueCount[] = Object.entries(typeCounts)
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const deptRows: DeptRow[] = (depts ?? []).map(dept => ({
-      name: dept.name,
-      tickets: (tickets ?? []).filter(t => t.department_id === dept.id).length,
-      repairs: 0,
-    })).filter(d => d.tickets > 0).sort((a, b) => b.tickets - a.tickets).slice(0, 5);
-
-    setData({
-      totalTickets:      (tickets ?? []).length,
-      pendingTickets:    (tickets ?? []).filter(t => t.status === "Pending").length,
-      resolvedTickets:   (tickets ?? []).filter(t => t.status === "Resolved").length,
-      inProgressTickets: (tickets ?? []).filter(t => t.status === "In Progress").length,
-      incomingUnits:     (incoming ?? []).length,
-      outgoingUnits:     (outgoing ?? []).length,
-      issueBreakdown,
-      deptRows,
-      weeklyTickets,
-    });
+    recompute();
     setLoading(false);
   };
 
+  // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => { load(); }, []);
+
+  // ── Supabase Realtime auto-sync ─────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard_realtime")
+      // file_reports
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" }, (payload) => {
+        ticketsRef.current = [...ticketsRef.current, payload.new];
+        recompute();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
+        ticketsRef.current = ticketsRef.current.map(r => r.id === payload.new.id ? payload.new : r);
+        recompute();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "file_reports" }, (payload) => {
+        ticketsRef.current = ticketsRef.current.filter(r => r.id !== (payload.old as any).id);
+        recompute();
+      })
+      // incoming_units
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "incoming_units" }, (payload) => {
+        incomingRef.current = [...incomingRef.current, payload.new];
+        recompute();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "incoming_units" }, (payload) => {
+        incomingRef.current = incomingRef.current.filter(r => r.id !== (payload.old as any).id);
+        recompute();
+      })
+      // outgoing_units
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
+        outgoingRef.current = [...outgoingRef.current, payload.new];
+        recompute();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "outgoing_units" }, (payload) => {
+        outgoingRef.current = outgoingRef.current.filter(r => r.id !== (payload.old as any).id);
+        recompute();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [recompute]);
 
   const handleRefresh = async () => {
     setRefreshed(true);
@@ -332,7 +393,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </button>
         </div>
 
-        {/* KPI Grid — 6 cards, 3 columns, all clickable */}
+        {/* KPI Grid */}
         <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
           <KPI label="Total Tickets"   value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
           <KPI label="Pending"         value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
@@ -466,7 +527,7 @@ const Dashboard: React.FC = () => {
     "Submit Ticket":       <FileReports />,
     "Repair History":      <Repairs />,
     "My Tickets":          <MyTickets />,
-    "Work History": <WorkHistory />,
+    "Work History":        <WorkHistory />,
     "Incoming Units":      <IncomingUnits readOnly={isTechnician} />,
     "Outgoing Units":      <OutgoingUnits readOnly={isTechnician} />,
     "Departments":         <Departments />,
