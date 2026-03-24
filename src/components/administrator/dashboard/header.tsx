@@ -258,11 +258,11 @@ type NotificationRow = {
   created_at: string;
 };
 
-//
-const PROFILE_TABLE = "user_accounts";           
-const FIELD_FULL_NAME  = "full_name";    
-const FIELD_ROLE       = "role";         
-const FIELD_AVATAR_URL = "avatar_url";   
+// ─── adjust these field names to match your actual table/column names ────────
+const PROFILE_TABLE = "users";           // e.g. "profiles" or "users"
+const FIELD_FULL_NAME  = "full_name";    // column that stores the display name
+const FIELD_ROLE       = "role";         // column that stores the role string
+const FIELD_AVATAR_URL = "avatar_url";   // column that stores the avatar URL
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ProfileState = {
@@ -301,6 +301,10 @@ const Header: React.FC<HeaderProps> = ({
     role: userRole,
     avatarUrl: avatarUrl,
   });
+
+  // Always-current ref so realtime callbacks never read stale closure values
+  const profileRef = useRef<ProfileState>(profile);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   // Keep in sync when parent re-renders with fresh props (e.g. initial load)
   useEffect(() => {
@@ -349,12 +353,14 @@ const Header: React.FC<HeaderProps> = ({
         },
         (payload) => {
           const row = payload.new as any;
-          const nextName      = row[FIELD_FULL_NAME]  ?? profile.name;
-          const nextRole      = row[FIELD_ROLE]        ?? profile.role;
-          const nextAvatarUrl = row[FIELD_AVATAR_URL]  ?? profile.avatarUrl;
+          // Use profileRef — never a stale closure, even with empty dep array
+          const current       = profileRef.current;
+          const nextName      = row[FIELD_FULL_NAME]  ?? current.name;
+          const nextRole      = row[FIELD_ROLE]        ?? current.role;
+          const nextAvatarUrl = row[FIELD_AVATAR_URL]  ?? current.avatarUrl;
 
           // Trigger avatar pop animation if avatar changed
-          if (nextAvatarUrl !== profile.avatarUrl && avatarRef.current) {
+          if (nextAvatarUrl !== current.avatarUrl && avatarRef.current) {
             avatarRef.current.classList.remove("hdr-avatar-updated");
             // Force reflow so re-adding the class re-triggers the animation
             void avatarRef.current.offsetWidth;
