@@ -209,6 +209,15 @@ const headerStyles = `
     flex-shrink: 0;
   }
 
+  @keyframes hdrAvatarPop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
+  .hdr-avatar-updated {
+    animation: hdrAvatarPop 0.35s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
   @media (max-width: 1024px) {
     .hdr-menu-btn { display: flex; }
     .hdr-user-meta { display: none; }
@@ -249,6 +258,19 @@ type NotificationRow = {
   created_at: string;
 };
 
+//
+const PROFILE_TABLE = "user_accounts";           
+const FIELD_FULL_NAME  = "full_name";    
+const FIELD_ROLE       = "role";         
+const FIELD_AVATAR_URL = "avatar_url";   
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ProfileState = {
+  name: string;
+  role: string;
+  avatarUrl: string;
+};
+
 const Header: React.FC<HeaderProps> = ({
   currentUserName,
   userRole,
@@ -271,6 +293,102 @@ const Header: React.FC<HeaderProps> = ({
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const userTriggerRef = useRef<HTMLButtonElement | null>(null);
   const prevUnreadRef = useRef<number>(0);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Live profile state (seeded from props, kept in sync via realtime) ──────
+  const [profile, setProfile] = useState<ProfileState>({
+    name: currentUserName,
+    role: userRole,
+    avatarUrl: avatarUrl,
+  });
+
+  // Keep in sync when parent re-renders with fresh props (e.g. initial load)
+  useEffect(() => {
+    setProfile((prev) => ({
+      name: currentUserName || prev.name,
+      role: userRole || prev.role,
+      avatarUrl: avatarUrl || prev.avatarUrl,
+    }));
+  }, [currentUserName, userRole, avatarUrl]);
+
+  // ── Fetch latest profile from DB on mount ────────────────────────────────
+  const fetchProfile = useCallback(async () => {
+    const uid = localStorage.getItem("session_user_id");
+    if (!uid) return;
+    const { data, error } = await supabase
+      .from(PROFILE_TABLE)
+      .select(`${FIELD_FULL_NAME}, ${FIELD_ROLE}, ${FIELD_AVATAR_URL}`)
+      .eq("id", uid)
+      .single();
+    if (error || !data) return;
+    setProfile({
+      name: (data as any)[FIELD_FULL_NAME] ?? currentUserName,
+      role: (data as any)[FIELD_ROLE] ?? userRole,
+      avatarUrl: (data as any)[FIELD_AVATAR_URL] ?? avatarUrl,
+    });
+  }, []); // intentionally empty — run once on mount
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  // ── Realtime subscription: profile row changes ───────────────────────────
+  useEffect(() => {
+    const uid = localStorage.getItem("session_user_id");
+    if (!uid) return;
+
+    const channel = supabase
+      .channel("header-profile-sync")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: PROFILE_TABLE,
+          filter: `id=eq.${uid}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          const nextName      = row[FIELD_FULL_NAME]  ?? profile.name;
+          const nextRole      = row[FIELD_ROLE]        ?? profile.role;
+          const nextAvatarUrl = row[FIELD_AVATAR_URL]  ?? profile.avatarUrl;
+
+          // Trigger avatar pop animation if avatar changed
+          if (nextAvatarUrl !== profile.avatarUrl && avatarRef.current) {
+            avatarRef.current.classList.remove("hdr-avatar-updated");
+            // Force reflow so re-adding the class re-triggers the animation
+            void avatarRef.current.offsetWidth;
+            avatarRef.current.classList.add("hdr-avatar-updated");
+          }
+
+          setProfile({
+            name: nextName,
+            role: nextRole,
+            avatarUrl: nextAvatarUrl,
+          });
+
+          // Keep localStorage in sync so other parts of the app stay consistent
+          if (nextName) localStorage.setItem("session_user_full_name", nextName);
+          if (nextRole) localStorage.setItem("session_user_role", nextRole);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // intentionally empty — subscribe once; payload carries fresh values
+
+  // ── Derived initials from live profile ──────────────────────────────────
+  const initials = profile.name
+    .split(" ")
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
+    .slice(0, 2);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Everything below is unchanged from the original
+  // ─────────────────────────────────────────────────────────────────────────
 
   const playNotificationSound = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -397,12 +515,6 @@ const Header: React.FC<HeaderProps> = ({
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const initials = currentUserName
-    .split(" ")
-    .map((part) => part[0]?.toUpperCase())
-    .join("")
-    .slice(0, 2);
 
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -567,8 +679,9 @@ const Header: React.FC<HeaderProps> = ({
             aria-label="Open user menu"
             onClick={() => setShowUserMenu((v) => !v)}
           >
-            {/* Avatar */}
+            {/* Avatar — uses live profile state */}
             <div
+              ref={avatarRef}
               className="hdr-avatar"
               style={{
                 width: 36,
@@ -585,17 +698,21 @@ const Header: React.FC<HeaderProps> = ({
                 overflow: "hidden",
               }}
             >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }} />
+              {profile.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt="Profile"
+                  style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }}
+                />
               ) : (
                 initials
               )}
             </div>
 
-            {/* Name + role — hidden on mobile */}
+            {/* Name + role — uses live profile state; hidden on mobile */}
             <div className="hdr-user-meta">
-              <span className="hdr-user-name-text">{currentUserName}</span>
-              <span className="hdr-user-role-text">{userRole}</span>
+              <span className="hdr-user-name-text">{profile.name}</span>
+              <span className="hdr-user-role-text">{profile.role}</span>
             </div>
             <ChevronDown
               size={15}
@@ -605,7 +722,7 @@ const Header: React.FC<HeaderProps> = ({
             />
           </button>
 
-          {/* Dropdown menu */}
+          {/* Dropdown menu — uses live profile state */}
           {showUserMenu && (
             <div
               ref={userMenuRef}
@@ -625,8 +742,8 @@ const Header: React.FC<HeaderProps> = ({
             >
               {/* User info header in dropdown */}
               <div style={{ padding: "0.5rem 0.7rem 0.65rem", borderBottom: "1px solid #f1f5f9", marginBottom: "0.35rem" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{currentUserName}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{userRole}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{profile.name}</div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{profile.role}</div>
               </div>
 
               <button
