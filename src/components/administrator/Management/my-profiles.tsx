@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import {
-  X, Camera, KeyRound, Save, UserCircle2,
+  X, Camera, KeyRound, Save, UserRound,
   Eye, EyeOff, Check, AlertCircle, Loader2,
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
@@ -546,7 +546,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
               className={`pm-tab${tab === "account" ? " pm-tab--active" : ""}`}
               onClick={() => setTab("account")}
             >
-              <UserCircle2 size={14} />
+              <UserRound size={14} />
               Account Info
             </button>
             <button
@@ -581,7 +581,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                           }}
                         />
                       ) : (
-                        <UserCircle2 size={42} color="#cbd5e1" />
+                        <UserRound size={42} color="#cbd5e1" />
                       )}
                       <div className="pm-avatar-overlay">
                         {uploadingAvatar
@@ -649,7 +649,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                         className="pm-input"
                         value={form.email}
                         onChange={(e) => { setForm((p) => ({ ...p, email: e.target.value })); setProfileError(""); }}
-                        placeholder="your@email.com"
+                        placeholder="name@email.com"
                       />
                     </div>
                   </div>
