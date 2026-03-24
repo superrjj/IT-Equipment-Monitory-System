@@ -12,7 +12,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
 
-const BUCKET = "user-avatars";
+const BUCKET = "profile-avatar";
 
 type ProfileRow = {
   id: string;
@@ -21,6 +21,7 @@ type ProfileRow = {
   email: string;
   role: string;
   avatar_url: string | null;
+  updated_at?: string | null;
   is_active: boolean;
 };
 
@@ -35,6 +36,13 @@ type Props = {
 /* ─── helpers ─── */
 function validateEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function validateUsername(u: string): string {
+  const v = u.trim();
+  if (v.length < 3) return "Username must be at least 3 characters.";
+  if (v.length > 32) return "Username must be 32 characters or less.";
+  if (!/^[A-Za-z0-9_]+$/.test(v)) return "Username may contain only letters, numbers, and underscores.";
+  return "";
 }
 function validatePassword(pw: string): string {
   if (pw.length < 8) return "At least 8 characters required.";
@@ -270,7 +278,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const [tab, setTab] = useState<Tab>("account");
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [form, setForm] = useState({ full_name: "", email: "" });
+  const [form, setForm] = useState({ username: "", full_name: "", email: "" });
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -296,15 +304,19 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     setLoading(true);
     const { data, error } = await supabase
       .from("user_accounts")
-      .select("id, username, full_name, email, role, avatar_url, is_active")
+      .select("id, username, full_name, email, role, avatar_url, updated_at, is_active")
       .eq("id", userId)
       .single();
     if (error || !data) { showToast("Unable to load profile.", "error"); setLoading(false); return; }
     const row = data as ProfileRow;
     setProfile(row);
-    setForm({ full_name: row.full_name ?? "", email: row.email ?? "" });
-    const url = row.avatar_url || localStorage.getItem("session_user_avatar") || "";
-    setAvatarUrl(url);
+    setForm({
+      username: row.username ?? "",
+      full_name: row.full_name ?? "",
+      email: row.email ?? "",
+    });
+    setAvatarUrl(row.avatar_url ? `${row.avatar_url}?t=${encodeURIComponent(row.updated_at ?? "")}` : "");
+    localStorage.removeItem("session_user_avatar");
     setLoading(false);
   }, [userId]);
 
@@ -322,75 +334,120 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
 
   /* ── avatar upload ── */
   const handleAvatarFile = async (file: File) => {
-    if (!userId) return;
-    if (!file.type.startsWith("image/")) { setProfileError("Please upload a valid image file."); return; }
+    if (!userId) {
+      showToast("No active session. Please sign in again.", "error");
+      return;
+    }
+    const looksLikeImage =
+      file.type.startsWith("image/")
+      || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name);
+    if (!looksLikeImage) {
+      setProfileError("Please upload a valid image file (PNG, JPG, GIF, WEBP).");
+      showToast("Invalid image file.", "error");
+      return;
+    }
     if (file.size > 25 * 1024 * 1024) { setProfileError("Image must be 25 MB or smaller."); return; }
-
-    setUploadingAvatar(true);
     setProfileError("");
 
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `${userId}/avatar.${ext}`;
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${userId}/avatar.${ext}`;
 
-    const { error: upErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, file, { upsert: true, contentType: file.type });
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, file, { upsert: true, contentType: file.type || "image/*" });
+      if (upErr) {
+        setProfileError(`Upload failed: ${upErr.message}`);
+        showToast("Upload failed.", "error");
+        return;
+      }
 
-    if (upErr) {
-      setProfileError(`Upload failed: ${upErr.message}`);
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      const avatar_url = urlData.publicUrl;
+      const updated_at = new Date().toISOString();
+
+      const { error: dbErr } = await supabase
+        .from("user_accounts")
+        .update({ avatar_url, updated_at })
+        .eq("id", userId);
+      if (dbErr) {
+        setProfileError(`Failed to save avatar: ${dbErr.message}`);
+        showToast("Failed to save avatar.", "error");
+        return;
+      }
+
+      const fresh = `${avatar_url}?t=${encodeURIComponent(updated_at)}`;
+      setAvatarUrl(fresh);
+      setProfile((p) => (p ? { ...p, avatar_url, updated_at } : p));
+      onAvatarChange?.(fresh);
+      showToast("Profile picture updated.", "success");
+    } finally {
       setUploadingAvatar(false);
-      return;
     }
-
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-
-    const { error: dbErr } = await supabase
-      .from("user_accounts")
-      .update({ avatar_url: urlData.publicUrl, updated_at: new Date().toISOString() })
-      .eq("id", userId);
-
-    if (dbErr) {
-      setProfileError(`Failed to save avatar URL: ${dbErr.message}`);
-      setUploadingAvatar(false);
-      return;
-    }
-
-    setAvatarUrl(publicUrl);
-    localStorage.setItem("session_user_avatar", publicUrl);
-    onAvatarChange?.(publicUrl);
-    showToast("Profile picture updated.", "success");
-    setUploadingAvatar(false);
   };
 
   /* ── save profile ── */
   const saveProfile = async () => {
     if (!profile || !userId) return;
     setProfileError("");
+    const username = form.username.trim();
+    const full_name = form.full_name.trim();
     const email = form.email.trim();
+
+    const uErr = validateUsername(username);
+    if (uErr) { setProfileError(uErr); return; }
+    if (!full_name) { setProfileError("Full name is required."); return; }
     if (!email) { setProfileError("Email is required."); return; }
     if (!validateEmail(email)) { setProfileError("Invalid email address."); return; }
 
     setSavingProfile(true);
-    const { data: dupe } = await supabase
-      .from("user_accounts").select("id")
-      .ilike("email", email).neq("id", userId).limit(1);
-    if (dupe && dupe.length > 0) {
+    const [{ data: dupeEmail }, { data: dupeUser }] = await Promise.all([
+      supabase.from("user_accounts").select("id").ilike("email", email).neq("id", userId).limit(1),
+      supabase.from("user_accounts").select("id").ilike("username", username).neq("id", userId).limit(1),
+    ]);
+    if (dupeEmail && dupeEmail.length > 0) {
       setProfileError("Email is already used by another account.");
-      setSavingProfile(false); return;
+      setSavingProfile(false);
+      return;
     }
+    if (dupeUser && dupeUser.length > 0) {
+      setProfileError("Username is already used by another account.");
+      setSavingProfile(false);
+      return;
+    }
+
+    const updatePayload: { email: string; username: string; full_name: string; updated_at: string } = {
+      email,
+      username,
+      full_name,
+      updated_at: new Date().toISOString(),
+    };
 
     const { error } = await supabase
       .from("user_accounts")
-      .update({ email, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("id", userId);
     if (error) { setProfileError(error.message); setSavingProfile(false); return; }
+    // If RLS blocks or id doesn't match, update may affect 0 rows with no error.
+    // Re-fetch the row to confirm persistence and to get latest updated_at/avatar_url.
+    const { data: refreshed, error: refErr } = await supabase
+      .from("user_accounts")
+      .select("id, full_name, email, role, username, avatar_url, updated_at")
+      .eq("id", userId)
+      .single();
+    if (refErr || !refreshed) {
+      setProfileError("Profile save failed. Please check permissions / RLS.");
+      setSavingProfile(false);
+      return;
+    }
 
     await insertActivityLog(supabase, {
       actorUserId: userId, action: "user_profile_updated",
       entityType: "user_account", entityId: userId,
-      meta: { email },
+      meta: { email, username, full_name },
     });
+    localStorage.removeItem("session_user_avatar");
     showToast("Profile saved.", "success");
     setSavingProfile(false);
   };
@@ -432,6 +489,21 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
 
   if (!open) return null;
 
+  const profileDirty = !!profile && (
+    form.username.trim() !== (profile.username ?? "") ||
+    form.full_name.trim() !== (profile.full_name ?? "") ||
+    form.email.trim() !== (profile.email ?? "")
+  );
+
+  const pwRuleErr = pwForm.next ? validatePassword(pwForm.next) : "";
+  const pwValid =
+    !!pwForm.current &&
+    !!pwForm.next &&
+    !!pwForm.confirm &&
+    !pwRuleErr &&
+    pwForm.next === pwForm.confirm &&
+    pwForm.current !== pwForm.next;
+
   return (
     <>
       <style>{css}</style>
@@ -462,9 +534,6 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
               <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.01em" }}>
                 My Profile
               </h2>
-              <p style={{ margin: "3px 0 0", fontSize: 12, color: "#94a3b8" }}>
-                Manage your account details and security.
-              </p>
             </div>
             <button className="pm-close" onClick={onClose} aria-label="Close">
               <X size={15} strokeWidth={2.2} />
@@ -502,8 +571,15 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                   <label style={{ cursor: "pointer" }}>
                     <div className={`pm-avatar-ring${uploadingAvatar ? " pm-uploading-ring" : ""}`}>
                       {avatarUrl ? (
-                        <img src={avatarUrl} alt="Avatar"
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img
+                          src={avatarUrl}
+                          alt="Avatar"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          onError={() => {
+                            setAvatarUrl("");
+                            showToast("Avatar failed to load. Please try saving again.", "error");
+                          }}
+                        />
                       ) : (
                         <UserCircle2 size={42} color="#cbd5e1" />
                       )}
@@ -543,15 +619,16 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                   <div className="pm-account-row">
                     <div className="pm-account-cell">
                       <span className="pm-label">Username</span>
-                      <div className="pm-readonly" title={profile?.username ?? ""}>
-                        {profile?.username ?? ""}
-                      </div>
+                      <input
+                        className="pm-input"
+                        value={form.username}
+                        onChange={(e) => { setForm((p) => ({ ...p, username: e.target.value })); setProfileError(""); }}
+                        placeholder="Username"
+                      />
                     </div>
                     <div className="pm-account-cell">
                       <span className="pm-label">Role</span>
-                      <div className="pm-readonly" title={profile?.role ?? ""}>
-                        {profile?.role ?? ""}
-                      </div>
+                      <input className="pm-input" value={profile?.role ?? ""} disabled />
                     </div>
                   </div>
 
@@ -559,16 +636,19 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                   <div className="pm-account-row">
                     <div className="pm-account-cell">
                       <span className="pm-label">Full Name</span>
-                      <div className="pm-readonly" title={form.full_name}>
-                        {form.full_name}
-                      </div>
+                      <input
+                        className="pm-input"
+                        value={form.full_name}
+                        onChange={(e) => { setForm((p) => ({ ...p, full_name: e.target.value })); setProfileError(""); }}
+                        placeholder="Full name"
+                      />
                     </div>
                     <div className="pm-account-cell">
                       <span className="pm-label">Email Address</span>
                       <input
                         className="pm-input"
                         value={form.email}
-                        onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                        onChange={(e) => { setForm((p) => ({ ...p, email: e.target.value })); setProfileError(""); }}
                         placeholder="your@email.com"
                       />
                     </div>
@@ -585,7 +665,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                 <button
                   className="pm-btn"
                   onClick={() => void saveProfile()}
-                  disabled={savingProfile || uploadingAvatar}
+                  disabled={savingProfile || uploadingAvatar || !profileDirty}
                 >
                   {savingProfile
                     ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
@@ -611,7 +691,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                             className="pm-input pm-input--pw"
                             type={showPw[field] ? "text" : "password"}
                             value={pwForm[field]}
-                            onChange={(e) => setPwForm((p) => ({ ...p, [field]: e.target.value }))}
+                            onChange={(e) => { setPwForm((p) => ({ ...p, [field]: e.target.value })); setPwError(""); }}
                             placeholder={field === "current" ? "Enter current password" : field === "next" ? "Min 8 characters" : "Repeat new password"}
                           />
                           <button
@@ -638,7 +718,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                 <button
                   className="pm-btn"
                   onClick={() => void savePassword()}
-                  disabled={savingPassword}
+                  disabled={savingPassword || !pwValid}
                 >
                   {savingPassword
                     ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />

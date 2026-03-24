@@ -227,6 +227,7 @@ const headerStyles = `
 type HeaderProps = {
   currentUserName: string;
   userRole: string;
+  avatarUrl?: string;
   onMenuClick?: () => void;
   onNotificationNavigate?: (entityType: string, entityId: string | null) => void;
   onOpenProfile?: () => void;
@@ -248,7 +249,14 @@ type NotificationRow = {
   created_at: string;
 };
 
-const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick, onNotificationNavigate, onOpenProfile }) => {
+const Header: React.FC<HeaderProps> = ({
+  currentUserName,
+  userRole,
+  avatarUrl = "",
+  onMenuClick,
+  onNotificationNavigate,
+  onOpenProfile,
+}) => {
   const navigate = useNavigate();
   const [now, setNow]               = useState(new Date());
   const [showConfirm, setShowConfirm] = useState(false);
@@ -390,7 +398,6 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
     return () => clearInterval(timer);
   }, []);
 
-  const avatarUrl = localStorage.getItem("session_user_avatar") || "";
   const initials = currentUserName
     .split(" ")
     .map((part) => part[0]?.toUpperCase())

@@ -522,12 +522,14 @@ const Dashboard: React.FC = () => {
   const [activeLabel, setActiveLabel] = useState("Home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false); // ✅ Add state for ProfileModal
+  const [headerAvatarUrl, setHeaderAvatarUrl] = useState("");
   
   const navigate = useNavigate();
   const openSidebar  = useCallback(() => setSidebarOpen(true), []);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const currentUserName = localStorage.getItem("session_user_full_name") || "User";
   const userRole        = localStorage.getItem("session_user_role") || "";
+  const userId          = localStorage.getItem("session_user_id") || "";
   const isAdmin         = userRole === "Administrator";
   const isTechnician    = userRole === "IT Technician";
 
@@ -535,6 +537,26 @@ const Dashboard: React.FC = () => {
     const token = localStorage.getItem("session_token");
     if (!token) navigate("/");
   }, [navigate]);
+
+  useEffect(() => {
+    const loadHeaderAvatar = async () => {
+      if (!userId) {
+        setHeaderAvatarUrl("");
+        return;
+      }
+      const { data } = await supabase
+        .from("user_accounts")
+        .select("avatar_url, updated_at")
+        .eq("id", userId)
+        .single();
+      setHeaderAvatarUrl(
+        data?.avatar_url
+          ? `${data.avatar_url}?t=${encodeURIComponent(String(data.updated_at ?? ""))}`
+          : ""
+      );
+    };
+    void loadHeaderAvatar();
+  }, [userId]);
 
   const dashHomeNode = useRef<React.ReactNode>(
     isTechnician
@@ -603,6 +625,7 @@ const Dashboard: React.FC = () => {
             <Header
               currentUserName={currentUserName}
               userRole={userRole}
+              avatarUrl={headerAvatarUrl}
               onMenuClick={openSidebar}
               onNotificationNavigate={
                 isTechnician
@@ -628,9 +651,7 @@ const Dashboard: React.FC = () => {
         open={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         onAvatarChange={(url) => {
-          localStorage.setItem("session_user_avatar", url);
-          // Force header to re-render by updating localStorage
-          window.dispatchEvent(new Event('storage'));
+          setHeaderAvatarUrl(url);
         }}
       />
     </>
