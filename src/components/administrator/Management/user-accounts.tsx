@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
-import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown } from "lucide-react";
+import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon} from "lucide-react";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -357,7 +357,9 @@ export default function UserAccounts() {
       {/* Page Header */}
       <div className="ua-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>User Accounts</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8 }}>
+              <User2Icon size={20} color={BRAND} /> User Accounts
+            </h2>
           <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>Passwords are stored as bcrypt hashes.</div>
         </div>
         <button onClick={openAdd} style={{ display: "inline-flex", gap: 8, alignItems: "center", border: "none", background: BRAND, color: "#fff", padding: "0.55rem 0.9rem", borderRadius: 10, cursor: "pointer", fontWeight: 700, boxShadow: "0 4px 12px rgba(10,76,134,0.25)" }}>

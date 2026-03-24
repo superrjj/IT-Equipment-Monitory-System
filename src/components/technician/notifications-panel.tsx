@@ -98,7 +98,7 @@ const NotificationsPanel: React.FC = () => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Notifications</h2>
+            <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Notifications</h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Assignments and updates for your account.</p>
           </div>
         </div>

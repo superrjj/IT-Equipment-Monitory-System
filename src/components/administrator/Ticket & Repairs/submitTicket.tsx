@@ -642,7 +642,7 @@ const SubmitTicket: React.FC = () => {
 
                 {/* Title */}
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>Issue Title <span style={{ color: "#dc2626" }}>*</span></label>
+                  <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.title} onChange={e => { setForm(f => ({ ...f, title: e.target.value })); setFormError(""); }}
                     placeholder="Brief description of the issue" maxLength={150}
                     style={{ ...inputStyle, borderColor: formError && !form.title.trim() ? "#fca5a5" : "#e2e8f0" }} />
@@ -651,7 +651,7 @@ const SubmitTicket: React.FC = () => {
 
                 {/* Employee Name */}
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>Employee Name <span style={{ color: "#dc2626" }}>*</span></label>
+                  <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.employee_name} onChange={e => { setForm(f => ({ ...f, employee_name: e.target.value })); setFormError(""); }}
                     placeholder="e.g. Juan Dela Cruz" maxLength={100}
                     style={{ ...inputStyle, borderColor: formError && !form.employee_name.trim() ? "#fca5a5" : "#e2e8f0" }} />
@@ -659,7 +659,7 @@ const SubmitTicket: React.FC = () => {
 
                 {/* Department */}
                 <div>
-                  <label style={labelStyle}>Department <span style={{ color: "#dc2626" }}>*</span></label>
+                  <label style={labelStyle}>Department/Office <span style={{ color: "#dc2626" }}>*</span></label>
                   <select value={form.department_id} onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); setFormError(""); }}
                     style={{ ...selectStyle, borderColor: formError && !form.department_id ? "#fca5a5" : "#e2e8f0" }}>
                     <option value="">— Select department —</option>
@@ -741,10 +741,10 @@ const SubmitTicket: React.FC = () => {
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Ticket Information</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
-                  { label: "Employee",    value: selected.employee_name, icon: <User size={12} /> },
-                  { label: "Department",  value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
+                  { label: "Name of Employee",    value: selected.employee_name, icon: <User size={12} /> },
+                  { label: "Department/Office",  value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
                   {
-                    // ✅ CHANGED: full month name, Philippine timezone
+                    //full month name, Philippine timezone
                     label: "Submitted",
                     value: new Date(selected.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }),
                     icon: <Clock size={12} />,
