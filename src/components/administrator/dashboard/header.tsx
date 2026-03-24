@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
-import { LogOut, Menu, Bell, Settings } from "lucide-react";
+import { LogOut, Menu, Bell, Settings, ChevronDown } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
 
 const brandBlue = "#0a4c86";
@@ -188,10 +188,30 @@ const headerStyles = `
     color: #0f172a;
     white-space: nowrap;
   }
+  .hdr-user-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    min-width: 0;
+  }
+  .hdr-user-role-text {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .hdr-user-chevron {
+    color: #64748b;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
 
   @media (max-width: 1024px) {
     .hdr-menu-btn { display: flex; }
-    .hdr-user-name-text { display: none; }
+    .hdr-user-meta { display: none; }
     .hdr-datetime { font-size: 14px; }
     .hdr-date { font-size: 12px; }
   }
@@ -565,8 +585,17 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
               )}
             </div>
 
-            {/* Name — hidden on mobile */}
-            <span className="hdr-user-name-text">{currentUserName}</span>
+            {/* Name + role — hidden on mobile */}
+            <div className="hdr-user-meta">
+              <span className="hdr-user-name-text">{currentUserName}</span>
+              <span className="hdr-user-role-text">{userRole}</span>
+            </div>
+            <ChevronDown
+              size={15}
+              strokeWidth={2.4}
+              className="hdr-user-chevron"
+              style={{ transform: showUserMenu ? "rotate(180deg)" : "rotate(0deg)" }}
+            />
           </button>
 
           {/* Dropdown menu */}
@@ -605,7 +634,7 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
                 }}
               >
                 <Settings size={15} />
-                Settings
+                My Profile
               </button>
               <button
                 type="button"

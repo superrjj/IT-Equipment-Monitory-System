@@ -61,8 +61,8 @@ const css = `
 .pm-modal {
   background: #fff;
   border-radius: 24px;
-  width: 100%; max-width: 520px;
-  max-height: 92vh;
+  width: 100%; max-width: 620px;
+  max-height: calc(100vh - 32px);
   overflow: hidden;
   display: flex; flex-direction: column;
   box-shadow: 0 32px 80px rgba(10,20,40,0.28), 0 2px 8px rgba(10,20,40,0.1);
@@ -111,15 +111,18 @@ const css = `
 }
 
 .pm-body {
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 1.1rem 1.5rem 1.35rem;
   overflow-y: auto; flex: 1;
+  scrollbar-width: none; /* Firefox: hide scrollbar */
 }
+.pm-body::-webkit-scrollbar { width: 0; height: 0; } /* Chrome/Safari: hide scrollbar */
 
 .pm-label {
   display: block;
   font-size: 11px; font-weight: 700;
   color: #94a3b8; letter-spacing: .07em; text-transform: uppercase;
   margin-bottom: 5px;
+  text-align: left;
 }
 
 .pm-input {
@@ -128,6 +131,8 @@ const css = `
   background: #f8fafc; font-family: 'Poppins', sans-serif;
   font-size: 13px; color: #0f172a; outline: none;
   transition: border-color .18s, box-shadow .18s, background .18s;
+  box-sizing: border-box;
+  min-height: 42px;
 }
 .pm-input:focus { border-color: #0a4c86; background: #fff; box-shadow: 0 0 0 3px rgba(10,76,134,.08); }
 .pm-input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
@@ -163,11 +168,11 @@ const css = `
 
 .pm-avatar-wrap {
   display: flex; flex-direction: column; align-items: center;
-  gap: .75rem; padding: 1rem 0 1.25rem;
+  gap: .85rem; padding: 1.05rem 0 1.35rem;
 }
 
 .pm-avatar-ring {
-  width: 88px; height: 88px; border-radius: 999px;
+  width: 150px; height: 150px; border-radius: 999px;
   border: 3px solid #e8ecf4;
   overflow: hidden; display: flex;
   align-items: center; justify-content: center;
@@ -199,7 +204,49 @@ const css = `
   height: 1px; background: #f1f5f9; margin: 1.1rem 0;
 }
 
-.pm-field-group { display: flex; flex-direction: column; gap: 12px; }
+.pm-field-group {
+  display: flex; flex-direction: column; gap: 12px;
+  width: 100%;
+}
+.pm-field-group > div { width: 100%; }
+
+.pm-account-lines {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pm-account-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  align-items: stretch;
+}
+.pm-account-cell { width: 100%; }
+
+.pm-readonly {
+  width: 100%;
+  padding: .6rem .85rem;
+  border-radius: 10px;
+  border: 1.5px solid #e8ecf4;
+  background: #f8fafc;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 520px) {
+  .pm-account-row { grid-template-columns: 1fr; }
+}
 
 .pm-toast {
   position: fixed; bottom: 24px; right: 24px; z-index: 1600;
@@ -214,13 +261,6 @@ const css = `
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.pm-username-badge {
-  display: inline-flex; align-items: center;
-  padding: .3rem .65rem; border-radius: 8px;
-  background: #eef4fc; color: #0a4c86;
-  font-size: 12px; font-weight: 700; font-family: 'Poppins', sans-serif;
-  letter-spacing: .03em;
-}
 `;
 
 export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange }) => {
@@ -280,11 +320,11 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  /* ── avatar upload to Supabase Storage ── */
+  /* ── avatar upload ── */
   const handleAvatarFile = async (file: File) => {
     if (!userId) return;
     if (!file.type.startsWith("image/")) { setProfileError("Please upload a valid image file."); return; }
-    if (file.size > 2 * 1024 * 1024) { setProfileError("Image must be 2 MB or smaller."); return; }
+    if (file.size > 25 * 1024 * 1024) { setProfileError("Image must be 25 MB or smaller."); return; }
 
     setUploadingAvatar(true);
     setProfileError("");
@@ -303,7 +343,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     }
 
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`; // cache-bust
+    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
     const { error: dbErr } = await supabase
       .from("user_accounts")
@@ -327,10 +367,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const saveProfile = async () => {
     if (!profile || !userId) return;
     setProfileError("");
-    const fullName = form.full_name.trim();
     const email = form.email.trim();
-    if (!fullName) { setProfileError("Full name is required."); return; }
-    if (fullName.length > 120) { setProfileError("Full name is too long."); return; }
     if (!email) { setProfileError("Email is required."); return; }
     if (!validateEmail(email)) { setProfileError("Invalid email address."); return; }
 
@@ -345,15 +382,14 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
 
     const { error } = await supabase
       .from("user_accounts")
-      .update({ full_name: fullName, email, updated_at: new Date().toISOString() })
+      .update({ email, updated_at: new Date().toISOString() })
       .eq("id", userId);
     if (error) { setProfileError(error.message); setSavingProfile(false); return; }
 
-    localStorage.setItem("session_user_full_name", fullName);
     await insertActivityLog(supabase, {
       actorUserId: userId, action: "user_profile_updated",
       entityType: "user_account", entityId: userId,
-      meta: { full_name: fullName, email },
+      meta: { email },
     });
     showToast("Profile saved.", "success");
     setSavingProfile(false);
@@ -490,9 +526,11 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                     />
                   </label>
                   <div style={{ textAlign: "center" }}>
-                    <span className="pm-username-badge">@{profile?.username}</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+                      {profile?.full_name || "User"}
+                    </div>
                     <p style={{ margin: "5px 0 0", fontSize: 11, color: "#94a3b8" }}>
-                      Click avatar to change · JPG, PNG, GIF, WEBP · max 2 MB
+                      Click avatar to change · JPG, PNG, GIF, WEBP · max 25 MB
                     </p>
                   </div>
                 </div>
@@ -500,24 +538,40 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                 <div className="pm-divider" />
 
                 {/* Fields */}
-                <div className="pm-field-group">
-                  <div>
-                    <span className="pm-label">Full Name</span>
-                    <input
-                      className="pm-input"
-                      value={form.full_name}
-                      onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
-                      placeholder="Your full name"
-                    />
+                <div className="pm-account-lines">
+                  {/* Row 1 */}
+                  <div className="pm-account-row">
+                    <div className="pm-account-cell">
+                      <span className="pm-label">Username</span>
+                      <div className="pm-readonly" title={profile?.username ?? ""}>
+                        {profile?.username ?? ""}
+                      </div>
+                    </div>
+                    <div className="pm-account-cell">
+                      <span className="pm-label">Role</span>
+                      <div className="pm-readonly" title={profile?.role ?? ""}>
+                        {profile?.role ?? ""}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="pm-label">Email Address</span>
-                    <input
-                      className="pm-input"
-                      value={form.email}
-                      onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                      placeholder="your@email.com"
-                    />
+
+                  {/* Row 2 */}
+                  <div className="pm-account-row">
+                    <div className="pm-account-cell">
+                      <span className="pm-label">Full Name</span>
+                      <div className="pm-readonly" title={form.full_name}>
+                        {form.full_name}
+                      </div>
+                    </div>
+                    <div className="pm-account-cell">
+                      <span className="pm-label">Email Address</span>
+                      <input
+                        className="pm-input"
+                        value={form.email}
+                        onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                        placeholder="your@email.com"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -537,7 +591,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                     ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
                     : <Save size={14} />
                   }
-                  {savingProfile ? "Saving…" : "Save Changes"}
+                  {savingProfile ? "Saving…" : "Save Profile"}
                 </button>
               </>
             ) : (

@@ -522,9 +522,6 @@ const Dashboard: React.FC = () => {
   const [activeLabel, setActiveLabel] = useState("Home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false); // ✅ Add state for ProfileModal
-  const [avatarUrl, setAvatarUrl] = useState(
-    localStorage.getItem("session_user_avatar") || ""
-  ); // ✅ Track avatar URL
   
   const navigate = useNavigate();
   const openSidebar  = useCallback(() => setSidebarOpen(true), []);
@@ -631,7 +628,7 @@ const Dashboard: React.FC = () => {
         open={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         onAvatarChange={(url) => {
-          setAvatarUrl(url);
+          localStorage.setItem("session_user_avatar", url);
           // Force header to re-render by updating localStorage
           window.dispatchEvent(new Event('storage'));
         }}
