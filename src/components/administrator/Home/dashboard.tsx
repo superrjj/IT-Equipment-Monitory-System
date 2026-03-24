@@ -25,26 +25,6 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-function useCountUp(target: number, duration = 900) {
-  const [val, setVal] = useState(0);
-  const raf = useRef<number>(0);
-  useEffect(() => {
-    let start: number | null = null;
-    const step = (ts: number) => {
-      if (!start) start = ts;
-      const progress = Math.min((ts - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
-      setVal(Math.round(lerp(0, target, ease)));
-      if (progress < 1) raf.current = requestAnimationFrame(step);
-    };
-    raf.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf.current);
-  }, [target, duration]);
-  return val;
-}
-
 type IssueCount = { type: string; count: number };
 type DeptRow    = { name: string; tickets: number; repairs: number };
 type DashData = {
@@ -68,7 +48,7 @@ const KPI: React.FC<{
   const [visible, setVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), delay); return () => clearTimeout(t); }, [delay]);
-  const displayed = useCountUp(visible ? value : 0);
+  const displayed = visible ? value : 0;
 
   return (
     <div
@@ -94,7 +74,6 @@ const KPI: React.FC<{
     >
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: "20px 20px 0 0" }} />
       <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: accent, opacity: hovered ? 0.1 : 0.06, transition: "opacity 0.2s" }} />
-
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ width: 38, height: 38, borderRadius: 12, background: `${accent}15`, display: "flex", alignItems: "center", justifyContent: "center", color: accent }}>
           {icon}
@@ -103,7 +82,6 @@ const KPI: React.FC<{
           <ArrowUpRight size={14} color={hovered ? accent : "#cbd5e1"} style={{ transition: "color 0.2s", transform: hovered ? "translate(2px, -2px)" : "none", transitionProperty: "color, transform" }} />
         )}
       </div>
-
       <div>
         <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1px", fontFamily: "'DM Sans', sans-serif" }}>
           {displayed}
@@ -130,7 +108,6 @@ const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data, color })
             height: `${Math.max((v / max) * 44, 4)}px`,
             background: i === data.length - 1 ? color : `${color}50`,
             borderRadius: 4,
-            transition: "height 0.6s ease",
           }} />
           <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 500 }}>{days[i]}</span>
         </div>
@@ -158,7 +135,6 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
               stroke={d.color} strokeWidth={stroke}
               strokeDasharray={`${dash} ${gap}`}
               strokeDashoffset={-offset * circ + circ / 4}
-              style={{ transition: "stroke-dasharray 0.8s ease" }}
             />
           );
           offset += pct;
@@ -183,14 +159,8 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
 };
 
 // ── Horizontal Bar ────────────────────────────────────────────────────────────
-const HorizBar: React.FC<{ label: string; value: number; max: number; color: string; rank: number }> = ({ label, value, max, color, rank }) => {
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    // Reset to 0 first, then animate to the target width
-    setWidth(0);
-    const t = setTimeout(() => setWidth((value / Math.max(max, 1)) * 100), rank * 120 + 80);
-    return () => clearTimeout(t);
-  }, [value, max, rank]);
+const HorizBar: React.FC<{ label: string; value: number; max: number; color: string }> = ({ label, value, max, color }) => {
+  const width = (value / Math.max(max, 1)) * 100;
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -198,19 +168,14 @@ const HorizBar: React.FC<{ label: string; value: number; max: number; color: str
         <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{value}</span>
       </div>
       <div style={{ height: 7, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 4, transition: "width 0.7s ease" }} />
+        <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 4 }} />
       </div>
     </div>
   );
 };
 
-// ── Helper: derive DashData from raw ticket/unit arrays ───────────────────────
-function buildDashData(
-  tickets: any[],
-  incoming: any[],
-  outgoing: any[],
-  depts: any[],
-): DashData {
+// ── Helper ────────────────────────────────────────────────────────────────────
+function buildDashData(tickets: any[], incoming: any[], outgoing: any[], depts: any[]): DashData {
   const today = new Date();
   const weeklyTickets = Array(7).fill(0);
 
@@ -223,8 +188,7 @@ function buildDashData(
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 7);
     if (submitted >= startOfWeek && submitted < endOfWeek) {
-      const monBasedIndex = (submitted.getDay() + 6) % 7;
-      weeklyTickets[monBasedIndex]++;
+      weeklyTickets[(submitted.getDay() + 6) % 7]++;
     }
   });
 
@@ -233,15 +197,20 @@ function buildDashData(
     const k = t.issue_type === "Network / Internet" ? "Internet" : (t.issue_type ?? "Other");
     typeCounts[k] = (typeCounts[k] ?? 0) + 1;
   });
+
   const issueBreakdown: IssueCount[] = Object.entries(typeCounts)
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count);
 
-  const deptRows: DeptRow[] = (depts ?? []).map((dept: any) => ({
-    name: dept.name,
-    tickets: tickets.filter(t => t.department_id === dept.id).length,
-    repairs: 0,
-  })).filter((d: DeptRow) => d.tickets > 0).sort((a: DeptRow, b: DeptRow) => b.tickets - a.tickets).slice(0, 5);
+  const deptRows: DeptRow[] = (depts ?? [])
+    .map((dept: any) => ({
+      name: dept.name,
+      tickets: tickets.filter(t => t.department_id === dept.id).length,
+      repairs: 0,
+    }))
+    .filter((d: DeptRow) => d.tickets > 0)
+    .sort((a: DeptRow, b: DeptRow) => b.tickets - a.tickets)
+    .slice(0, 5);
 
   return {
     totalTickets:      tickets.length,
@@ -262,23 +231,24 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   const [loading, setLoading]     = useState(true);
   const [refreshed, setRefreshed] = useState(false);
 
-  // ── FIX: updateKey forces child chart components to fully remount,
-  //         restarting all internal animations and effects on every realtime event.
-  const [updateKey, setUpdateKey] = useState(0);
-
-  // Keep raw data in refs so realtime handlers can patch without re-fetching everything
   const ticketsRef  = useRef<any[]>([]);
   const incomingRef = useRef<any[]>([]);
   const outgoingRef = useRef<any[]>([]);
   const deptsRef    = useRef<any[]>([]);
 
-  // ── FIX: recompute now also bumps updateKey so React knows to remount charts
-  const recompute = useCallback(() => {
+  // Always-current ref — fixes stale closure in realtime handlers
+  const recomputeRef = useRef<() => void>(() => {});
+  recomputeRef.current = () => {
     setData(buildDashData(ticketsRef.current, incomingRef.current, outgoingRef.current, deptsRef.current));
-    setUpdateKey(k => k + 1);
+  };
+
+  const upsertById = useCallback((rows: any[], next: any) => {
+    const exists = rows.some((r) => r.id === next.id);
+    if (!exists) return [...rows, next];
+    return rows.map((r) => (r.id === next.id ? { ...r, ...next } : r));
   }, []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const [
       { data: tickets },
@@ -297,66 +267,82 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
     outgoingRef.current = outgoing ?? [];
     deptsRef.current    = depts    ?? [];
 
-    recompute();
+    recomputeRef.current();
     setLoading(false);
-  };
+  }, []);
 
-  // ── Initial load ────────────────────────────────────────────────────────────
-  useEffect(() => { load(); }, []);
+  // Initial load
+  useEffect(() => { load(); }, [load]);
 
-  // ── Supabase Realtime auto-sync ─────────────────────────────────────────────
+  // Realtime — subscribe once on mount, always call recomputeRef.current (never stale)
   useEffect(() => {
     const channel = supabase
-      .channel("dashboard_realtime")
+      .channel(`dashboard_${Date.now()}`)
 
-      // ── file_reports ────────────────────────────────────────────────────────
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" }, (payload) => {
-        ticketsRef.current = [...ticketsRef.current, payload.new];
-        recompute();
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" }, ({ new: n }) => {
+        ticketsRef.current = upsertById(ticketsRef.current, n);
+        recomputeRef.current();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
-        ticketsRef.current = ticketsRef.current.map(r => r.id === payload.new.id ? payload.new : r);
-        recompute();
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, ({ new: n }) => {
+        ticketsRef.current = upsertById(ticketsRef.current, n);
+        recomputeRef.current();
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "file_reports" }, (payload) => {
-        ticketsRef.current = ticketsRef.current.filter(r => r.id !== (payload.old as any).id);
-        recompute();
-      })
-
-      // ── incoming_units ──────────────────────────────────────────────────────
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "incoming_units" }, (payload) => {
-        incomingRef.current = [...incomingRef.current, payload.new];
-        recompute();
-      })
-      // FIX: added missing UPDATE handler for incoming_units
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "incoming_units" }, (payload) => {
-        incomingRef.current = incomingRef.current.map(r => r.id === payload.new.id ? payload.new : r);
-        recompute();
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "incoming_units" }, (payload) => {
-        incomingRef.current = incomingRef.current.filter(r => r.id !== (payload.old as any).id);
-        recompute();
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "file_reports" }, ({ old: o }) => {
+        ticketsRef.current = ticketsRef.current.filter(r => r.id !== (o as any).id);
+        recomputeRef.current();
       })
 
-      // ── outgoing_units ──────────────────────────────────────────────────────
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
-        outgoingRef.current = [...outgoingRef.current, payload.new];
-        recompute();
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "incoming_units" }, ({ new: n }) => {
+        incomingRef.current = upsertById(incomingRef.current, n);
+        recomputeRef.current();
       })
-      // FIX: added missing UPDATE handler for outgoing_units
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "outgoing_units" }, (payload) => {
-        outgoingRef.current = outgoingRef.current.map(r => r.id === payload.new.id ? payload.new : r);
-        recompute();
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "incoming_units" }, ({ new: n }) => {
+        incomingRef.current = upsertById(incomingRef.current, n);
+        recomputeRef.current();
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "outgoing_units" }, (payload) => {
-        outgoingRef.current = outgoingRef.current.filter(r => r.id !== (payload.old as any).id);
-        recompute();
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "incoming_units" }, ({ old: o }) => {
+        incomingRef.current = incomingRef.current.filter(r => r.id !== (o as any).id);
+        recomputeRef.current();
+      })
+
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, ({ new: n }) => {
+        outgoingRef.current = upsertById(outgoingRef.current, n);
+        recomputeRef.current();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "outgoing_units" }, ({ new: n }) => {
+        outgoingRef.current = upsertById(outgoingRef.current, n);
+        recomputeRef.current();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "outgoing_units" }, ({ old: o }) => {
+        outgoingRef.current = outgoingRef.current.filter(r => r.id !== (o as any).id);
+        recomputeRef.current();
+      })
+
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "departments" }, ({ new: n }) => {
+        deptsRef.current = upsertById(deptsRef.current, n);
+        recomputeRef.current();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "departments" }, ({ new: n }) => {
+        deptsRef.current = upsertById(deptsRef.current, n);
+        recomputeRef.current();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "departments" }, ({ old: o }) => {
+        deptsRef.current = deptsRef.current.filter(r => r.id !== (o as any).id);
+        recomputeRef.current();
       })
 
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [recompute]);
+  }, [upsertById]); // subscribe once per function identity
+
+  // Safety net: periodic full refresh keeps charts fully in sync across tabs/devices.
+  useEffect(() => {
+    const id = setInterval(() => {
+      void load();
+    }, 20000);
+    return () => clearInterval(id);
+  }, [load]);
 
   const handleRefresh = async () => {
     setRefreshed(true);
@@ -416,14 +402,14 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </button>
         </div>
 
-        {/* KPI Grid — key prop triggers count-up re-animation on each realtime update */}
+        {/* KPI Grid */}
         <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
-          <KPI key={`total-${updateKey}`}    label="Total Tickets"   value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
-          <KPI key={`pending-${updateKey}`}  label="Pending"         value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
-          <KPI key={`inprog-${updateKey}`}   label="In Progress"     value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#3b82f6" delay={120} sub="Being handled"        onClick={() => onNavigate("Submit Ticket")} />
-          <KPI key={`resolved-${updateKey}`} label="Resolved"        value={data.resolvedTickets}   icon={<CheckCircle size={17} />}     accent="#10b981" delay={180} sub="Issues closed"        onClick={() => onNavigate("Submit Ticket")} />
-          <KPI key={`inc-${updateKey}`}      label="Incoming Units"  value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#8b5cf6" delay={240} sub="Logged for repair"    onClick={() => onNavigate("Incoming Units")} />
-          <KPI key={`out-${updateKey}`}      label="Outgoing Units"  value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#10b981" delay={300} sub="Returned to users"    onClick={() => onNavigate("Outgoing Units")} />
+          <KPI label="Total Tickets"   value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="Pending"         value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="In Progress"     value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#3b82f6" delay={120} sub="Being handled"        onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="Resolved"        value={data.resolvedTickets}   icon={<CheckCircle size={17} />}     accent="#10b981" delay={180} sub="Issues closed"        onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="Incoming Units"  value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#8b5cf6" delay={240} sub="Logged for repair"    onClick={() => onNavigate("Incoming Units")} />
+          <KPI label="Outgoing Units"  value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#10b981" delay={300} sub="Returned to users"    onClick={() => onNavigate("Outgoing Units")} />
         </div>
 
         {/* Mid row */}
@@ -435,8 +421,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Ticket Status</span>
             </div>
-            {/* FIX: key forces DonutChart to remount and re-run its SVG animation */}
-            <DonutChart key={`donut-${updateKey}`} data={donutData} />
+            <DonutChart data={donutData} />
           </div>
 
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
@@ -449,8 +434,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               </div>
               <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Last 7 days</span>
             </div>
-            {/* FIX: key forces Sparkline to remount and re-run bar height transition */}
-            <Sparkline key={`spark-${updateKey}`} data={data.weeklyTickets} color="#0a4c86" />
+            <Sparkline data={data.weeklyTickets} color="#0a4c86" />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: "1px solid #f1f5f9" }}>
               {[
                 { label: "Total this week", value: data.weeklyTickets.reduce((a, b) => a + b, 0), color: "#0a4c86" },
@@ -480,15 +464,12 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {data.issueBreakdown.slice(0, 5).map((item, i) => (
-                  // FIX: updateKey prefix forces each HorizBar to remount,
-                  //      resetting width to 0 then re-animating to the new value
                   <HorizBar
-                    key={`${updateKey}-${item.type}`}
+                    key={item.type}
                     label={item.type}
                     value={item.count}
                     max={maxIssue}
                     color={issueColors[i] ?? "#0a4c86"}
-                    rank={i}
                   />
                 ))}
               </div>
@@ -517,14 +498,12 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
                   {data.deptRows.map((row, i) => {
                     const pct = (row.tickets / (data.deptRows[0]?.tickets ?? 1)) * 100;
                     return (
-                      // FIX: updateKey prefix forces dept rows to remount,
-                      //      restarting the progress bar width animation
-                      <tr key={`${updateKey}-${row.name}`} className="dept-row-h" style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s" }}>
+                      <tr key={row.name} className="dept-row-h" style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s" }}>
                         <td style={{ padding: "0.6rem 0.5rem", fontWeight: 700, color: "#cbd5e1", fontSize: 12, width: 28 }}>{i + 1}</td>
                         <td style={{ padding: "0.6rem 0.5rem" }}>
                           <div style={{ fontWeight: 600, color: "#374151", fontSize: 13 }}>{row.name}</div>
                           <div style={{ height: 3, background: "#f1f5f9", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${pct}%`, background: "#8b5cf6", borderRadius: 2, transition: "width 0.6s ease" }} />
+                            <div style={{ height: "100%", width: `${pct}%`, background: "#8b5cf6", borderRadius: 2 }} />
                           </div>
                         </td>
                         <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontWeight: 800, color: "#8b5cf6", fontSize: 15 }}>{row.tickets}</td>
@@ -558,18 +537,30 @@ const Dashboard: React.FC = () => {
     if (!token) navigate("/");
   }, [navigate]);
 
-  const PAGE_MAP: Record<string, React.ReactNode> = {
-    "Home":                isTechnician ? <TechnicianDashboardHome /> : <DashboardHome onNavigate={setActiveLabel} />,
-    "Submit Ticket":       <FileReports />,
-    "Repair History":      <Repairs />,
-    "My Tickets":          <MyTickets />,
-    "Work History":        <WorkHistory />,
-    "Incoming Units":      <IncomingUnits readOnly={isTechnician} />,
-    "Outgoing Units":      <OutgoingUnits readOnly={isTechnician} />,
-    "Departments":         <Departments />,
-    "User Accounts":       isAdmin ? <UserAccounts />    : <DashboardHome onNavigate={setActiveLabel} />,
-    "Reports & Analytics": isAdmin ? <ReportAnalytics /> : <DashboardHome onNavigate={setActiveLabel} />,
-    "Activity Log":        <ActivityLogPanel isAdmin={isAdmin} />,
+  // FIX: Store DashboardHome in a ref so it never remounts when activeLabel changes.
+  // Previously PAGE_MAP was re-created every render, destroying and re-creating
+  // DashboardHome (and its realtime subscription) every time you switched pages.
+  const dashHomeNode = useRef<React.ReactNode>(
+    isTechnician
+      ? <TechnicianDashboardHome />
+      : <DashboardHome onNavigate={setActiveLabel} />
+  );
+
+  const getPage = (label: string): React.ReactNode => {
+    switch (label) {
+      case "Home":                return dashHomeNode.current;
+      case "Submit Ticket":       return <FileReports />;
+      case "Repair History":      return <Repairs />;
+      case "My Tickets":          return <MyTickets />;
+      case "Work History":        return <WorkHistory />;
+      case "Incoming Units":      return <IncomingUnits readOnly={isTechnician} />;
+      case "Outgoing Units":      return <OutgoingUnits readOnly={isTechnician} />;
+      case "Departments":         return <Departments />;
+      case "User Accounts":       return isAdmin ? <UserAccounts /> : dashHomeNode.current;
+      case "Reports & Analytics": return isAdmin ? <ReportAnalytics /> : dashHomeNode.current;
+      case "Activity Log":        return <ActivityLogPanel isAdmin={isAdmin} />;
+      default:                    return dashHomeNode.current;
+    }
   };
 
   return (
@@ -630,7 +621,7 @@ const Dashboard: React.FC = () => {
             />
           </div>
           <div className="adm-scroll-area" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "0.5rem" }}>
-            {PAGE_MAP[activeLabel] ?? <DashboardHome onNavigate={setActiveLabel} />}
+            {getPage(activeLabel)}
           </div>
         </div>
       </div>
