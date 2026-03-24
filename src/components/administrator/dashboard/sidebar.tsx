@@ -64,6 +64,7 @@ const technicianMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "My Tickets", icon: TicketIcon },
+      { label: "Work History", icon: ScrollText },
     ],
   },
   {

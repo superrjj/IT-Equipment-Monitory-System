@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   Ticket, Clock, CheckCircle2, CircleDot,
-  Wrench, RefreshCw, Activity, ArrowUpRight,
+  RefreshCw, ArrowUpRight,
 } from "lucide-react";
 import { getSessionUserId } from "../../lib/audit-notifications";
 
@@ -40,13 +40,17 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
   accent: string;
   delay?: number;
-}> = ({ label, value, sub, icon, accent, delay = 0 }) => {
+  animKey?: number;
+}> = ({ label, value, sub, icon, accent, delay = 0, animKey = 0 }) => {
   const [visible, setVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
+
   useEffect(() => {
+    setVisible(false);
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
-  }, [delay]);
+  }, [delay, animKey]);
+
   const displayed = useCountUp(visible ? value : 0);
 
   return (
@@ -66,13 +70,10 @@ const KpiCard: React.FC<{
         boxShadow: hovered ? "0 4px 18px rgba(10,76,134,0.08)" : "none",
       }}
     >
-      {/* top accent stripe */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: 3,
         background: accent, borderRadius: "14px 14px 0 0",
       }} />
-
-      {/* ghost icon */}
       <div style={{
         position: "absolute", top: 10, right: 12,
         color: accent, opacity: hovered ? 0.15 : 0.07,
@@ -83,8 +84,6 @@ const KpiCard: React.FC<{
       }}>
         {icon}
       </div>
-
-      {/* icon row */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem" }}>
         <div style={{
           width: 30, height: 30, borderRadius: 8,
@@ -100,8 +99,6 @@ const KpiCard: React.FC<{
           style={{ transition: "color 0.2s, transform 0.2s", transform: hovered ? "translate(1px,-1px)" : "none" }}
         />
       </div>
-
-      {/* number */}
       <div style={{
         fontSize: 32, fontWeight: 800, color: "#0f172a",
         lineHeight: 1, letterSpacing: "-1px",
@@ -110,16 +107,12 @@ const KpiCard: React.FC<{
       }}>
         {displayed}
       </div>
-
-      {/* label */}
       <div style={{
         fontSize: 10, fontWeight: 700, color: "#64748b",
         textTransform: "uppercase", letterSpacing: "0.09em",
       }}>
         {label}
       </div>
-
-      {/* sub */}
       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{sub}</div>
     </div>
   );
@@ -132,13 +125,17 @@ const ResolutionBar: React.FC<{
   total: number;
   color: string;
   delay?: number;
-}> = ({ label, value, total, color, delay = 0 }) => {
+  animKey?: number;
+}> = ({ label, value, total, color, delay = 0, animKey = 0 }) => {
   const [width, setWidth] = useState(0);
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+
   useEffect(() => {
+    setWidth(0);
     const t = setTimeout(() => setWidth(pct), delay + 250);
     return () => clearTimeout(t);
-  }, [pct, delay]);
+  }, [pct, delay, animKey]);
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
@@ -167,26 +164,27 @@ const TechnicianDashboardHome: React.FC = () => {
   const userId = getSessionUserId();
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [animKey, setAnimKey]       = useState(0);
   const [tickets, setTickets]       = useState({ total: 0, pending: 0, inProg: 0, resolved: 0 });
-  const [repairs, setRepairs]       = useState({ active: 0, completed: 0 });
 
-  const load = async () => {
+  const load = async (isRefresh = false) => {
     if (!userId) { setLoading(false); return; }
-    const [{ data: tix }, { data: repAll }] = await Promise.all([
-      supabase.from("file_reports").select("id, status").contains("assigned_to", [userId]),
-      supabase.from("repairs").select("id, status").contains("assigned_to", [userId]),
-    ]);
+
+    if (isRefresh) {
+      setTickets({ total: 0, pending: 0, inProg: 0, resolved: 0 });
+    }
+
+    const { data: tix } = await supabase
+      .from("file_reports")
+      .select("id, status")
+      .contains("assigned_to", [userId]);
+
     const t = tix ?? [];
-    const r = repAll ?? [];
     setTickets({
       total:    t.length,
       pending:  t.filter((x: any) => x.status === "Pending").length,
       inProg:   t.filter((x: any) => x.status === "In Progress").length,
       resolved: t.filter((x: any) => x.status === "Resolved").length,
-    });
-    setRepairs({
-      active:    r.filter((x: any) => x.status === "Pending" || x.status === "In Progress").length,
-      completed: r.filter((x: any) => x.status === "Completed").length,
     });
     setLoading(false);
   };
@@ -194,8 +192,10 @@ const TechnicianDashboardHome: React.FC = () => {
   useEffect(() => { load(); }, [userId]);
 
   const handleRefresh = async () => {
+    if (refreshing) return;
     setRefreshing(true);
-    await load();
+    setAnimKey(k => k + 1);
+    await load(true);
     setTimeout(() => setRefreshing(false), 600);
   };
 
@@ -231,39 +231,25 @@ const TechnicianDashboardHome: React.FC = () => {
 
       <div className="tdb2" style={{ fontFamily: "'DM Sans', sans-serif", color: "#0f172a" }}>
 
-        {/* ── Page header ── */}
-        <div className="tdb2-in" style={{
-          animationDelay: "0ms",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          marginBottom: "1rem", flexWrap: "wrap", gap: 8,
-        }}>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: "-0.3px" }}>
-              Technician Dashboard
-            </h1>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
-              Your assignments and progress at a glance.
-            </p>
-          </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
           <button
             className="tdb2-refresh"
             onClick={handleRefresh}
-            disabled={refreshing || loading}
+            disabled={refreshing}
             style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "0.4rem 0.8rem", borderRadius: 9,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "0.45rem 0.9rem", borderRadius: 10,
               border: "1px solid #e2e8f0", background: "#fff",
-              fontSize: 12, fontWeight: 600, color: "#64748b",
-              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              fontSize: 12, fontWeight: 600, color: "#475569",
+              cursor: refreshing ? "not-allowed" : "pointer",
+              fontFamily: "'DM Sans', sans-serif",
               transition: "background 0.15s",
+              opacity: refreshing ? 0.6 : 1,
             }}
           >
             <RefreshCw
-              size={12}
-              style={{
-                animation: refreshing ? "tdb2-spin 0.6s linear infinite" : "none",
-                color: refreshing ? BRAND : "#64748b",
-              }}
+              size={13}
+              style={{ animation: refreshing ? "tdb2-spin 0.6s linear infinite" : "none" }}
             />
             Refresh
           </button>
@@ -272,7 +258,7 @@ const TechnicianDashboardHome: React.FC = () => {
         {/* ── Skeleton ── */}
         {loading ? (
           <div className="tdb2-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.7rem" }}>
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} style={{
                 background: "#fff", borderRadius: 14, height: 120,
                 border: "1px solid #e8edf5",
@@ -283,24 +269,22 @@ const TechnicianDashboardHome: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* ── Row 1 ── */}
+            {/* ── Row 1: 3 cards ── */}
             <div
               className="tdb2-in tdb2-grid"
               style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.7rem", marginBottom: "0.7rem" }}
             >
-              <KpiCard label="My Tickets"  value={tickets.total}   sub="Assigned to you"  icon={<Ticket size={15} />}       accent={BRAND}   delay={0}   />
-              <KpiCard label="Pending"      value={tickets.pending} sub="Awaiting action"  icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  />
-              <KpiCard label="In Progress"  value={tickets.inProg}  sub="Currently active" icon={<CircleDot size={15} />}     accent="#3b82f6" delay={100} />
+              <KpiCard label="My Tickets"  value={tickets.total}   sub="Assigned to you"  icon={<Ticket size={15} />}      accent={BRAND}   delay={0}   animKey={animKey} />
+              <KpiCard label="Pending"     value={tickets.pending} sub="Awaiting action"  icon={<Clock size={15} />}        accent="#f59e0b" delay={50}  animKey={animKey} />
+              <KpiCard label="In Progress" value={tickets.inProg}  sub="Currently active" icon={<CircleDot size={15} />}    accent="#3b82f6" delay={100} animKey={animKey} />
             </div>
 
-            {/* ── Row 2 ── */}
+            {/* ── Row 2: 1 card ── */}
             <div
               className="tdb2-in tdb2-grid"
               style={{ animationDelay: "100ms", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.7rem", marginBottom: "1rem" }}
             >
-              <KpiCard label="Resolved"         value={tickets.resolved}  sub="Closed tickets"    icon={<CheckCircle2 size={15} />} accent="#10b981" delay={150} />
-              <KpiCard label="Active Repairs"    value={repairs.active}    sub="Pending / ongoing" icon={<Wrench size={15} />}       accent="#0891b2" delay={200} />
-              <KpiCard label="Repairs Completed" value={repairs.completed} sub="Finished jobs"     icon={<Activity size={15} />}     accent="#8b5cf6" delay={250} />
+              <KpiCard label="Resolved" value={tickets.resolved} sub="Closed tickets" icon={<CheckCircle2 size={15} />} accent="#10b981" delay={150} animKey={animKey} />
             </div>
 
             {/* ── Breakdown panel ── */}
@@ -309,13 +293,11 @@ const TechnicianDashboardHome: React.FC = () => {
                 className="tdb2-in"
                 style={{
                   animationDelay: "180ms",
-                  background: "#fff",
-                  borderRadius: 14,
+                  background: "#fff", borderRadius: 14,
                   border: "1px solid #e8edf5",
                   padding: "1rem 1.1rem",
                 }}
               >
-                {/* header */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                     <div style={{
@@ -336,14 +318,12 @@ const TechnicianDashboardHome: React.FC = () => {
                   </span>
                 </div>
 
-                {/* bars */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <ResolutionBar label="Pending"     value={tickets.pending}  total={tickets.total} color="#f59e0b" delay={0}   />
-                  <ResolutionBar label="In Progress" value={tickets.inProg}   total={tickets.total} color="#3b82f6" delay={70}  />
-                  <ResolutionBar label="Resolved"    value={tickets.resolved} total={tickets.total} color="#10b981" delay={140} />
+                  <ResolutionBar label="Pending"     value={tickets.pending}  total={tickets.total} color="#f59e0b" delay={0}   animKey={animKey} />
+                  <ResolutionBar label="In Progress" value={tickets.inProg}   total={tickets.total} color="#3b82f6" delay={70}  animKey={animKey} />
+                  <ResolutionBar label="Resolved"    value={tickets.resolved} total={tickets.total} color="#10b981" delay={140} animKey={animKey} />
                 </div>
 
-                {/* footer */}
                 <div style={{
                   display: "flex", gap: "1.5rem",
                   marginTop: "0.85rem", paddingTop: "0.85rem",
@@ -368,7 +348,7 @@ const TechnicianDashboardHome: React.FC = () => {
             )}
 
             {/* ── Empty state ── */}
-            {tickets.total === 0 && repairs.active === 0 && repairs.completed === 0 && (
+            {tickets.total === 0 && (
               <div
                 className="tdb2-in"
                 style={{

@@ -13,6 +13,7 @@ import Repairs from "../repairs/repairs";
 import TechnicianDashboardHome from "../../technician/technician-dashboard-home";
 import MyTickets from "../../technician/my-tickets";
 import ActivityLogPanel from "../../technician/activity-log-panel";
+import WorkHistory from "../../technician/work-history";
 import {
   Ticket, Clock, CheckCircle, CircleArrowDown,
   CircleArrowUp, TrendingUp, Activity,
@@ -449,6 +450,7 @@ const Dashboard: React.FC = () => {
     "Submit Ticket":       <FileReports />,
     "Repair History":      <Repairs />,
     "My Tickets":          <MyTickets />,
+    "Work History": <WorkHistory />,
     "Incoming Units":      <IncomingUnits readOnly={isTechnician} />,
     "Outgoing Units":      <OutgoingUnits readOnly={isTechnician} />,
     "Departments":         <Departments />,
