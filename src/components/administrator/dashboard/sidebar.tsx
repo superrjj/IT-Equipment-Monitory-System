@@ -10,7 +10,6 @@ import {
   X,
   ScrollText,
 } from "lucide-react";
-import Dashboard from "../Home/dashboard";
 
 const baseBlue = "#0a4c86";
 const hoverBlue = "#0d5fa3";
