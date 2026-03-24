@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 import Sidebar from "../dashboard/sidebar";
 import Header from "../dashboard/header";
+import ProfileModal from "../Management/my-profiles"; // ✅ Import ProfileModal
 import Departments from "../Management/department";
 import FileReports from "../Ticket & Repairs/submitTicket";
 import ReportAnalytics from "../Reports/report-analytics";
@@ -236,7 +237,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   const outgoingRef = useRef<any[]>([]);
   const deptsRef    = useRef<any[]>([]);
 
-  // Always-current ref — fixes stale closure in realtime handlers
   const recomputeRef = useRef<() => void>(() => {});
   recomputeRef.current = () => {
     setData(buildDashData(ticketsRef.current, incomingRef.current, outgoingRef.current, deptsRef.current));
@@ -271,10 +271,8 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
     setLoading(false);
   }, []);
 
-  // Initial load
   useEffect(() => { load(); }, [load]);
 
-  // Realtime — subscribe once on mount, always call recomputeRef.current (never stale)
   useEffect(() => {
     const channel = supabase
       .channel(`dashboard_${Date.now()}`)
@@ -334,13 +332,12 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [upsertById]); // subscribe once per function identity
+  }, [upsertById]);
 
-  // Safety net: periodic full refresh keeps charts fully in sync across tabs/devices.
   useEffect(() => {
     const id = setInterval(() => {
       void load();
-    }, 20000);
+    }, 30000);
     return () => clearInterval(id);
   }, [load]);
 
@@ -524,6 +521,11 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
 const Dashboard: React.FC = () => {
   const [activeLabel, setActiveLabel] = useState("Home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false); // ✅ Add state for ProfileModal
+  const [avatarUrl, setAvatarUrl] = useState(
+    localStorage.getItem("session_user_avatar") || ""
+  ); // ✅ Track avatar URL
+  
   const navigate = useNavigate();
   const openSidebar  = useCallback(() => setSidebarOpen(true), []);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -537,9 +539,6 @@ const Dashboard: React.FC = () => {
     if (!token) navigate("/");
   }, [navigate]);
 
-  // FIX: Store DashboardHome in a ref so it never remounts when activeLabel changes.
-  // Previously PAGE_MAP was re-created every render, destroying and re-creating
-  // DashboardHome (and its realtime subscription) every time you switched pages.
   const dashHomeNode = useRef<React.ReactNode>(
     isTechnician
       ? <TechnicianDashboardHome />
@@ -618,6 +617,7 @@ const Dashboard: React.FC = () => {
                     }
                   : undefined
               }
+              onOpenProfile={() => setShowProfileModal(true)} // ✅ Open modal instead of navigate
             />
           </div>
           <div className="adm-scroll-area" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "0.5rem" }}>
@@ -625,6 +625,17 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ✅ ProfileModal Integration */}
+      <ProfileModal
+        open={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        onAvatarChange={(url) => {
+          setAvatarUrl(url);
+          // Force header to re-render by updating localStorage
+          window.dispatchEvent(new Event('storage'));
+        }}
+      />
     </>
   );
 };

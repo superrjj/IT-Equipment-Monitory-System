@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
-import { LogOut, Menu, Bell } from "lucide-react";
+import { LogOut, Menu, Bell, Settings } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
 
 const brandBlue = "#0a4c86";
@@ -161,9 +161,37 @@ const headerStyles = `
     background: #f1f5f9; color: #475569;
     cursor: pointer; flex-shrink: 0;
   }
+  @keyframes hdrMenuDrop {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .hdr-user-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0.65rem 0.35rem 0.35rem;
+    border-radius: 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    transition: background 0.15s ease;
+  }
+  .hdr-user-trigger:hover {
+    background: #f1f5f9;
+  }
+
+  .hdr-user-name-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+    white-space: nowrap;
+  }
+
   @media (max-width: 1024px) {
     .hdr-menu-btn { display: flex; }
-    .hdr-user-name { display: none; }
+    .hdr-user-name-text { display: none; }
     .hdr-datetime { font-size: 14px; }
     .hdr-date { font-size: 12px; }
   }
@@ -173,7 +201,6 @@ const headerStyles = `
     .hdr-date { font-size: 11px; }
     .hdr-user-block { gap: 0.5rem; }
     .hdr-avatar { width: 36px; height: 36px; font-size: 14px; }
-    .hdr-logout-btn { padding: 0.35rem 0.6rem; font-size: 12px; }
   }
 `;
 
@@ -182,6 +209,7 @@ type HeaderProps = {
   userRole: string;
   onMenuClick?: () => void;
   onNotificationNavigate?: (entityType: string, entityId: string | null) => void;
+  onOpenProfile?: () => void;
 };
 
 const supabase = createClient(
@@ -200,7 +228,7 @@ type NotificationRow = {
   created_at: string;
 };
 
-const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick, onNotificationNavigate }) => {
+const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick, onNotificationNavigate, onOpenProfile }) => {
   const navigate = useNavigate();
   const [now, setNow]               = useState(new Date());
   const [showConfirm, setShowConfirm] = useState(false);
@@ -209,8 +237,11 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifs, setNotifs] = useState<NotificationRow[]>([]);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const notifPanelRef = useRef<HTMLDivElement | null>(null);
   const notifBtnRef = useRef<HTMLButtonElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const userTriggerRef = useRef<HTMLButtonElement | null>(null);
   const prevUnreadRef = useRef<number>(0);
 
   const playNotificationSound = useCallback(() => {
@@ -240,23 +271,14 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
       osc.stop(t + 0.2);
 
       setTimeout(() => {
-        try {
-          ctx.close();
-        } catch {
-          // ignore
-        }
+        try { ctx.close(); } catch { /* ignore */ }
       }, 300);
-    } catch {
-      // ignore sound errors
-    }
+    } catch { /* ignore sound errors */ }
   }, []);
 
   const refreshUnread = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
-    if (!uid) {
-      setUnreadNotifications(0);
-      return;
-    }
+    if (!uid) { setUnreadNotifications(0); return; }
     const { count, error } = await supabase
       .from("app_notifications")
       .select("id", { count: "exact", head: true })
@@ -266,48 +288,26 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
     else if (count !== null) setUnreadNotifications(count);
   }, []);
 
-  // ── Realtime + polling + custom event ────────────────────────────────────
   useEffect(() => {
     refreshUnread();
-
     const onEvt = () => refreshUnread();
     window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onEvt);
-
-    // Fallback poll every 30s (reduced from 60s for faster badge updates)
     const t = setInterval(refreshUnread, 30000);
-
-    // Supabase Realtime — fires instantly when a new notification is inserted
     const uid = localStorage.getItem("session_user_id");
     const channel = supabase
       .channel("notif-badge-header")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "app_notifications",
-          filter: `user_id=eq.${uid}`,
-        },
-        () => {
-          refreshUnread();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "app_notifications", filter: `user_id=eq.${uid}` }, () => { refreshUnread(); })
       .subscribe();
-
     return () => {
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onEvt);
       clearInterval(t);
       supabase.removeChannel(channel);
     };
   }, [refreshUnread]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const fetchNotifications = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
-    if (!uid) {
-      setNotifs([]);
-      return;
-    }
+    if (!uid) { setNotifs([]); return; }
     setNotifLoading(true);
     const { data } = await supabase
       .from("app_notifications")
@@ -336,23 +336,26 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
   }, [showNotifPanel]);
 
   useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (userMenuRef.current?.contains(t)) return;
+      if (userTriggerRef.current?.contains(t)) return;
+      setShowUserMenu(false);
+    };
+    if (showUserMenu) document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [showUserMenu]);
+
+  useEffect(() => {
     const showBell = !!onNotificationNavigate;
-    if (!showBell) {
-      prevUnreadRef.current = unreadNotifications;
-      return;
-    }
+    if (!showBell) { prevUnreadRef.current = unreadNotifications; return; }
     const prev = prevUnreadRef.current;
-    if (prev === 0 && unreadNotifications > 0) {
-      playNotificationSound();
-    }
+    if (prev === 0 && unreadNotifications > 0) playNotificationSound();
     prevUnreadRef.current = unreadNotifications;
   }, [onNotificationNavigate, unreadNotifications, playNotificationSound]);
 
   const markNotifRead = useCallback(async (id: string) => {
-    await supabase
-      .from("app_notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("id", id);
+    await supabase.from("app_notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
     refreshUnread();
   }, [refreshUnread]);
 
@@ -367,25 +370,15 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
     return () => clearInterval(timer);
   }, []);
 
+  const avatarUrl = localStorage.getItem("session_user_avatar") || "";
   const initials = currentUserName
     .split(" ")
     .map((part) => part[0]?.toUpperCase())
     .join("")
     .slice(0, 2);
 
-  const timeStr = now.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  const dateStr = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   const confirmLogout = () => {
     setShowConfirm(false);
@@ -406,23 +399,15 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
 
       {/* ── Confirm dialog ── */}
       {showConfirm && !loggingOut && (
-        <div
-          className="hdr-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false); }}
-        >
+        <div className="hdr-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false); }}>
           <div className="hdr-dialog" role="dialog" aria-modal="true" aria-labelledby="logout-title">
-            <div className="hdr-dialog-icon">
-              <LogOut size={24} strokeWidth={2} />
-            </div>
+            <div className="hdr-dialog-icon"><LogOut size={24} strokeWidth={2} /></div>
             <p className="hdr-dialog-title" id="logout-title">Sign out?</p>
             <p className="hdr-dialog-desc">
-              You're about to sign out of the IT Equipment Monitoring system.
-              Any unsaved changes will be lost.
+              You're about to sign out of the IT Equipment Monitoring system. Any unsaved changes will be lost.
             </p>
             <div className="hdr-dialog-actions">
-              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)}>
-                Stay
-              </button>
+              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)}>Stay</button>
               <button className="hdr-btn-confirm" onClick={confirmLogout}>
                 <LogOut size={13} strokeWidth={2.2} />
                 Sign out
@@ -432,7 +417,7 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
         </div>
       )}
 
-      {/* ── 3-second logging-out overlay ── */}
+      {/* ── Logging-out overlay ── */}
       {loggingOut && (
         <div className="hdr-loading-overlay">
           <div className="hdr-loading-spinner" />
@@ -454,29 +439,19 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: "1 1 auto" }}>
           {onMenuClick && (
-            <button
-              type="button"
-              className="hdr-menu-btn"
-              onClick={onMenuClick}
-              aria-label="Open menu"
-              style={{ width: 40, height: 40 }}
-            >
+            <button type="button" className="hdr-menu-btn" onClick={onMenuClick} aria-label="Open menu" style={{ width: 40, height: 40 }}>
               <Menu size={20} strokeWidth={2} />
             </button>
           )}
-          {/* Date & Time */}
           <div className="hdr-datetime">
-            <div style={{ fontSize: 20, fontWeight: 700, color: brandBlue, letterSpacing: "0.02em" }}>
-              {timeStr}
-            </div>
-            <div className="hdr-date" style={{ fontSize: 14, color: "#64748b", marginTop: 2 }}>
-              {dateStr}
-            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: brandBlue, letterSpacing: "0.02em" }}>{timeStr}</div>
+            <div className="hdr-date" style={{ fontSize: 14, color: "#64748b", marginTop: 2 }}>{dateStr}</div>
           </div>
         </div>
 
-        {/* User + Logout */}
-        <div className="hdr-user-block" style={{ display: "flex", alignItems: "center", gap: "0.75rem", position: "relative" }}>
+        {/* Right side */}
+        <div className="hdr-user-block" style={{ display: "flex", alignItems: "center", gap: "0.5rem", position: "relative" }}>
+          {/* Bell */}
           {onNotificationNavigate && (
             <button
               ref={notifBtnRef}
@@ -485,9 +460,9 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
               title="Notifications"
               style={{
                 position: "relative",
-                width: 56,
-                height: 56,
-                borderRadius: 16,
+                width: 40,
+                height: 40,
+                borderRadius: 12,
                 border: "none",
                 background: "transparent",
                 color: brandBlue,
@@ -495,52 +470,32 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "none",
               }}
             >
-              <Bell size={22} strokeWidth={2.2} />
+              <Bell size={20} strokeWidth={2.2} />
               {unreadNotifications > 0 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 4,
-                    right: 4,
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 4px",
-                    borderRadius: 999,
-                    background: "#dc2626",
-                    color: "#fff",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
+                <span style={{
+                  position: "absolute", top: 4, right: 4,
+                  minWidth: 16, height: 16, padding: "0 4px",
+                  borderRadius: 999, background: "#dc2626", color: "#fff",
+                  fontSize: 10, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
                   {unreadNotifications > 99 ? "99+" : unreadNotifications}
                 </span>
               )}
             </button>
           )}
+
+          {/* Notifications panel */}
           {onNotificationNavigate && showNotifPanel && (
-            <div
-              ref={notifPanelRef}
-              style={{
-                position: "absolute",
-                top: 60,
-                right: 0,
-                width: 360,
-                maxHeight: 520,
-                overflowY: "auto",
-                background: "#fff",
-                border: "1px solid #e2e8f0",
-                borderRadius: 14,
-                boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
-                zIndex: 1200,
-                padding: "0.75rem",
-              }}
-            >
+            <div ref={notifPanelRef} style={{
+              position: "absolute", top: 52, right: 0,
+              width: 360, maxHeight: 520, overflowY: "auto",
+              background: "#fff", border: "1px solid #e2e8f0",
+              borderRadius: 14, boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
+              zIndex: 1200, padding: "0.75rem",
+            }}>
               <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Notifications</div>
               {notifLoading ? (
                 <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem" }}>Loading...</div>
@@ -552,125 +507,122 @@ const Header: React.FC<HeaderProps> = ({ currentUserName, userRole, onMenuClick,
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem" }}>New</div>
                   )}
                   {notifs.filter((n) => !n.read_at).map((n) => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => { void openNotification(n); }}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        border: "none",
-                        background: "rgba(10,76,134,0.08)",
-                        borderRadius: 10,
-                        padding: "0.7rem",
-                        marginBottom: 8,
-                        cursor: "pointer",
-                      }}
-                    >
+                    <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
+                      style={{ width: "100%", textAlign: "left", border: "none", background: "rgba(10,76,134,0.08)", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{n.type.replace(/_/g, " ")}</div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginTop: 4 }}>{n.title}</div>
                       {n.body && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{n.body}</div>}
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
-                        {new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
-                      </div>
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
                     </button>
                   ))}
                   {notifs.some((n) => !!n.read_at) && (
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem" }}>Earlier</div>
                   )}
                   {notifs.filter((n) => !!n.read_at).map((n) => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => { void openNotification(n); }}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        border: "none",
-                        background: "#fff",
-                        borderRadius: 10,
-                        padding: "0.7rem",
-                        marginBottom: 8,
-                        cursor: "pointer",
-                      }}
-                    >
+                    <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
+                      style={{ width: "100%", textAlign: "left", border: "none", background: "#fff", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{n.type.replace(/_/g, " ")}</div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginTop: 4 }}>{n.title}</div>
                       {n.body && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{n.body}</div>}
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
-                        {new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
-                      </div>
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
                     </button>
                   ))}
                 </>
               )}
             </div>
           )}
-          <div
-            className="hdr-avatar"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "999px",
-              background: brandBlue,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontSize: 18,
-              fontWeight: 600,
-            }}
-          >
-            {initials}
-          </div>
 
-          {/* Name + role — hidden on mobile */}
-          <div className="hdr-user-name" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", lineHeight: 1.2 }}>
-              {currentUserName}
-            </span>
-            <span style={{
-              fontSize: 12,
-              fontWeight: 800,
-              color: brandBlue,
-              lineHeight: 1.2,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}>
-              {userRole}
-            </span>
-          </div>
-
+          {/* ── User trigger: avatar + name (clickable) ── */}
           <button
-            className="hdr-logout-btn"
-            onClick={() => setShowConfirm(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              padding: "0.4rem 0.8rem",
-              borderRadius: 8,
-              border: `1.5px solid ${brandBlue}`,
-              background: "transparent",
-              color: brandBlue,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "'Poppins', sans-serif",
-              transition: "background 0.18s, color 0.18s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = brandBlue;
-              (e.currentTarget as HTMLButtonElement).style.color = "#ffffff";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              (e.currentTarget as HTMLButtonElement).style.color = brandBlue;
-            }}
+            ref={userTriggerRef}
+            type="button"
+            className="hdr-user-trigger"
+            aria-label="Open user menu"
+            onClick={() => setShowUserMenu((v) => !v)}
           >
-            <LogOut size={13} strokeWidth={2.2} />
-            Logout
+            {/* Avatar */}
+            <div
+              className="hdr-avatar"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "999px",
+                background: brandBlue,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+                overflow: "hidden",
+              }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }} />
+              ) : (
+                initials
+              )}
+            </div>
+
+            {/* Name — hidden on mobile */}
+            <span className="hdr-user-name-text">{currentUserName}</span>
           </button>
+
+          {/* Dropdown menu */}
+          {showUserMenu && (
+            <div
+              ref={userMenuRef}
+              style={{
+                position: "absolute",
+                top: 52,
+                right: 0,
+                width: 220,
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 14,
+                boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
+                zIndex: 1200,
+                padding: "0.5rem",
+                animation: "hdrMenuDrop 0.18s ease both",
+              }}
+            >
+              {/* User info header in dropdown */}
+              <div style={{ padding: "0.5rem 0.7rem 0.65rem", borderBottom: "1px solid #f1f5f9", marginBottom: "0.35rem" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{currentUserName}</div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{userRole}</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setShowUserMenu(false); if (onOpenProfile) onOpenProfile(); }}
+                style={{
+                  width: "100%", textAlign: "left", border: "none", background: "#fff",
+                  borderRadius: 10, padding: "0.65rem 0.7rem", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 8,
+                  fontSize: 13, color: "#0f172a", fontWeight: 600,
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <Settings size={15} />
+                Settings
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowUserMenu(false); setShowConfirm(true); }}
+                style={{
+                  width: "100%", textAlign: "left", border: "none", background: "#fff",
+                  borderRadius: 10, padding: "0.65rem 0.7rem", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 8,
+                  fontSize: 13, color: "#dc2626", fontWeight: 700,
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <LogOut size={15} />
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </header>
     </>
