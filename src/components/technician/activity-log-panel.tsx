@@ -16,6 +16,7 @@ type Row = {
   entity_type: string;
   meta: Record<string, unknown>;
   created_at: string;
+  actor?: { full_name: string | null } | null;
 };
 
 type Props = { isAdmin: boolean };
@@ -32,6 +33,21 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
     if (action === "repair_created") return "Created repair";
     if (action === "repair_updated") return "Updated repair";
     if (action === "repair_technician_update") return "Technician updated repair";
+    if (action === "incoming_unit_created") return "Created incoming unit";
+    if (action === "incoming_unit_updated") return "Updated incoming unit";
+    if (action === "incoming_unit_deleted") return "Deleted incoming unit";
+    if (action === "outgoing_unit_created") return "Created outgoing unit";
+    if (action === "outgoing_unit_updated") return "Updated outgoing unit";
+    if (action === "outgoing_unit_deleted") return "Deleted outgoing unit";
+    if (action === "department_created") return "Created department";
+    if (action === "department_updated") return "Updated department";
+    if (action === "department_deleted") return "Deleted department";
+    if (action === "user_account_created") return "Created user account";
+    if (action === "user_account_updated") return "Updated user account";
+    if (action === "user_account_deleted") return "Deleted user account";
+    if (action === "user_account_status_changed") return "Changed account status";
+    if (action === "user_account_approved") return "Approved signup request";
+    if (action === "user_account_rejected") return "Rejected signup request";
     return action;
   };
 
@@ -40,6 +56,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
     if (entityType === "repair") return "Repair Module";
     if (entityType === "incoming_unit") return "Incoming Units";
     if (entityType === "outgoing_unit") return "Outgoing Units";
+    if (entityType === "department") return "Departments";
     if (entityType === "user_account") return "User Accounts";
     return entityType;
   };
@@ -49,9 +66,16 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
     const status = typeof meta.status === "string" ? meta.status : "";
     const assignees = typeof meta.new_assignees === "number" ? meta.new_assignees : null;
     const title = typeof meta.title === "string" ? meta.title : "";
+    const unitName = typeof meta.unit_name === "string" ? meta.unit_name : "";
+    const departmentName = typeof meta.department_name === "string" ? meta.department_name : "";
+    const fullName = typeof meta.full_name === "string" ? meta.full_name : "";
+    const username = typeof meta.username === "string" ? meta.username : "";
 
     if (status) return `Status changed to ${status}`;
     if (assignees !== null) return `${assignees} new assignee(s) added`;
+    if (unitName) return `Unit: ${unitName}`;
+    if (departmentName) return `Department: ${departmentName}`;
+    if (fullName || username) return [fullName, username].filter(Boolean).join(" · ");
     if (title) return "Record updated";
     return "Action recorded";
   };
@@ -61,7 +85,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       setLoading(true);
       let q = supabase
         .from("activity_log")
-        .select("id, action, entity_type, meta, created_at")
+        .select("id, action, entity_type, meta, created_at, actor:user_accounts!activity_log_actor_user_id_fkey(full_name)")
         .order("created_at", { ascending: false })
         .limit(isAdmin ? 400 : 200);
 
@@ -112,7 +136,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f8fafc" }}>
-              {["When", "Action", "Entity", "Details"].map(h => (
+              {(isAdmin ? ["By", "When", "Action", "Entity", "Details"] : ["When", "Action", "Entity", "Details"]).map(h => (
                 <th key={h} style={{ padding: "0.65rem 1rem", textAlign: "left", fontSize: 11, color: "#64748b", textTransform: "uppercase" }}>
                   {h}
                 </th>
@@ -122,20 +146,25 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>
+                <td colSpan={isAdmin ? 5 : 4} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>
                   <Loader size={20} style={{ marginRight: 8, verticalAlign: "middle" }} />
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={4} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>
+                <td colSpan={isAdmin ? 5 : 4} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>
                   No activity recorded yet.
                 </td>
               </tr>
             ) : (
               rows.map(r => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  {isAdmin && (
+                    <td style={{ padding: "0.75rem 1rem", color: "#0f172a", fontSize: 12, fontWeight: 600 }}>
+                      {r.actor?.full_name?.trim() || "System"}
+                    </td>
+                  )}
                   <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap", fontSize: 12 }}>
                     {new Date(r.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
                   </td>

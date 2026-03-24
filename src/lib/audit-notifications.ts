@@ -83,25 +83,13 @@ export async function notifyTicketAssignees(
   ctx: { ticketId: string; ticketTitle: string; ticketNumber?: string | null }
 ): Promise<void> {
   const label = ctx.ticketNumber?.trim() || "Ticket";
-  for (const uid of assigneeIds) {
+  const uniqueAssignees = Array.from(new Set(assigneeIds.filter(Boolean)));
+  for (const uid of uniqueAssignees) {
     if (!uid) continue;
     await insertNotification(supabase, {
       userId: uid,
       type: "ticket_assigned",
       title: "New ticket assigned to you",
-      body: `${label}: ${clip(ctx.ticketTitle, 180)}`,
-      entityType: "file_report",
-      entityId: ctx.ticketId,
-    });
-  }
-
-  // Also notify administrators so the admin UI/bell updates.
-  const adminIds = await fetchActiveAdminIds(supabase);
-  for (const uid of adminIds) {
-    await insertNotification(supabase, {
-      userId: uid,
-      type: "ticket_assigned_admin",
-      title: "Ticket assigned",
       body: `${label}: ${clip(ctx.ticketTitle, 180)}`,
       entityType: "file_report",
       entityId: ctx.ticketId,
@@ -116,24 +104,13 @@ export async function notifyRepairAssignees(
   assigneeIds: string[],
   ctx: { repairId: string; summary: string }
 ): Promise<void> {
-  for (const uid of assigneeIds) {
+  const uniqueAssignees = Array.from(new Set(assigneeIds.filter(Boolean)));
+  for (const uid of uniqueAssignees) {
     if (!uid) continue;
     await insertNotification(supabase, {
       userId: uid,
       type: "repair_assigned",
       title: "New repair job assigned to you",
-      body: clip(ctx.summary, 2000),
-      entityType: "repair",
-      entityId: ctx.repairId,
-    });
-  }
-
-  const adminIds = await fetchActiveAdminIds(supabase);
-  for (const uid of adminIds) {
-    await insertNotification(supabase, {
-      userId: uid,
-      type: "repair_added_admin",
-      title: "Repair job added",
       body: clip(ctx.summary, 2000),
       entityType: "repair",
       entityId: ctx.repairId,

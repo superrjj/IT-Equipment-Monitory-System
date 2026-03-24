@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon} from "lucide-react";
+import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -232,11 +233,19 @@ export default function UserAccounts() {
       if (err) { setFormError(err); setSubmitting(false); return; }
       if (modalMode === "add") {
         const password_hash = await bcrypt.hash(form.password, BCRYPT_ROUNDS);
-        const { error } = await supabase.from("user_accounts").insert({
+        const payload = {
           username: form.username.trim(), full_name: form.full_name.trim(),
           email: form.email.trim(), role: form.role, is_active: form.is_active, password_hash,
-        });
+        };
+        const { data: inserted, error } = await supabase.from("user_accounts").insert(payload).select("id").single();
         if (error) throw new Error(error.message);
+        await insertActivityLog(supabase, {
+          actorUserId: getSessionUserId(),
+          action: "user_account_created",
+          entityType: "user_account",
+          entityId: inserted?.id ?? null,
+          meta: { username: payload.username, full_name: payload.full_name, role: payload.role },
+        });
         showToast("User created.", "success");
       } else if (modalMode === "edit" && selected) {
         const payload: Record<string, any> = {
@@ -246,6 +255,13 @@ export default function UserAccounts() {
         if (resetPw) payload.password_hash = await bcrypt.hash(form.password, BCRYPT_ROUNDS);
         const { error } = await supabase.from("user_accounts").update(payload).eq("id", selected.id);
         if (error) throw new Error(error.message);
+        await insertActivityLog(supabase, {
+          actorUserId: getSessionUserId(),
+          action: "user_account_updated",
+          entityType: "user_account",
+          entityId: selected.id,
+          meta: { username: payload.username, full_name: payload.full_name, role: payload.role, is_active: payload.is_active },
+        });
         showToast("User updated.", "success");
       }
       closeModal(); fetchUsers();
@@ -257,34 +273,71 @@ export default function UserAccounts() {
   const toggleActive = async (u: UserAccount) => {
     const { error } = await supabase.from("user_accounts").update({ is_active: !u.is_active }).eq("id", u.id);
     if (error) showToast(error.message, "error");
-    else { showToast(u.is_active ? "Deactivated." : "Activated.", "success"); fetchUsers(); }
+    else {
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "user_account_status_changed",
+        entityType: "user_account",
+        entityId: u.id,
+        meta: { username: u.username, full_name: u.full_name, is_active: !u.is_active },
+      });
+      showToast(u.is_active ? "Deactivated." : "Activated.", "success");
+      fetchUsers();
+    }
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const removed = deleteTarget;
     const { error } = await supabase.from("user_accounts").delete().eq("id", deleteTarget.id);
     if (error) showToast(error.message, "error");
-    else showToast("Deleted.", "success");
+    else {
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "user_account_deleted",
+        entityType: "user_account",
+        entityId: removed.id,
+        meta: { username: removed.username, full_name: removed.full_name },
+      });
+      showToast("Deleted.", "success");
+    }
     closeModal(); fetchUsers();
   };
 
   const approveRequest = async (r: SignupRequest) => {
     const uniqErr = await checkUniqueness(r.username, r.email);
     if (uniqErr) { showToast(uniqErr, "error"); return; }
-    const { error: insertErr } = await supabase.from("user_accounts").insert({
+    const { data: inserted, error: insertErr } = await supabase.from("user_accounts").insert({
       username: r.username.trim(), full_name: r.full_name.trim(), email: r.email.trim(),
       role: "IT Technician", is_active: true, password_hash: r.password_hash,
-    });
+    }).select("id").single();
     if (insertErr) { showToast(insertErr.message, "error"); return; }
     const { error: updErr } = await supabase.from("signup_requests").update({ status: "approved" }).eq("id", r.id);
     if (updErr) { showToast(updErr.message, "error"); return; }
+    await insertActivityLog(supabase, {
+      actorUserId: getSessionUserId(),
+      action: "user_account_approved",
+      entityType: "user_account",
+      entityId: inserted?.id ?? null,
+      meta: { username: r.username.trim(), full_name: r.full_name.trim(), role: "IT Technician" },
+    });
     showToast("Request approved.", "success"); fetchUsers(); fetchPending();
   };
 
   const rejectRequest = async (r: SignupRequest) => {
     const { error } = await supabase.from("signup_requests").update({ status: "rejected" }).eq("id", r.id);
     if (error) showToast(error.message, "error");
-    else { showToast("Request rejected.", "success"); fetchPending(); }
+    else {
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "user_account_rejected",
+        entityType: "user_account",
+        entityId: null,
+        meta: { username: r.username.trim(), full_name: r.full_name.trim() },
+      });
+      showToast("Request rejected.", "success");
+      fetchPending();
+    }
   };
 
   return (

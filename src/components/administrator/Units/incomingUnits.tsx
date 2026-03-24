@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Package,
   Clock, User, Users, Inbox, Cable, Phone, Building2,
 } from "lucide-react";
+import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -395,14 +396,28 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     };
 
     if (modalMode === "add") {
-      const { error } = await supabase.from("incoming_units").insert(basePayload);
+      const { data: inserted, error } = await supabase.from("incoming_units").insert(basePayload).select("id").single();
       if (error) { setSubmitError(friendlyError(error.message)); setSubmitting(false); return; }
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "incoming_unit_created",
+        entityType: "incoming_unit",
+        entityId: inserted?.id ?? null,
+        meta: { unit_name: basePayload.unit_name, reported_by: basePayload.reported_by },
+      });
       showToast("Incoming unit recorded successfully.", "success");
     } else if (modalMode === "edit" && selected) {
       const { error } = await supabase.from("incoming_units")
         .update({ ...basePayload, updated_at: new Date().toISOString() })
         .eq("id", selected.id);
       if (error) { setSubmitError(friendlyError(error.message)); setSubmitting(false); return; }
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "incoming_unit_updated",
+        entityType: "incoming_unit",
+        entityId: selected.id,
+        meta: { unit_name: basePayload.unit_name, reported_by: basePayload.reported_by },
+      });
       showToast("Record updated successfully.", "success");
     }
 
@@ -413,9 +428,20 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const removedName = deleteTarget.unit_name;
+    const removedId = deleteTarget.id;
     const { error } = await supabase.from("incoming_units").delete().eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
-    else showToast(`Removed "${deleteTarget.unit_name}" from incoming units.`, "success");
+    else {
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "incoming_unit_deleted",
+        entityType: "incoming_unit",
+        entityId: removedId,
+        meta: { unit_name: removedName },
+      });
+      showToast(`Removed "${removedName}" from incoming units.`, "success");
+    }
     setDeleteTarget(null);
     // Realtime DELETE event removes it from state automatically
   };

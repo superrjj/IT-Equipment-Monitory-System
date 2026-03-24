@@ -5,6 +5,7 @@ import {
   X, AlertTriangle, ChevronLeft, ChevronRight, Building2,
   Ticket, Clock, CheckCircle2, CircleDot, Hash,
 } from "lucide-react";
+import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
 // ── Supabase client ────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -205,20 +206,36 @@ const Departments: React.FC = () => {
 
     setSubmitting(true);
     if (modalMode === "add") {
-      const { error } = await supabase.from("departments").insert({
+      const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
-      });
+      };
+      const { data: inserted, error } = await supabase.from("departments").insert(payload).select("id").single();
       if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "department_created",
+        entityType: "department",
+        entityId: inserted?.id ?? null,
+        meta: { department_name: payload.name },
+      });
       showToast(`Department "${form.name.trim()}" added successfully.`, "success");
     } else if (modalMode === "edit" && selected) {
-      const { error } = await supabase.from("departments").update({
+      const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
-      }).eq("id", selected.id);
+      };
+      const { error } = await supabase.from("departments").update(payload).eq("id", selected.id);
       if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "department_updated",
+        entityType: "department",
+        entityId: selected.id,
+        meta: { department_name: payload.name },
+      });
       showToast(`Department "${form.name.trim()}" updated successfully.`, "success");
     }
     setSubmitting(false);
@@ -240,9 +257,20 @@ const Departments: React.FC = () => {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const removedName = deleteTarget.name;
+    const removedId = deleteTarget.id;
     const { error } = await supabase.from("departments").delete().eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
-    else showToast(`Department "${deleteTarget.name}" deleted.`, "success");
+    else {
+      await insertActivityLog(supabase, {
+        actorUserId: getSessionUserId(),
+        action: "department_deleted",
+        entityType: "department",
+        entityId: removedId,
+        meta: { department_name: removedName },
+      });
+      showToast(`Department "${removedName}" deleted.`, "success");
+    }
     setDeleteTarget(null);
     fetchDepartments();
   };
