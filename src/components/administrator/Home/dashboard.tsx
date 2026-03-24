@@ -139,6 +139,7 @@ const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data, color })
   );
 };
 
+// ── Donut Chart ───────────────────────────────────────────────────────────────
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
   const total = data.reduce((s, d) => s + d.value, 0);
   const r = 52, cx = 64, cy = 64, stroke = 18;
@@ -185,7 +186,9 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
 const HorizBar: React.FC<{ label: string; value: number; max: number; color: string; rank: number }> = ({ label, value, max, color, rank }) => {
   const [width, setWidth] = useState(0);
   useEffect(() => {
-    const t = setTimeout(() => setWidth((value / Math.max(max, 1)) * 100), rank * 120 + 200);
+    // Reset to 0 first, then animate to the target width
+    setWidth(0);
+    const t = setTimeout(() => setWidth((value / Math.max(max, 1)) * 100), rank * 120 + 80);
     return () => clearTimeout(t);
   }, [value, max, rank]);
   return (
@@ -259,14 +262,20 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   const [loading, setLoading]     = useState(true);
   const [refreshed, setRefreshed] = useState(false);
 
+  // ── FIX: updateKey forces child chart components to fully remount,
+  //         restarting all internal animations and effects on every realtime event.
+  const [updateKey, setUpdateKey] = useState(0);
+
   // Keep raw data in refs so realtime handlers can patch without re-fetching everything
   const ticketsRef  = useRef<any[]>([]);
   const incomingRef = useRef<any[]>([]);
   const outgoingRef = useRef<any[]>([]);
   const deptsRef    = useRef<any[]>([]);
 
+  // ── FIX: recompute now also bumps updateKey so React knows to remount charts
   const recompute = useCallback(() => {
     setData(buildDashData(ticketsRef.current, incomingRef.current, outgoingRef.current, deptsRef.current));
+    setUpdateKey(k => k + 1);
   }, []);
 
   const load = async () => {
@@ -299,7 +308,8 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   useEffect(() => {
     const channel = supabase
       .channel("dashboard_realtime")
-      // file_reports
+
+      // ── file_reports ────────────────────────────────────────────────────────
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" }, (payload) => {
         ticketsRef.current = [...ticketsRef.current, payload.new];
         recompute();
@@ -312,24 +322,37 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         ticketsRef.current = ticketsRef.current.filter(r => r.id !== (payload.old as any).id);
         recompute();
       })
-      // incoming_units
+
+      // ── incoming_units ──────────────────────────────────────────────────────
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "incoming_units" }, (payload) => {
         incomingRef.current = [...incomingRef.current, payload.new];
+        recompute();
+      })
+      // FIX: added missing UPDATE handler for incoming_units
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "incoming_units" }, (payload) => {
+        incomingRef.current = incomingRef.current.map(r => r.id === payload.new.id ? payload.new : r);
         recompute();
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "incoming_units" }, (payload) => {
         incomingRef.current = incomingRef.current.filter(r => r.id !== (payload.old as any).id);
         recompute();
       })
-      // outgoing_units
+
+      // ── outgoing_units ──────────────────────────────────────────────────────
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
         outgoingRef.current = [...outgoingRef.current, payload.new];
+        recompute();
+      })
+      // FIX: added missing UPDATE handler for outgoing_units
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "outgoing_units" }, (payload) => {
+        outgoingRef.current = outgoingRef.current.map(r => r.id === payload.new.id ? payload.new : r);
         recompute();
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "outgoing_units" }, (payload) => {
         outgoingRef.current = outgoingRef.current.filter(r => r.id !== (payload.old as any).id);
         recompute();
       })
+
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -393,14 +416,14 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </button>
         </div>
 
-        {/* KPI Grid */}
+        {/* KPI Grid — key prop triggers count-up re-animation on each realtime update */}
         <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
-          <KPI label="Total Tickets"   value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="Pending"         value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="In Progress"     value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#3b82f6" delay={120} sub="Being handled"        onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="Resolved"        value={data.resolvedTickets}   icon={<CheckCircle size={17} />}     accent="#10b981" delay={180} sub="Issues closed"        onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="Incoming Units"  value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#8b5cf6" delay={240} sub="Logged for repair"    onClick={() => onNavigate("Incoming Units")} />
-          <KPI label="Outgoing Units"  value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#10b981" delay={300} sub="Returned to users"    onClick={() => onNavigate("Outgoing Units")} />
+          <KPI key={`total-${updateKey}`}    label="Total Tickets"   value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
+          <KPI key={`pending-${updateKey}`}  label="Pending"         value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
+          <KPI key={`inprog-${updateKey}`}   label="In Progress"     value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#3b82f6" delay={120} sub="Being handled"        onClick={() => onNavigate("Submit Ticket")} />
+          <KPI key={`resolved-${updateKey}`} label="Resolved"        value={data.resolvedTickets}   icon={<CheckCircle size={17} />}     accent="#10b981" delay={180} sub="Issues closed"        onClick={() => onNavigate("Submit Ticket")} />
+          <KPI key={`inc-${updateKey}`}      label="Incoming Units"  value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#8b5cf6" delay={240} sub="Logged for repair"    onClick={() => onNavigate("Incoming Units")} />
+          <KPI key={`out-${updateKey}`}      label="Outgoing Units"  value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#10b981" delay={300} sub="Returned to users"    onClick={() => onNavigate("Outgoing Units")} />
         </div>
 
         {/* Mid row */}
@@ -412,7 +435,8 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Ticket Status</span>
             </div>
-            <DonutChart data={donutData} />
+            {/* FIX: key forces DonutChart to remount and re-run its SVG animation */}
+            <DonutChart key={`donut-${updateKey}`} data={donutData} />
           </div>
 
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
@@ -425,7 +449,8 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               </div>
               <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Last 7 days</span>
             </div>
-            <Sparkline data={data.weeklyTickets} color="#0a4c86" />
+            {/* FIX: key forces Sparkline to remount and re-run bar height transition */}
+            <Sparkline key={`spark-${updateKey}`} data={data.weeklyTickets} color="#0a4c86" />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: "1px solid #f1f5f9" }}>
               {[
                 { label: "Total this week", value: data.weeklyTickets.reduce((a, b) => a + b, 0), color: "#0a4c86" },
@@ -455,7 +480,16 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {data.issueBreakdown.slice(0, 5).map((item, i) => (
-                  <HorizBar key={item.type} label={item.type} value={item.count} max={maxIssue} color={issueColors[i] ?? "#0a4c86"} rank={i} />
+                  // FIX: updateKey prefix forces each HorizBar to remount,
+                  //      resetting width to 0 then re-animating to the new value
+                  <HorizBar
+                    key={`${updateKey}-${item.type}`}
+                    label={item.type}
+                    value={item.count}
+                    max={maxIssue}
+                    color={issueColors[i] ?? "#0a4c86"}
+                    rank={i}
+                  />
                 ))}
               </div>
             )}
@@ -483,7 +517,9 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
                   {data.deptRows.map((row, i) => {
                     const pct = (row.tickets / (data.deptRows[0]?.tickets ?? 1)) * 100;
                     return (
-                      <tr key={row.name} className="dept-row-h" style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s" }}>
+                      // FIX: updateKey prefix forces dept rows to remount,
+                      //      restarting the progress bar width animation
+                      <tr key={`${updateKey}-${row.name}`} className="dept-row-h" style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s" }}>
                         <td style={{ padding: "0.6rem 0.5rem", fontWeight: 700, color: "#cbd5e1", fontSize: 12, width: 28 }}>{i + 1}</td>
                         <td style={{ padding: "0.6rem 0.5rem" }}>
                           <div style={{ fontWeight: 600, color: "#374151", fontSize: 13 }}>{row.name}</div>
