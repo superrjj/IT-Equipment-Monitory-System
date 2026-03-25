@@ -9,6 +9,7 @@ import {
   TicketIcon,
   X,
   ScrollText,
+  CheckCircle2,
 } from "lucide-react";
 
 const baseBlue = "#0a4c86";
@@ -30,6 +31,7 @@ const adminMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "Submit Ticket", icon: TicketIcon },
+      { label: "Resolved Tickets", icon: CheckCircle2 }, // Admin: all resolved
     ],
   },
   {
@@ -52,9 +54,7 @@ const adminMenuSections: MenuSection[] = [
   },
   {
     heading: "Workspace",
-    items: [
-      { label: "Activity Log", icon: ScrollText },
-    ],
+    items: [{ label: "Activity Log", icon: ScrollText }],
   },
 ];
 
@@ -64,7 +64,7 @@ const technicianMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "My Tickets", icon: TicketIcon },
-      { label: "Work History", icon: ScrollText },
+      { label: "Work History", icon: ScrollText }, // Technician: own work
     ],
   },
   {
@@ -76,9 +76,7 @@ const technicianMenuSections: MenuSection[] = [
   },
   {
     heading: "Workspace",
-    items: [
-      { label: "Activity Log", icon: ScrollText },
-    ],
+    items: [{ label: "Activity Log", icon: ScrollText }],
   },
 ];
 
@@ -92,7 +90,13 @@ type SidebarProps = {
   onMobileClose?: () => void;
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ activeLabel, onNavigate, userRole, isMobileOpen, onMobileClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  activeLabel,
+  onNavigate,
+  userRole,
+  isMobileOpen,
+  onMobileClose,
+}) => {
   const isAdmin = userRole === "Administrator";
   const isTechnician = userRole === "IT Technician";
 
@@ -156,11 +160,26 @@ const Sidebar: React.FC<SidebarProps> = ({ activeLabel, onNavigate, userRole, is
           overflow: "hidden",
         }}
       >
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+        <div
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            marginBottom: 4,
+          }}
+        >
           <img
             src="/masaya-sa-tarlac-city.png"
             alt="Masaya sa Tarlac City"
-            style={{ width: "100%", height: "auto", display: "block", flex: 1, minWidth: 0 }}
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              flex: 1,
+              minWidth: 0,
+            }}
           />
           {onMobileClose !== undefined && (
             <button

@@ -14,7 +14,6 @@ const headerStyles = `
     inset: 0;
     z-index: 999;
     background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -258,11 +257,11 @@ type NotificationRow = {
   created_at: string;
 };
 
-// ─── adjust these field names to match your actual table/column names ────────
-const PROFILE_TABLE = "users";           // e.g. "profiles" or "users"
-const FIELD_FULL_NAME  = "full_name";    // column that stores the display name
-const FIELD_ROLE       = "role";         // column that stores the role string
-const FIELD_AVATAR_URL = "avatar_url";   // column that stores the avatar URL
+
+const PROFILE_TABLE = "user_accounts";          
+const FIELD_FULL_NAME  = "full_name";    
+const FIELD_ROLE       = "role";        
+const FIELD_AVATAR_URL = "avatar_url";   
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ProfileState = {

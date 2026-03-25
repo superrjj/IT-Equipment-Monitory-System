@@ -59,7 +59,6 @@ const css = `
 .pm-overlay {
   position: fixed; inset: 0; z-index: 1400;
   background: rgba(10, 20, 40, 0.5);
-  backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 1rem;
   animation: pmFade .2s ease both;
@@ -546,7 +545,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
               className={`pm-tab${tab === "account" ? " pm-tab--active" : ""}`}
               onClick={() => setTab("account")}
             >
-              <UserRound size={14} />
+              <UserRound size={14} /><div className=""></div>
               Account Info
             </button>
             <button
@@ -602,11 +601,11 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                     />
                   </label>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
                       {profile?.full_name || "User"}
                     </div>
                     <p style={{ margin: "5px 0 0", fontSize: 11, color: "#94a3b8" }}>
-                      Click avatar to change · JPG, PNG, GIF, WEBP · max 25 MB
+                      Click avatar to change · max 25 MB
                     </p>
                   </div>
                 </div>

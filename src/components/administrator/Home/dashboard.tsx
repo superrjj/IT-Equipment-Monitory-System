@@ -570,7 +570,8 @@ const Dashboard: React.FC = () => {
       case "Submit Ticket":       return <FileReports />;
       case "Repair History":      return <Repairs />;
       case "My Tickets":          return <MyTickets />;
-      case "Work History":        return <WorkHistory />;
+      case "Work History":        return <WorkHistory />;         
+      case "Resolved Tickets":    return <WorkHistory />;         
       case "Incoming Units":      return <IncomingUnits readOnly={isTechnician} />;
       case "Outgoing Units":      return <OutgoingUnits readOnly={isTechnician} />;
       case "Departments":         return <Departments />;
