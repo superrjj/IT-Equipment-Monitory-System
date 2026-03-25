@@ -257,12 +257,10 @@ type NotificationRow = {
   created_at: string;
 };
 
-
-const PROFILE_TABLE = "user_accounts";          
-const FIELD_FULL_NAME  = "full_name";    
-const FIELD_ROLE       = "role";        
-const FIELD_AVATAR_URL = "avatar_url";   
-// ─────────────────────────────────────────────────────────────────────────────
+const PROFILE_TABLE   = "user_accounts";
+const FIELD_FULL_NAME  = "full_name";
+const FIELD_ROLE       = "role";
+const FIELD_AVATAR_URL = "avatar_url";
 
 type ProfileState = {
   name: string;
@@ -335,6 +333,30 @@ const Header: React.FC<HeaderProps> = ({
     fetchProfile();
   }, [fetchProfile]);
 
+  // ── FIX 2a: Listen for the "avatar-updated" custom event dispatched by
+  //    ProfileModal after a successful upload. This gives the Header an
+  //    immediate cache-busted URL so it shows the new image right away —
+  //    without waiting for the Supabase realtime payload (which carries only
+  //    the bare DB URL and would cause the browser to serve the cached image).
+  useEffect(() => {
+    const handleAvatarUpdated = (e: Event) => {
+      const freshUrl = (e as CustomEvent<{ url: string }>).detail?.url;
+      if (!freshUrl) return;
+
+      setProfile((p) => ({ ...p, avatarUrl: freshUrl }));
+
+      // Trigger the pop animation on the avatar element
+      if (avatarRef.current) {
+        avatarRef.current.classList.remove("hdr-avatar-updated");
+        void avatarRef.current.offsetWidth; // force reflow to re-trigger animation
+        avatarRef.current.classList.add("hdr-avatar-updated");
+      }
+    };
+
+    window.addEventListener("avatar-updated", handleAvatarUpdated);
+    return () => window.removeEventListener("avatar-updated", handleAvatarUpdated);
+  }, []); // mount once — stable handler, no deps needed
+
   // ── Realtime subscription: profile row changes ───────────────────────────
   useEffect(() => {
     const uid = localStorage.getItem("session_user_id");
@@ -352,27 +374,31 @@ const Header: React.FC<HeaderProps> = ({
         },
         (payload) => {
           const row = payload.new as any;
-          // Use profileRef — never a stale closure, even with empty dep array
-          const current       = profileRef.current;
-          const nextName      = row[FIELD_FULL_NAME]  ?? current.name;
-          const nextRole      = row[FIELD_ROLE]        ?? current.role;
-          const nextAvatarUrl = row[FIELD_AVATAR_URL]  ?? current.avatarUrl;
+          const current  = profileRef.current;
+          const nextName = row[FIELD_FULL_NAME] ?? current.name;
+          const nextRole = row[FIELD_ROLE]       ?? current.role;
 
-          // Trigger avatar pop animation if avatar changed
-          if (nextAvatarUrl !== current.avatarUrl && avatarRef.current) {
-            avatarRef.current.classList.remove("hdr-avatar-updated");
-            // Force reflow so re-adding the class re-triggers the animation
-            void avatarRef.current.offsetWidth;
-            avatarRef.current.classList.add("hdr-avatar-updated");
+          // ✅ FIX 2b: The DB row only has the bare avatar_url (no cache-buster).
+          // If we set that directly, the browser serves the old cached image.
+          // Solution: always append Date.now() when the avatar URL changes
+          // so the browser is forced to re-fetch the new image from storage.
+          const rawAvatarUrl = row[FIELD_AVATAR_URL];
+          let nextAvatarUrl = current.avatarUrl;
+          if (rawAvatarUrl && rawAvatarUrl !== current.avatarUrl.split("?")[0]) {
+            // Avatar actually changed — apply a fresh cache-busting timestamp
+            nextAvatarUrl = `${rawAvatarUrl}?t=${Date.now()}`;
+
+            // Trigger avatar pop animation
+            if (avatarRef.current) {
+              avatarRef.current.classList.remove("hdr-avatar-updated");
+              void avatarRef.current.offsetWidth;
+              avatarRef.current.classList.add("hdr-avatar-updated");
+            }
           }
 
-          setProfile({
-            name: nextName,
-            role: nextRole,
-            avatarUrl: nextAvatarUrl,
-          });
+          setProfile({ name: nextName, role: nextRole, avatarUrl: nextAvatarUrl });
 
-          // Keep localStorage in sync so other parts of the app stay consistent
+          // Keep localStorage in sync
           if (nextName) localStorage.setItem("session_user_full_name", nextName);
           if (nextRole) localStorage.setItem("session_user_role", nextRole);
         }
@@ -390,10 +416,6 @@ const Header: React.FC<HeaderProps> = ({
     .map((part) => part[0]?.toUpperCase())
     .join("")
     .slice(0, 2);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Everything below is unchanged from the original
-  // ─────────────────────────────────────────────────────────────────────────
 
   const playNotificationSound = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -689,14 +711,15 @@ const Header: React.FC<HeaderProps> = ({
               ref={avatarRef}
               className="hdr-avatar"
               style={{
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
                 borderRadius: "999px",
-                background: brandBlue,
+                background: "#ffffff",
+                border: "1.5px solid #e2e8f0",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#fff",
+                color: brandBlue,
                 fontSize: 14,
                 fontWeight: 600,
                 flexShrink: 0,
@@ -727,7 +750,7 @@ const Header: React.FC<HeaderProps> = ({
             />
           </button>
 
-          {/* Dropdown menu — uses live profile state */}
+          {/* Dropdown menu */}
           {showUserMenu && (
             <div
               ref={userMenuRef}
