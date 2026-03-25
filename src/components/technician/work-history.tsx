@@ -866,8 +866,8 @@ const WorkHistory: React.FC = () => {
                 <div style={{ fontSize: 11, fontWeight: 700, color: BRAND, textTransform: "uppercase", marginTop: 4 }}>Action taken</div>
                 <div style={{ fontSize: 13, background: "#f8fafc", padding: "0.75rem", borderRadius: 8, border: "1px solid #e2e8f0", whiteSpace: "pre-wrap" }}>{selected.action_taken || "—"}</div>
                 <div style={{ display: "flex", gap: "1rem", fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                  <span>Start: <strong style={{ color: "#0f172a" }}>{fmtDate(selected.started_at)}</strong></span>
-                  <span>End: <strong style={{ color: "#10b981" }}>{fmtDate(selected.completed_at)}</strong></span>
+                  <span>Start: <strong style={{ color: "#0a4c86" }}>{fmtDate(selected.started_at)}</strong></span>
+                  <span>End: <strong style={{ color: "#0a4c86" }}>{fmtDate(selected.completed_at)}</strong></span>
                 </div>
               </div>
             </div>
