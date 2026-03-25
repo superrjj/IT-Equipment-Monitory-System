@@ -71,6 +71,8 @@ const groupByMonth = (rows: TicketRow[]): Record<string, TicketRow[]> => {
   return grouped;
 };
 
+
+
 const getMonths = (
   grouped: Record<string, TicketRow[]>,
   selectedMonth: string
