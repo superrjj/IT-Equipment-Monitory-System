@@ -570,7 +570,7 @@ const Header: React.FC<HeaderProps> = ({
             <div className="hdr-dialog-icon"><LogOut size={24} strokeWidth={2} /></div>
             <p className="hdr-dialog-title" id="logout-title">Sign out?</p>
             <p className="hdr-dialog-desc">
-              You're about to sign out of the IT Equipment Monitoring system. Any unsaved changes will be lost.
+              You're about to sign out of the IT Helpdesk Ticketing system. Any unsaved changes will be lost.
             </p>
             <div className="hdr-dialog-actions">
               <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)}>Stay</button>
@@ -642,9 +642,9 @@ const Header: React.FC<HeaderProps> = ({
               {unreadNotifications > 0 && (
                 <span style={{
                   position: "absolute", top: 4, right: 4,
-                  minWidth: 16, height: 16, padding: "0 4px",
+                  minWidth: 14, height: 14, padding: "0 4px",
                   borderRadius: 999, background: "#dc2626", color: "#fff",
-                  fontSize: 10, fontWeight: 700,
+                  fontSize: 11, fontWeight: 700,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {unreadNotifications > 99 ? "99+" : unreadNotifications}
@@ -720,7 +720,7 @@ const Header: React.FC<HeaderProps> = ({
                 alignItems: "center",
                 justifyContent: "center",
                 color: brandBlue,
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 600,
                 flexShrink: 0,
                 overflow: "hidden",
