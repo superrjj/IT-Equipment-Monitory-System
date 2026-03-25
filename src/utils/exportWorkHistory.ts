@@ -34,7 +34,7 @@ const ACCENT_HEX = "1E3A5F";
 const LIGHT_HEX  = "EBF2FA";
 const WHITE_HEX  = "FFFFFF";
 const TNR        = "Times New Roman";
-const MAX_ROWS_PER_PAGE = 15; // Maximum rows per page/table
+const MAX_ROWS_PER_PAGE = 12; // Maximum rows per page/table
 
 // ─── Shared Helpers ───────────────────────────────────────────────────────────
 export const fmtDate = (iso: string | null | undefined): string =>
