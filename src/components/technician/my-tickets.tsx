@@ -37,6 +37,11 @@ type DeptMap = Record<string, string>;
 
 const BRAND = "#0a4c86";
 
+// Returns today's date as YYYY-MM-DD in Asia/Manila timezone
+function todayPH(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
 function sanitize(val: string): string {
   return val
     .replace(/</g, "&lt;")
@@ -51,12 +56,15 @@ function validateTechUpdate(form: {
   started_at: string;
   completed_at: string;
 }): string {
+  const today = todayPH();
   if (!["In Progress", "Resolved"].includes(form.status)) return "Invalid status.";
   if (!form.started_at.trim()) return "Start date is required.";
+  if (form.started_at < today) return "Start date cannot be in the past.";
   if (form.status === "Resolved") {
     if (!form.completed_at.trim()) return "End date is required.";
     if (!form.action_taken.trim()) return "Action taken is required.";
     if (form.action_taken.trim().length > 2000) return "Action taken must be 2000 characters or less.";
+    if (form.completed_at < today) return "End date cannot be in the past.";
     if (new Date(form.completed_at) < new Date(form.started_at))
       return "End date cannot be before start date.";
   }
@@ -167,12 +175,23 @@ const MyTickets: React.FC = () => {
   const openWork = (r: TicketRow) => {
     setFocusedTicketId(r.id);
     setSelected(r);
-    const currentStatus: Status = r.status === "Resolved" ? "Resolved" : "In Progress";
+    const today = todayPH();
+
+    // If ticket was already set to In Progress before, keep that started_at; else default today
+    const existingStarted = r.started_at ? r.started_at.slice(0, 10) : "";
+    const existingCompleted = r.completed_at ? r.completed_at.slice(0, 10) : "";
+
+    // Determine initial status: if ticket was already In Progress, force Resolved-only toggle
+    // (can't go back to In Progress once saved as In Progress)
+    const wasInProgress = r.status === "In Progress";
+    const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
+
     setForm({
-      status: currentStatus,
+      status: initialStatus,
       action_taken: r.action_taken ?? "",
-      started_at:   r.started_at   ? r.started_at.slice(0, 10)   : "",
-      completed_at: r.completed_at ? r.completed_at.slice(0, 10) : "",
+      // If already in progress, lock start date to existing; else default today
+      started_at: existingStarted || today,
+      completed_at: existingCompleted || (initialStatus === "Resolved" ? today : ""),
     });
     setFormError("");
     setModal("work");
@@ -181,6 +200,9 @@ const MyTickets: React.FC = () => {
   const closeModal = () => {
     setModal(null); setSelected(null); setFormError(""); setSaving(false);
   };
+
+  // Whether the ticket has already been saved as "In Progress" (so can't go back)
+  const isAlreadyInProgress = selected?.status === "In Progress";
 
   const saveWork = async () => {
     if (!selected || !userId) return;
@@ -220,7 +242,7 @@ const MyTickets: React.FC = () => {
     border: "1.5px solid #e2e8f0", fontSize: 13,
     fontFamily: "'Poppins', sans-serif", background: "#f8fafc",
     boxSizing: "border-box", outline: "none", transition: "border-color 0.15s",
-    color: "#0f172a",
+    color: "#0f172a", cursor: "pointer",
   };
 
   const readonlyInput: React.CSSProperties = {
@@ -238,6 +260,7 @@ const MyTickets: React.FC = () => {
   }
 
   const isResolved = form.status === "Resolved";
+  const today = todayPH();
 
   return (
     <>
@@ -246,6 +269,23 @@ const MyTickets: React.FC = () => {
         .mt-row:hover { background: #f8fafc !important; }
         .mt-input:focus { border-color: ${BRAND} !important; box-shadow: 0 0 0 3px ${BRAND}18; }
         .mt-btn-cancel:hover { background: #f1f5f9 !important; }
+
+        /* Make date input open calendar on full-field click */
+        input[type="date"] {
+          position: relative;
+          cursor: pointer;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          background: transparent;
+          color: transparent;
+          cursor: pointer;
+          opacity: 0;
+        }
 
         .status-option {
           flex: 1; padding: 0.6rem 0.5rem;
@@ -256,7 +296,10 @@ const MyTickets: React.FC = () => {
           display: flex; align-items: center; justify-content: center; gap: 6px;
           transition: all 0.15s; color: #64748b;
         }
-        .status-option:hover { border-color: #cbd5e1; background: #f1f5f9; }
+        .status-option:hover:not(:disabled) { border-color: #cbd5e1; background: #f1f5f9; }
+        .status-option:disabled {
+          opacity: 0.45; cursor: not-allowed;
+        }
         .status-option.active-inprog {
           border-color: #eab308; background: rgba(234,179,8,0.08); color: #a16207;
         }
@@ -443,7 +486,6 @@ const MyTickets: React.FC = () => {
                 <div style={{ padding: "1.25rem 1.5rem" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "#374151" }}>
 
-                    {/* Requester — full width */}
                     <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Requester</div>
                       <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
@@ -451,7 +493,6 @@ const MyTickets: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Office — full width */}
                     <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Office</div>
                       <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
@@ -459,7 +500,6 @@ const MyTickets: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Issue Type + Submitted — side by side */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                         <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Issue Type</div>
@@ -473,7 +513,6 @@ const MyTickets: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Description */}
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Description</div>
                       <div style={{ background: "#f8fafc", padding: "0.85rem", borderRadius: 10, border: "1px solid #f1f5f9", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.6 }}>
@@ -481,7 +520,6 @@ const MyTickets: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Your Response */}
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 600, color: BRAND, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Your Response</div>
                       <div style={{ background: `${BRAND}06`, padding: "0.85rem", borderRadius: 10, border: `1px solid ${BRAND}18`, fontSize: 13, lineHeight: 1.6 }}>
@@ -513,27 +551,54 @@ const MyTickets: React.FC = () => {
                       Status <span style={{ color: "#ef4444" }}>*</span>
                     </label>
                     <div style={{ display: "flex", gap: 8 }}>
+                      {/* In Progress button — disabled once ticket is already In Progress */}
                       <button
                         type="button"
+                        disabled={isAlreadyInProgress}
                         className={`status-option ${form.status === "In Progress" ? "active-inprog" : ""}`}
+                        title={isAlreadyInProgress ? "Cannot revert to In Progress once saved" : undefined}
                         onClick={() => {
-                          setForm(f => ({ ...f, status: "In Progress", completed_at: "" }));
+                          if (isAlreadyInProgress) return;
+                          setForm(f => ({
+                            ...f,
+                            status: "In Progress",
+                            completed_at: "",
+                            // Auto-fill today when switching to In Progress
+                            started_at: f.started_at || today,
+                          }));
                           setFormError("");
                         }}
                       >
                         <Timer size={13} /> In Progress
                       </button>
+
+                      {/* Resolved button */}
                       <button
                         type="button"
                         className={`status-option ${form.status === "Resolved" ? "active-resolved" : ""}`}
                         onClick={() => {
-                          setForm(f => ({ ...f, status: "Resolved" }));
+                          setForm(f => ({
+                            ...f,
+                            status: "Resolved",
+                            // Auto-fill today for end date when switching to Resolved
+                            completed_at: f.completed_at || today,
+                            // Keep or set start date
+                            started_at: f.started_at || today,
+                          }));
                           setFormError("");
                         }}
                       >
                         <CheckCircle2 size={13} /> Resolved
                       </button>
                     </div>
+
+                    {/* Helper note when already In Progress */}
+                    {isAlreadyInProgress && (
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                        <AlertTriangle size={11} color="#eab308" />
+                        This ticket is already In Progress — you can only mark it as Resolved.
+                      </div>
+                    )}
                   </div>
 
                   {/* Start date — always shown, locked when Resolved */}
@@ -547,6 +612,7 @@ const MyTickets: React.FC = () => {
                     <input
                       type="date"
                       value={form.started_at}
+                      min={today}
                       readOnly={isResolved}
                       onChange={e => {
                         if (isResolved) return;
@@ -567,6 +633,7 @@ const MyTickets: React.FC = () => {
                       <input
                         type="date"
                         value={form.completed_at}
+                        min={today}
                         onChange={e => {
                           setForm(f => ({ ...f, completed_at: e.target.value }));
                           setFormError("");
@@ -593,7 +660,7 @@ const MyTickets: React.FC = () => {
                         maxLength={2000}
                         placeholder="Describe what was done to resolve this ticket…"
                         className="mt-input"
-                        style={{ ...inputBase, resize: "vertical", lineHeight: 1.6 }}
+                        style={{ ...inputBase, resize: "vertical", lineHeight: 1.6, cursor: "text" }}
                       />
                       <div style={{ textAlign: "right", fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                         {form.action_taken.length} / 2000

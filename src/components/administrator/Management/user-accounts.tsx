@@ -513,7 +513,7 @@ export default function UserAccounts() {
                       border: "1px solid " + (u.is_active ? "#bbf7d0" : "#fecaca"),
                       background: u.is_active ? "#dcfce7" : "#fee2e2",
                       color: u.is_active ? "#166534" : "#b91c1c",
-                      padding: "0.2rem 0.55rem", borderRadius: 999, cursor: "pointer", fontWeight: 800, fontSize: 11,
+                      padding: "0.2rem 0.55rem", borderRadius: 999, cursor: "pointer", fontWeight: 700, fontSize: 11,
                       letterSpacing: "0.06em", textTransform: "uppercase",
                     }}>{u.is_active ? "Active" : "Inactive"}</button>
                   </td>
