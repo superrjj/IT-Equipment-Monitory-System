@@ -12,7 +12,7 @@ import {
   ChevronLeft, ChevronRight, FileText,
   Monitor, Cpu, Wifi, Building2,
   Clock, CheckCircle, AlertCircle, Loader, User, Users,
-  Ticket,
+  Ticket, Lock,
 } from "lucide-react";
 
 const supabase = createClient(
@@ -456,7 +456,10 @@ const SubmitTicket: React.FC = () => {
     setForm(emptyForm()); setFormErrors({}); setSubmitting(false);
   };
   const openAdd  = () => { closeModal(); setModalMode("add"); };
+
+  // ← UPDATED: block edit if ticket is Resolved
   const openEdit = (r: FileReport) => {
+    if (r.status === "Resolved") return;
     closeModal(); setSelected(r);
     setForm({
       employee_name:  r.employee_name,
@@ -578,6 +581,8 @@ const SubmitTicket: React.FC = () => {
         .ticket-root, .ticket-root * { box-sizing: border-box; }
         .ticket-row:hover { background: #f8fafc !important; }
         .icon-btn-ticket:hover { background: #f1f5f9 !important; }
+        .icon-btn-ticket-disabled { opacity: 0.90; cursor: not-allowed !important; }
+        .icon-btn-ticket-disabled:hover { background: #fff !important; }
         .modal-overlay-ticket { animation: ticketFadeIn 0.15s ease; }
         @keyframes ticketFadeIn { from { opacity: 0 } to { opacity: 1 } }
         .modal-box-ticket { animation: ticketSlideUp 0.18s ease; }
@@ -690,39 +695,61 @@ const SubmitTicket: React.FC = () => {
                   <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
                 ) : paginated.length === 0 ? (
                   <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No tickets found.</td></tr>
-                ) : paginated.map(r => (
-                  <tr key={r.id} className="ticket-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
-                    <td style={{ padding: "0.75rem 1rem", fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</td>
-                    <td style={{ padding: "0.75rem 1rem" }}><IssueTypeBadge type={r.issue_type} /></td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.employee_name}</td>
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: BRAND, background: "rgba(10,76,134,0.07)", padding: "2px 9px", borderRadius: 999 }}>
-                        <Building2 size={11} /> {getDepartmentName(r.department_id)}
-                      </span>
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem", maxWidth: 180 }}>
-                      <TechnicianCell names={r.technician_names ?? []} />
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={r.status} /></td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                      {new Date(r.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" })}
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {[
-                          { icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),        color: BRAND },
-                          { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(r),        color: BRAND },
-                          { icon: <Trash2 size={14} />, title: "Delete", fn: () => setDeleteTarget(r), color: "#dc2626" },
-                        ].map((btn, i) => (
-                          <button key={i} title={btn.title} className="icon-btn-ticket" onClick={btn.fn}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, transition: "background 0.15s" }}>
-                            {btn.icon}
+                ) : paginated.map(r => {
+                  const isResolved = r.status === "Resolved";
+                  return (
+                    <tr key={r.id} className="ticket-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
+                      <td style={{ padding: "0.75rem 1rem", fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</td>
+                      <td style={{ padding: "0.75rem 1rem" }}><IssueTypeBadge type={r.issue_type} /></td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.employee_name}</td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: BRAND, background: "rgba(10,76,134,0.07)", padding: "2px 9px", borderRadius: 999 }}>
+                          <Building2 size={11} /> {getDepartmentName(r.department_id)}
+                        </span>
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", maxWidth: 180 }}>
+                        <TechnicianCell names={r.technician_names ?? []} />
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={r.status} /></td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
+                        {new Date(r.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" })}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {/* View — always available */}
+                          <button
+                            title="View"
+                            className="icon-btn-ticket"
+                            onClick={() => openView(r)}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: BRAND, transition: "background 0.15s" }}
+                          >
+                            <Eye size={14} />
                           </button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+
+                          {/* Edit — disabled when Resolved */}
+                          <button
+                            title={isResolved ? "Cannot edit a resolved ticket" : "Edit"}
+                            className={`icon-btn-ticket${isResolved ? " icon-btn-ticket-disabled" : ""}`}
+                            onClick={() => !isResolved && openEdit(r)}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: isResolved ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: isResolved ? "#cbd5e1" : BRAND, transition: "background 0.15s" }}
+                          >
+                            {isResolved ? <Pencil size={14} /> : <Pencil size={14} />}
+                          </button>
+
+                          {/* Delete — always available */}
+                          <button
+                            title="Delete"
+                            className="icon-btn-ticket"
+                            onClick={() => setDeleteTarget(r)}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", transition: "background 0.15s" }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -792,7 +819,6 @@ const SubmitTicket: React.FC = () => {
                     maxLength={150}
                     style={{ ...inputStyle, borderColor: formErrors.title ? "#fca5a5" : "#e2e8f0" }}
                   />
-                  {/* Row: error left, char count right — both always reserve space */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <FieldError msg={formErrors.title} />
                     <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0, paddingTop: 3 }}>
@@ -880,7 +906,7 @@ const SubmitTicket: React.FC = () => {
 
               </div>
 
-              {/* ── Actions (no global error banner) ── */}
+              {/* ── Actions ── */}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.2rem" }}>
                 <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Cancel
@@ -949,11 +975,18 @@ const SubmitTicket: React.FC = () => {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
-                <button onClick={() => { closeModal(); openEdit(selected); }}
-                  style={{ padding: "0.5rem 1rem", borderRadius: 8, border: `1.5px solid ${BRAND}`, background: "#fff", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
-                  <Pencil size={13} /> Edit
-                </button>
+              {/* ← UPDATED: hide Edit button if Resolved, show lock notice instead */}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", marginTop: "1.4rem" }}>
+                {selected.status === "Resolved" ? (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5, marginRight: "auto" }}>
+                    <Lock size={12} /> This ticket is resolved and cannot be edited.
+                  </span>
+                ) : (
+                  <button onClick={() => { closeModal(); openEdit(selected); }}
+                    style={{ padding: "0.5rem 1rem", borderRadius: 8, border: `1.5px solid ${BRAND}`, background: "#fff", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Pencil size={13} /> Edit
+                  </button>
+                )}
                 <button onClick={closeModal}
                   style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Close

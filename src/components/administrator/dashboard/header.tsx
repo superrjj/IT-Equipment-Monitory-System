@@ -378,10 +378,7 @@ const Header: React.FC<HeaderProps> = ({
           const nextName = row[FIELD_FULL_NAME] ?? current.name;
           const nextRole = row[FIELD_ROLE]       ?? current.role;
 
-          // ✅ FIX 2b: The DB row only has the bare avatar_url (no cache-buster).
-          // If we set that directly, the browser serves the old cached image.
-          // Solution: always append Date.now() when the avatar URL changes
-          // so the browser is forced to re-fetch the new image from storage.
+        
           const rawAvatarUrl = row[FIELD_AVATAR_URL];
           let nextAvatarUrl = current.avatarUrl;
           if (rawAvatarUrl && rawAvatarUrl !== current.avatarUrl.split("?")[0]) {
