@@ -66,7 +66,7 @@ const WorkHistory: React.FC = () => {
     setLoading(true);
     let query = supabase
       .from("file_reports")
-      .select("id, ticket_number, title, description, status, employee_name, department_id, issue_type, date_submitted, assigned_to, action_taken, started_at, completed_at")
+      .select("id, ticket_number, title, status, employee_name, department_id, issue_type, date_submitted, assigned_to, action_taken, started_at, completed_at")
       .eq("status", "Resolved")
       .order("completed_at", { ascending: false });
 
@@ -114,7 +114,7 @@ const WorkHistory: React.FC = () => {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      const matchSearch = !q || [r.title, r.description, r.employee_name, r.ticket_number ?? "", r.issue_type]
+      const matchSearch = !q || [r.title, r.employee_name, r.ticket_number ?? "", r.issue_type]
         .join(" ").toLowerCase().includes(q);
       const matchMonth = selectedMonth === "All" || getMonthYear(r.completed_at) === selectedMonth;
       return matchSearch && matchMonth;
@@ -512,10 +512,6 @@ const WorkHistory: React.FC = () => {
                 <div>
                   <CheckCircle2 size={12} color="#10b981" style={{ marginRight: 6, verticalAlign: "middle" }} />
                   Resolved: {fmtDate(selected.completed_at)}
-                </div>
-
-                <div style={{ background: "#f8fafc", padding: "0.75rem", borderRadius: 8, border: "1px solid #e2e8f0", whiteSpace: "pre-wrap" }}>
-                  {selected.description || "—"}
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

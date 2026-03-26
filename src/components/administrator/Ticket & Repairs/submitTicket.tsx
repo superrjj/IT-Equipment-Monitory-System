@@ -34,7 +34,6 @@ type FileReport = {
   department_id:  string;
   issue_type:     IssueType | "Network / Internet";
   title:          string;
-  description:    string;
   status:         Status;
   date_submitted: string;
   assigned_to:    string[];
@@ -54,7 +53,6 @@ type AdminForm = {
   department_id:  string;
   issue_type:     IssueType;
   title:          string;
-  description:    string;
   date_submitted: string;
   assigned_to:    string[];
 };
@@ -63,6 +61,7 @@ type FormState = AdminForm;
 
 const BRAND     = "#0a4c86";
 const PAGE_SIZE = 10;
+const MAX_ACTIVE_TICKETS = 3; // max Pending + In Progress tickets per technician
 
 const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
@@ -103,7 +102,6 @@ function validateForm(form: FormState): string {
   if (form.employee_name.trim().length > 100) return "Employee name must be 100 characters or less.";
   if (!form.department_id) return "Department is required.";
   if (form.assigned_to.length === 0) return "Please assign at least one IT Staff.";
-  if (form.description.trim().length > 2000) return "Description must be 2000 characters or less.";
   if (!ISSUE_TYPES.includes(form.issue_type)) return "Invalid issue type.";
   if (!form.date_submitted) return "Date submitted is required.";
   return "";
@@ -114,8 +112,7 @@ const emptyForm = (): FormState => ({
   department_id:  "",
   issue_type:     "Hardware",
   title:          "",
-  description:    "",
-  date_submitted: new Date().toLocaleDateString("en-CA",{ timeZone: "Asia/Manila" }),
+  date_submitted: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
   assigned_to:    [],
 });
 
@@ -181,34 +178,102 @@ const TechnicianChips: React.FC<{ names: string[] }> = ({ names }) => {
   );
 };
 
+// ── TechnicianPicker with load-limiting ────────────────────────────────────────
 const TechnicianPicker: React.FC<{
   users: UserOption[];
   selected: string[];
   onChange: (ids: string[]) => void;
   hasError: boolean;
-}> = ({ users, selected, onChange, hasError }) => {
-  const toggle = (id: string) =>
+  loadMap: Record<string, number>;       // active ticket count per technician id
+  editingTicketId?: string | null;       // id of ticket being edited (to avoid double-count)
+}> = ({ users, selected, onChange, hasError, loadMap, editingTicketId }) => {
+
+  const toggle = (id: string, blocked: boolean) => {
+    if (blocked) return; // already at max and not currently selected — do nothing
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
+  };
+
+  // Load badge colour thresholds
+  const loadColor = (count: number, isFull: boolean) => {
+    if (isFull)    return { bg: "rgba(220,38,38,0.10)",  color: "#dc2626" };
+    if (count >= 2) return { bg: "rgba(234,179,8,0.13)",  color: "#a16207" };
+    return           { bg: "rgba(22,163,74,0.10)",        color: "#15803d" };
+  };
+
   return (
-    <div style={{ border: `1px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`, borderRadius: 8, background: "#f8fafc", maxHeight: 130, overflowY: "auto", padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2 }}>
+    <div style={{
+      border: `1px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`,
+      borderRadius: 8, background: "#f8fafc",
+      maxHeight: 160, overflowY: "auto",
+      padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2,
+    }}>
       {users.length === 0 ? (
         <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Staff found.</div>
       ) : users.map(u => {
-        const active = selected.includes(u.id);
+        const isSelected = selected.includes(u.id);
+
+        // When editing, exclude the current ticket's own count for this technician
+        // so they don't appear "full" just because they're already assigned here.
+        const rawCount   = loadMap[u.id] ?? 0;
+        const activeCount = (editingTicketId && isSelected)
+          ? Math.max(0, rawCount - 1)   // subtract the ticket currently being edited
+          : rawCount;
+
+        const isFull    = activeCount >= MAX_ACTIVE_TICKETS && !isSelected;
+        const isBlocked = isFull; // can't be newly selected when full
+        const lc        = loadColor(activeCount, isFull);
+
         return (
-          <button key={u.id} type="button" onClick={() => toggle(u.id)}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.45rem 0.6rem", borderRadius: 6, border: "none", background: active ? `${BRAND}10` : "transparent", cursor: "pointer", textAlign: "left", width: "100%", transition: "background 0.12s" }}>
-            <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${active ? BRAND : "#cbd5e1"}`, background: active ? BRAND : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {active && (
+          <button
+            key={u.id}
+            type="button"
+            onClick={() => toggle(u.id, isBlocked)}
+            disabled={isBlocked}
+            title={isBlocked ? `${u.full_name} has reached the maximum of ${MAX_ACTIVE_TICKETS} active tickets.` : undefined}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
+              background: isSelected ? `${BRAND}10` : "transparent",
+              cursor: isBlocked ? "not-allowed" : "pointer",
+              textAlign: "left", width: "100%", transition: "background 0.12s",
+              opacity: isBlocked ? 0.52 : 1,
+            }}
+          >
+            {/* Checkbox */}
+            <span style={{
+              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+              border: `1.5px solid ${isSelected ? BRAND : "#cbd5e1"}`,
+              background: isSelected ? BRAND : "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              pointerEvents: "none",
+            }}>
+              {isSelected && (
                 <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                  <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </span>
-            <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
+
+            {/* Name */}
+            <span style={{
+              fontSize: 13,
+              fontWeight: isSelected ? 600 : 400,
+              color: isBlocked ? "#94a3b8" : isSelected ? BRAND : "#374151",
+              fontFamily: "'Poppins', sans-serif",
+              flex: 1,
+            }}>
               {u.full_name}
             </span>
-            <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{u.role}</span>
+
+            {/* Ticket load badge */}
+            <span style={{
+              fontSize: 10, fontWeight: 700,
+              padding: "1px 7px", borderRadius: 999,
+              background: lc.bg, color: lc.color,
+              whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              {activeCount}/{MAX_ACTIVE_TICKETS}{isFull ? " · Full" : " tickets"}
+            </span>
           </button>
         );
       })}
@@ -247,6 +312,20 @@ const SubmitTicket: React.FC = () => {
     return m;
   }, [itStaff]);
 
+  // ── Technician active-ticket load map ────────────────────────────────────────
+  // Counts Pending + In Progress tickets per technician (Resolved does NOT count).
+  const technicianLoadMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    reports.forEach(r => {
+      if (r.status === "Pending" || r.status === "In Progress") {
+        (r.assigned_to ?? []).forEach(id => {
+          map[id] = (map[id] ?? 0) + 1;
+        });
+      }
+    });
+    return map;
+  }, [reports]);
+
   const fetchAll = async () => {
     setLoading(true);
     const [
@@ -265,78 +344,45 @@ const SubmitTicket: React.FC = () => {
     setLoading(false);
   };
 
-  // ── Initial load + re-fetch when sort changes ──────────────────────────────
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
-  // ── Supabase Realtime auto-sync ────────────────────────────────────────────
+  // ── Supabase Realtime ─────────────────────────────────────────────────────────
   useEffect(() => {
     const channel = supabase
-      .channel("file_reports_realtime", {
-        config: { broadcast: { self: false } },
+      .channel("file_reports_realtime", { config: { broadcast: { self: false } } })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" }, (payload) => {
+        const newRow = payload.new as FileReport;
+        setReports(prev => {
+          if (prev.some(r => r.id === newRow.id)) return prev;
+          return [{ ...newRow, assigned_to: Array.isArray(newRow.assigned_to) ? newRow.assigned_to : [] }, ...prev];
+        });
       })
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "file_reports" },
-        (payload) => {
-          const newRow = payload.new as FileReport;
-          setReports(prev => {
-            if (prev.some(r => r.id === newRow.id)) return prev;
-            const row: FileReport = {
-              ...newRow,
-              assigned_to: Array.isArray(newRow.assigned_to) ? newRow.assigned_to : [],
-            };
-            // prepend so newest shows first (matches default desc sort)
-            return [row, ...prev];
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "file_reports" },
-        (payload) => {
-          const updated = payload.new as FileReport;
-          setReports(prev =>
-            prev.map(r =>
-              r.id === updated.id
-                ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
-                : r
-            )
-          );
-          // Also refresh the "selected" view modal if it's open for this record
-          setSelected(prev =>
-            prev && prev.id === updated.id
-              ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
-              : prev
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "file_reports" },
-        (payload) => {
-          const deletedId = (payload.old as { id: string }).id;
-          setReports(prev => prev.filter(r => r.id !== deletedId));
-          // Close view/edit modal if the deleted record was open
-          setSelected(prev => (prev?.id === deletedId ? null : prev));
-          setModalMode(prev => {
-            // We can't easily close without knowing selected here, so we rely on selected becoming null
-            return prev;
-          });
-        }
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
+        const updated = payload.new as FileReport;
+        setReports(prev => prev.map(r =>
+          r.id === updated.id
+            ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
+            : r
+        ));
+        setSelected(prev =>
+          prev && prev.id === updated.id
+            ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
+            : prev
+        );
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "file_reports" }, (payload) => {
+        const deletedId = (payload.old as { id: string }).id;
+        setReports(prev => prev.filter(r => r.id !== deletedId));
+        setSelected(prev => (prev?.id === deletedId ? null : prev));
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []); // mount once — no deps needed, uses setReports functional updater
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
-  // Close modal when selected becomes null due to realtime DELETE
   useEffect(() => {
     if (!selected && (modalMode === "view" || modalMode === "edit")) {
-      setModalMode(null);
-      setForm(emptyForm());
-      setFormError("");
+      setModalMode(null); setForm(emptyForm()); setFormError("");
     }
   }, [selected]);
 
@@ -352,7 +398,7 @@ const SubmitTicket: React.FC = () => {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return reportsWithNames.filter(r => {
-      const matchSearch    = !q || [r.title, r.description, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
+      const matchSearch    = !q || [r.title, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
       const matchIssueType = filterIssueType === "All" || r.issue_type === filterIssueType;
       const matchStatus    = filterStatus    === "All" || r.status      === filterStatus;
       return matchSearch && matchIssueType && matchStatus;
@@ -395,7 +441,6 @@ const SubmitTicket: React.FC = () => {
       department_id:  r.department_id,
       issue_type:     r.issue_type === "Network / Internet" ? "Internet" : (r.issue_type as IssueType),
       title:          r.title,
-      description:    r.description,
       date_submitted: r.date_submitted.slice(0, 10),
       assigned_to:    Array.isArray(r.assigned_to) ? r.assigned_to : [],
     });
@@ -403,7 +448,7 @@ const SubmitTicket: React.FC = () => {
   };
   const openView = (r: FileReport) => { setSelected(r); setModalMode("view"); };
 
-  const today =  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
   const handleSubmit = async () => {
     const err = validateForm(form);
@@ -415,7 +460,6 @@ const SubmitTicket: React.FC = () => {
       department_id:  form.department_id,
       issue_type:     form.issue_type,
       title:          sanitize(form.title),
-      description:    sanitize(form.description),
       date_submitted: new Date(form.date_submitted).toISOString(),
       assigned_to:    form.assigned_to,
     };
@@ -426,11 +470,7 @@ const SubmitTicket: React.FC = () => {
         .insert({ ...payload, status: "Pending" })
         .select("id, ticket_number")
         .single();
-      if (error) {
-        setFormError(friendlyError(error.message));
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
       if (row?.id && form.assigned_to.length > 0) {
         await notifyTicketAssignees(supabase, form.assigned_to, {
           ticketId: row.id,
@@ -449,11 +489,7 @@ const SubmitTicket: React.FC = () => {
     } else if (modalMode === "edit" && selected) {
       const prevAssigned = Array.isArray(selected.assigned_to) ? selected.assigned_to : [];
       const { error } = await supabase.from("file_reports").update(payload).eq("id", selected.id);
-      if (error) {
-        setFormError(friendlyError(error.message));
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
       const added = diffNewAssignees(prevAssigned, form.assigned_to);
       if (added.length > 0) {
         await notifyTicketAssignees(supabase, added, {
@@ -474,8 +510,6 @@ const SubmitTicket: React.FC = () => {
 
     setSubmitting(false);
     closeModal();
-    // No manual fetchAll() needed — Realtime will push the change automatically.
-    // But we still call it here to ensure sort order is correct after edits.
     fetchAll();
   };
 
@@ -485,7 +519,6 @@ const SubmitTicket: React.FC = () => {
     if (error) showToast(friendlyError(error.message), "error");
     else showToast(`Ticket "${deleteTarget.title}" deleted.`, "success");
     setDeleteTarget(null);
-    // Realtime DELETE event will remove it from state automatically
   };
 
   const inputStyle: React.CSSProperties = {
@@ -524,9 +557,7 @@ const SubmitTicket: React.FC = () => {
         .ticket-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 140px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
         @media (max-width: 1024px) { .ticket-stat-cards { grid-template-columns: repeat(2, 1fr) !important; } }
         @media (max-width: 480px) { .ticket-stat-cards { grid-template-columns: 1fr !important; } .ticket-header-row { flex-direction: column; align-items: flex-start !important; } }
-        /* Row flash when updated via realtime */
-        @keyframes rowFlash { 0% { background: rgba(10,76,134,0.08); } 100% { background: transparent; } }
-        .ticket-row-flash { animation: rowFlash 1.2s ease-out; }
+        .tech-picker-btn:not(:disabled):hover { background: rgba(10,76,134,0.06) !important; }
       `}</style>
 
       <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
@@ -590,8 +621,6 @@ const SubmitTicket: React.FC = () => {
               <option value="All">All Statuses</option>
               {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-
-
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
               Page {page}/{totalPages}
             </div>
@@ -746,32 +775,47 @@ const SubmitTicket: React.FC = () => {
                     style={{ ...inputStyle, borderColor: formError && !form.date_submitted ? "#fca5a5" : "#e2e8f0" }} />
                 </div>
 
+                {/* ── Technician Picker with load-awareness ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Users size={13} color="#475569" /> Assign IT Technician <span style={{ color: "#dc2626" }}>*</span>
+                    <Users size={13} color="#475569" /> Assign IT Technician
+                    <span style={{ color: "#dc2626" }}>*</span>
                     {form.assigned_to.length > 0 && (
                       <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: BRAND, background: `${BRAND}10`, padding: "1px 8px", borderRadius: 999 }}>
                         {form.assigned_to.length} selected
                       </span>
                     )}
                   </label>
+
+                  {/* Legend */}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                    {[
+                      { dot: "#15803d", label: "Available (0–1)" },
+                      { dot: "#a16207", label: "Busy (2 tickets)" },
+                      { dot: "#dc2626", label: `Full (${MAX_ACTIVE_TICKETS} tickets)` },
+                    ].map(l => (
+                      <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: "#64748b", fontWeight: 500 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: l.dot, display: "inline-block" }} />
+                        {l.label}
+                      </span>
+                    ))}
+                  </div>
+
                   <TechnicianPicker
                     users={itStaff}
                     selected={form.assigned_to}
                     onChange={ids => { setForm(f => ({ ...f, assigned_to: ids })); setFormError(""); }}
                     hasError={!!(formError && form.assigned_to.length === 0)}
+                    loadMap={technicianLoadMap}
+                    editingTicketId={modalMode === "edit" ? selected?.id ?? null : null}
                   />
+
+                  {/* Helper note */}
+                  <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0" }}>
+                    Technicians with {MAX_ACTIVE_TICKETS} active (Pending or In Progress) tickets are grayed out and cannot be assigned.
+                  </p>
                 </div>
 
-                <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>
-                    Description <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>(optional)</span>
-                  </label>
-                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Provide detailed information about the issue..." rows={3} maxLength={2000}
-                    style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>{form.description.length}/2000</div>
-                </div>
               </div>
 
               {formError && (
@@ -810,14 +854,10 @@ const SubmitTicket: React.FC = () => {
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Ticket Information</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
-                  { label: "Name of Employee",  value: selected.employee_name, icon: <User size={12} /> },
+                  { label: "Name of Employee",  value: selected.employee_name,                icon: <User size={12} /> },
                   { label: "Department/Office", value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
-                  {
-                    label: "Submitted",
-                    value: new Date(selected.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }),
-                    icon: <Clock size={12} />,
-                  },
-                  { label: "Assigned To", value: <TechnicianChips names={(selected.assigned_to ?? []).map(id => userMap[id]?.full_name).filter(Boolean) as string[]} />, icon: <Users size={12} /> },
+                  { label: "Submitted",         value: new Date(selected.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }), icon: <Clock size={12} /> },
+                  { label: "Assigned To",       value: <TechnicianChips names={(selected.assigned_to ?? []).map(id => userMap[id]?.full_name).filter(Boolean) as string[]} />, icon: <Users size={12} /> },
                 ].map(row => (
                   <div key={row.label} className="ticket-detail-row">
                     <span className="ticket-detail-label">{row.icon} {row.label}</span>
@@ -825,15 +865,6 @@ const SubmitTicket: React.FC = () => {
                   </div>
                 ))}
               </div>
-
-              {selected.description && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 6 }}>Description</div>
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "0.75rem", lineHeight: 1.7, color: "#374151", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13 }}>
-                    {selected.description}
-                  </div>
-                </div>
-              )}
 
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#15803d", marginBottom: 4, marginTop: "0.5rem" }}>IT Technician Response</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
