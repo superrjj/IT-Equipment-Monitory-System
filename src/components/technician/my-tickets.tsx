@@ -345,7 +345,7 @@ const MyTickets: React.FC = () => {
 
         {/* ── Page header ── */}
         <div style={{ marginBottom: "1rem" }}>
-          <h2 style={{ fontSize: 28, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
             <Ticket size={20} color={BRAND} /> My Tickets
           </h2>
           <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>
