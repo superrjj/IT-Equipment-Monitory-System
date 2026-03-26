@@ -127,12 +127,23 @@ const emptyForm = (): FormState => ({
   department_id: "",
 });
 
-const FieldError: React.FC<{ msg?: string }> = ({ msg }) =>
-  msg ? (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, color: "#b91c1c", fontWeight: 500 }}>
-      <AlertTriangle size={11} /> {msg}
+// ── Per-field error — visibility:hidden keeps space, no layout shift ───────────
+const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
+   <div style={{
+      minHeight: 18,
+      marginTop: 1,
+      fontSize: 11,
+      fontWeight: 600,
+      color: "#dc2626",
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      visibility: msg ? "visible" : "hidden",
+    }}>
+      <AlertTriangle size={10} />
+      {msg ?? "placeholder"}
     </div>
-  ) : null;
+);
 
 const StaffSinglePicker: React.FC<{
   users: UserOption[];
@@ -217,7 +228,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const [deleteTarget, setDeleteTarget] = useState<IncomingUnitRow | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
@@ -254,7 +264,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
-  // ── Supabase Realtime auto-sync ─────────────────────────────────────────────
   useEffect(() => {
     const channel = supabase
       .channel("incoming_units_realtime")
@@ -289,7 +298,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Close modal if selected record was deleted via realtime
   useEffect(() => {
     if (!selected && (modalMode === "view" || modalMode === "edit")) {
       setModalMode(null);
@@ -307,7 +315,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     [rows, userMap, deptMap]
   );
 
-  // Client-side sort (realtime prepends rows; re-sort to keep order consistent)
   const rowsSorted = useMemo(() => {
     return [...rowsEnriched].sort((a, b) => {
       const aVal = a[sortField] ?? "";
@@ -349,7 +356,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setSelected(null);
     setForm(emptyForm());
     setFieldErrors({});
-    setSubmitError("");
     setSubmitting(false);
   };
 
@@ -382,7 +388,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setSubmitting(true);
-    setSubmitError("");
 
     const basePayload = {
       date_received: new Date(form.date_received).toISOString(),
@@ -397,7 +402,11 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
     if (modalMode === "add") {
       const { data: inserted, error } = await supabase.from("incoming_units").insert(basePayload).select("id").single();
-      if (error) { setSubmitError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFieldErrors({ unit_name: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "incoming_unit_created",
@@ -410,7 +419,11 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       const { error } = await supabase.from("incoming_units")
         .update({ ...basePayload, updated_at: new Date().toISOString() })
         .eq("id", selected.id);
-      if (error) { setSubmitError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFieldErrors({ unit_name: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "incoming_unit_updated",
@@ -423,7 +436,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
     setSubmitting(false);
     closeModal();
-    // No manual fetchAll() needed — Realtime handles state updates automatically
   };
 
   const confirmDelete = async () => {
@@ -443,7 +455,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       showToast(`Removed "${removedName}" from incoming units.`, "success");
     }
     setDeleteTarget(null);
-    // Realtime DELETE event removes it from state automatically
   };
 
   const inputStyle = (hasErr?: boolean): React.CSSProperties => ({
@@ -497,7 +508,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif"}}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif" }}>
               <Inbox size={20} color={BRAND} /> Incoming Units
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
@@ -630,7 +641,9 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.9rem" }}>
+
+                {/* Date */}
                 <div>
                   <label style={labelStyle}>Date <span style={{ color: "#dc2626" }}>*</span></label>
                   <input type="date" value={form.date_received} max={today}
@@ -639,6 +652,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.date_received} />
                 </div>
 
+                {/* Unit */}
                 <div>
                   <label style={labelStyle}>Unit <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.unit_name} onChange={e => { setForm(f => ({ ...f, unit_name: e.target.value })); clearError("unit_name"); }}
@@ -646,6 +660,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.unit_name} />
                 </div>
 
+                {/* Unit cable */}
                 <div>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Cable size={13} color="#475569" /> Unit cable {optionalBadge}
@@ -655,6 +670,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.unit_cable} />
                 </div>
 
+                {/* Contact no. */}
                 <div>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Phone size={13} color="#475569" /> Contact no. {optionalBadge}
@@ -664,6 +680,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.contact_number} />
                 </div>
 
+                {/* Employee */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.reported_by} onChange={e => { setForm(f => ({ ...f, reported_by: e.target.value })); clearError("reported_by"); }}
@@ -671,6 +688,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.reported_by} />
                 </div>
 
+                {/* Department */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Building2 size={13} color="#475569" /> Office / Department <span style={{ color: "#dc2626" }}>*</span>
@@ -683,6 +701,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.department_id} />
                 </div>
 
+                {/* Received by */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color="#475569" /> Received by (IT Technician) <span style={{ color: "#dc2626" }}>*</span>
@@ -696,23 +715,21 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.received_by_user_id} />
                 </div>
 
+                {/* Issue description */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
                   <textarea value={form.issue_description} onChange={e => { setForm(f => ({ ...f, issue_description: e.target.value })); clearError("issue_description"); }}
                     placeholder="Describe the problem or service requested…" rows={4} maxLength={2000}
                     style={{ ...inputStyle(!!fieldErrors.issue_description), resize: "vertical", lineHeight: 1.6 }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <FieldError msg={fieldErrors.issue_description} />
-                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{form.issue_description.length}/2000</span>
+                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto", paddingTop: 3 }}>
+                      {form.issue_description.length}/2000
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              {submitError && (
-                <div style={{ marginTop: "0.85rem", padding: "0.55rem 0.8rem", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  <AlertTriangle size={13} /> {submitError}
-                </div>
-              )}
+              </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
                 <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Cancel</button>

@@ -33,6 +33,15 @@ type SignupRequest = {
   created_at: string;
 };
 
+// Per-field form errors
+type UserFormErrors = {
+  username?: string;
+  full_name?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+};
+
 const BRAND = "#0a4c86";
 const PAGE_SIZE = 8;
 const BCRYPT_ROUNDS = 10;
@@ -76,6 +85,12 @@ const fieldInput: React.CSSProperties = {
   transition: "border-color 0.15s, box-shadow 0.15s",
 };
 
+const fieldInputError: React.CSSProperties = {
+  ...fieldInput,
+  borderColor: "#fca5a5",
+  background: "#fff8f8",
+};
+
 const fieldLabel: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
@@ -86,9 +101,29 @@ const fieldLabel: React.CSSProperties = {
   display: "block",
 };
 
+// ── Inline field error — always reserves space, no layout shift or overlap ─────
+const FieldError = ({ msg }: { msg?: string }) => (
+  <div style={{
+    minHeight: 18,
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#dc2626",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 4,
+    lineHeight: 1.4,
+    fontFamily: "inherit",
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} />
+    <span>{msg ?? "placeholder"}</span>
+  </div>
+);
+
 function InputField({
-  label, icon, required, children,
-}: { label: string; icon?: React.ReactNode; required?: boolean; children: React.ReactNode }) {
+  label, icon, required, error, children,
+}: { label: string; icon?: React.ReactNode; required?: boolean; error?: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <label style={fieldLabel}>
@@ -103,6 +138,7 @@ function InputField({
         )}
         {children}
       </div>
+      <FieldError msg={error} />
     </div>
   );
 }
@@ -129,7 +165,8 @@ export default function UserAccounts() {
     role: "IT Technician" as Role,
     is_active: true, password: "", confirmPassword: "",
   });
-  const [formError, setFormError] = useState("");
+  // ── Per-field errors (replaces single formError string) ─────────────────────
+  const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
   const showToast = (msg: string, type: "success" | "error") => {
@@ -186,7 +223,7 @@ export default function UserAccounts() {
 
   const closeModal = () => {
     setModalMode(null); setSelected(null); setDeleteTarget(null);
-    setResetPw(false); setFormError(""); setSubmitting(false);
+    setResetPw(false); setFormErrors({}); setSubmitting(false);
     setForm({ username: "", full_name: "", email: "", role: "IT Technician", is_active: true, password: "", confirmPassword: "" });
   };
 
@@ -201,36 +238,56 @@ export default function UserAccounts() {
     const uq = supabase.from("user_accounts").select("id").ilike("username", username.trim());
     if (excludeId) uq.neq("id", excludeId);
     const { data: uData, error: uErr } = await uq.limit(1);
-    if (uErr) return uErr.message;
-    if (uData && uData.length > 0) return "Username already exists.";
+    if (uErr) return { field: "username" as keyof UserFormErrors, msg: uErr.message };
+    if (uData && uData.length > 0) return { field: "username" as keyof UserFormErrors, msg: "Username already exists." };
     const eq = supabase.from("user_accounts").select("id").ilike("email", email.trim());
     if (excludeId) eq.neq("id", excludeId);
     const { data: eData, error: eErr } = await eq.limit(1);
-    if (eErr) return eErr.message;
-    if (eData && eData.length > 0) return "Email already exists.";
-    return "";
+    if (eErr) return { field: "email" as keyof UserFormErrors, msg: eErr.message };
+    if (eData && eData.length > 0) return { field: "email" as keyof UserFormErrors, msg: "Email already exists." };
+    return null;
   };
 
-  const validateForm = async () => {
+  // Returns per-field errors object; empty means valid
+  const validateForm = async (): Promise<UserFormErrors> => {
+    const errors: UserFormErrors = {};
+
     const uErr = validateUsername(form.username);
-    if (uErr) return uErr;
-    if (!form.full_name.trim()) return "Full name is required.";
-    if (!form.email.trim()) return "Email is required.";
-    if (!isValidEmail(form.email.trim())) return "Email is invalid.";
+    if (uErr) errors.username = uErr;
+
+    if (!form.full_name.trim()) errors.full_name = "Full name is required.";
+
+    if (!form.email.trim()) errors.email = "Email is required.";
+    else if (!isValidEmail(form.email.trim())) errors.email = "Email is invalid.";
+
     if (modalMode === "add" || (modalMode === "edit" && resetPw)) {
       const pErr = validatePassword(form.password);
-      if (pErr) return pErr;
-      if (form.password !== form.confirmPassword) return "Passwords do not match.";
+      if (pErr) errors.password = pErr;
+      else if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match.";
     }
-    return await checkUniqueness(form.username, form.email, modalMode === "edit" && selected ? selected.id : undefined);
+
+    // Only check uniqueness if no errors yet for username/email
+    if (!errors.username && !errors.email) {
+      const unique = await checkUniqueness(
+        form.username, form.email,
+        modalMode === "edit" && selected ? selected.id : undefined
+      );
+      if (unique) errors[unique.field] = unique.msg;
+    }
+
+    return errors;
   };
 
   const submit = async () => {
     if (!modalMode) return;
-    setFormError(""); setSubmitting(true);
+    setFormErrors({}); setSubmitting(true);
     try {
-      const err = await validateForm();
-      if (err) { setFormError(err); setSubmitting(false); return; }
+      const errors = await validateForm();
+      if (Object.keys(errors).length > 0) {
+        setFormErrors(errors);
+        setSubmitting(false);
+        return;
+      }
       if (modalMode === "add") {
         const password_hash = await bcrypt.hash(form.password, BCRYPT_ROUNDS);
         const payload = {
@@ -266,7 +323,8 @@ export default function UserAccounts() {
       }
       closeModal(); fetchUsers();
     } catch (e: any) {
-      setFormError(e?.message ?? "Something went wrong.");
+      // Unexpected server errors go to username field as a fallback
+      setFormErrors({ username: e?.message ?? "Something went wrong." });
     } finally { setSubmitting(false); }
   };
 
@@ -305,8 +363,8 @@ export default function UserAccounts() {
   };
 
   const approveRequest = async (r: SignupRequest) => {
-    const uniqErr = await checkUniqueness(r.username, r.email);
-    if (uniqErr) { showToast(uniqErr, "error"); return; }
+    const unique = await checkUniqueness(r.username, r.email);
+    if (unique) { showToast(unique.msg, "error"); return; }
     const { data: inserted, error: insertErr } = await supabase.from("user_accounts").insert({
       username: r.username.trim(), full_name: r.full_name.trim(), email: r.email.trim(),
       role: "IT Technician", is_active: true, password_hash: r.password_hash,
@@ -345,14 +403,13 @@ export default function UserAccounts() {
       <style>{`
         .ua-modal-overlay {
           position: fixed; inset: 0;
-          /* ✅ Default dim overlay — no blur */
           background: rgba(15, 23, 42, 0.45);
           display: flex; align-items: center; justify-content: center;
           z-index: 1000; padding: 16px;
           animation: fadeIn 0.15s ease;
         }
         .ua-modal-box {
-          width: min(540px, calc(100vw - 32px));
+          width: min(580px, calc(100vw - 32px));
           max-height: calc(100vh - 32px);
           overflow-y: auto; overflow-x: hidden;
           background: #fff; border-radius: 20px;
@@ -379,7 +436,6 @@ export default function UserAccounts() {
         .ua-span2 { grid-column: span 2; }
         .ua-input { transition: border-color 0.15s, box-shadow 0.15s; }
         .ua-input:focus { border-color: #0a4c86 !important; box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important; outline: none; }
-        /* ✅ Remove native dropdown arrow, add padding for custom chevron */
         .ua-select {
           appearance: none;
           -webkit-appearance: none;
@@ -390,7 +446,7 @@ export default function UserAccounts() {
         .ua-btn-save:hover { opacity: 0.92; }
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
-        @media (max-width: 560px) {
+        @media (max-width: 680px) {
           .ua-grid { grid-template-columns: 1fr; }
           .ua-span2 { grid-column: span 1; }
         }
@@ -565,17 +621,25 @@ export default function UserAccounts() {
             <div className="ua-modal-body">
               <div className="ua-grid">
 
-                <InputField label="Username" icon={<User size={13} />} required>
-                  <input className="ua-input" value={form.username}
-                    onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                    placeholder="e.g. jdela_cruz" style={{ ...fieldInput }} />
+                {/* Username */}
+                <InputField label="Username" icon={<User size={13} />} required error={formErrors.username}>
+                  <input
+                    className="ua-input"
+                    value={form.username}
+                    onChange={e => { setForm(f => ({ ...f, username: e.target.value })); setFormErrors(p => ({ ...p, username: undefined })); }}
+                    placeholder="e.g. jdela_cruz"
+                    style={formErrors.username ? fieldInputError : fieldInput}
+                  />
                 </InputField>
 
-                {/* ✅ Role with custom chevron dropdown */}
+                {/* Role */}
                 <InputField label="Role" icon={<Shield size={13} />} required>
-                  <select className="ua-input ua-select" value={form.role}
+                  <select
+                    className="ua-input ua-select"
+                    value={form.role}
                     onChange={e => setForm(f => ({ ...f, role: e.target.value as Role }))}
-                    style={{ ...fieldInput }}>
+                    style={{ ...fieldInput }}
+                  >
                     <option value="IT Technician">IT Technician</option>
                     <option value="Administrator">Administrator</option>
                   </select>
@@ -584,22 +648,34 @@ export default function UserAccounts() {
                   </span>
                 </InputField>
 
+                {/* Full Name */}
                 <div className="ua-span2">
-                  <InputField label="Full Name" icon={<User size={13} />} required>
-                    <input className="ua-input" value={form.full_name}
-                      onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-                      placeholder="e.g. Juan Dela Cruz" style={{ ...fieldInput }} />
+                  <InputField label="Full Name" icon={<User size={13} />} required error={formErrors.full_name}>
+                    <input
+                      className="ua-input"
+                      value={form.full_name}
+                      onChange={e => { setForm(f => ({ ...f, full_name: e.target.value })); setFormErrors(p => ({ ...p, full_name: undefined })); }}
+                      placeholder="e.g. Juan Dela Cruz"
+                      style={formErrors.full_name ? fieldInputError : fieldInput}
+                    />
                   </InputField>
                 </div>
 
+                {/* Email */}
                 <div className="ua-span2">
-                  <InputField label="Email Address" icon={<Mail size={13} />} required>
-                    <input className="ua-input" type="email" value={form.email}
-                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                      placeholder="e.g. juan@example.com" style={{ ...fieldInput }} />
+                  <InputField label="Email Address" icon={<Mail size={13} />} required error={formErrors.email}>
+                    <input
+                      className="ua-input"
+                      type="email"
+                      value={form.email}
+                      onChange={e => { setForm(f => ({ ...f, email: e.target.value })); setFormErrors(p => ({ ...p, email: undefined })); }}
+                      placeholder="e.g. juan@example.com"
+                      style={formErrors.email ? fieldInputError : fieldInput}
+                    />
                   </InputField>
                 </div>
 
+                {/* Reset Password toggle (edit mode) */}
                 {modalMode === "edit" && (
                   <div className="ua-span2">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.7rem 0.9rem", borderRadius: 12, border: `1.5px solid ${resetPw ? "rgba(10,76,134,0.25)" : "#e2e8f0"}`, background: resetPw ? "rgba(10,76,134,0.04)" : "#f8fafc", transition: "all 0.15s" }}>
@@ -610,7 +686,12 @@ export default function UserAccounts() {
                           <div style={{ fontSize: 11, color: "#94a3b8" }}>Set a new password for this user</div>
                         </div>
                       </div>
-                      <button onClick={() => { setResetPw(v => !v); setForm(f => ({ ...f, password: "", confirmPassword: "" })); }}
+                      <button
+                        onClick={() => {
+                          setResetPw(v => !v);
+                          setForm(f => ({ ...f, password: "", confirmPassword: "" }));
+                          setFormErrors(p => ({ ...p, password: undefined, confirmPassword: undefined }));
+                        }}
                         style={{ border: `1.5px solid ${resetPw ? BRAND : "#e2e8f0"}`, background: resetPw ? BRAND : "#fff", color: resetPw ? "#fff" : "#64748b", borderRadius: 8, padding: "0.3rem 0.75rem", cursor: "pointer", fontWeight: 800, fontSize: 12, fontFamily: "inherit", transition: "all 0.15s" }}>
                         {resetPw ? "On" : "Off"}
                       </button>
@@ -618,41 +699,48 @@ export default function UserAccounts() {
                   </div>
                 )}
 
+                {/* Password fields */}
                 {(modalMode === "add" || resetPw) && (
                   <>
-                    <InputField label="Password" icon={<Lock size={13} />} required>
-                      <input className="ua-input" type="password" value={form.password}
-                        onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                        placeholder="Min. 8 characters" style={{ ...fieldInput }} />
+                    <InputField label="Password" icon={<Lock size={13} />} required error={formErrors.password}>
+                      <input
+                        className="ua-input"
+                        type="password"
+                        value={form.password}
+                        onChange={e => { setForm(f => ({ ...f, password: e.target.value })); setFormErrors(p => ({ ...p, password: undefined })); }}
+                        placeholder="Min. 8 characters"
+                        style={formErrors.password ? fieldInputError : fieldInput}
+                      />
                     </InputField>
-                    <InputField label="Confirm Password" icon={<Lock size={13} />} required>
-                      <input className="ua-input" type="password" value={form.confirmPassword}
-                        onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
-                        placeholder="Repeat password" style={{ ...fieldInput }} />
+
+                    <InputField label="Confirm Password" icon={<Lock size={13} />} required error={formErrors.confirmPassword}>
+                      <input
+                        className="ua-input"
+                        type="password"
+                        value={form.confirmPassword}
+                        onChange={e => { setForm(f => ({ ...f, confirmPassword: e.target.value })); setFormErrors(p => ({ ...p, confirmPassword: undefined })); }}
+                        placeholder="Repeat password"
+                        style={formErrors.confirmPassword ? fieldInputError : fieldInput}
+                      />
                     </InputField>
                   </>
                 )}
 
+                {/* Account status toggle */}
                 <div className="ua-span2">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.7rem 0.9rem", borderRadius: 12, border: `1.5px solid ${form.is_active ? "#bbf7d0" : "#fecaca"}`, background: form.is_active ? "#f0fdf4" : "#fff5f5", transition: "all 0.15s" }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: form.is_active ? "#166534" : "#b91c1c" }}>Account Status</div>
                       <div style={{ fontSize: 11, color: "#94a3b8" }}>{form.is_active ? "User can log in" : "User is blocked from logging in"}</div>
                     </div>
-                    <button onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
+                    <button
+                      onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
                       style={{ border: `1.5px solid ${form.is_active ? "#16a34a" : "#dc2626"}`, background: form.is_active ? "#16a34a" : "#dc2626", color: "#fff", padding: "0.3rem 0.85rem", borderRadius: 8, cursor: "pointer", fontWeight: 800, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "inherit", transition: "all 0.15s" }}>
                       {form.is_active ? "Active" : "Inactive"}
                     </button>
                   </div>
                 </div>
               </div>
-
-              {formError && (
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "0.7rem 0.9rem", borderRadius: 12, border: "1.5px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: 12, fontWeight: 700 }}>
-                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  {formError}
-                </div>
-              )}
             </div>
 
             <div className="ua-modal-footer">

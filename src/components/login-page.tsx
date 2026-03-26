@@ -12,6 +12,7 @@ import {
   Lock,
   Eye,
   EyeOff,
+  AlertTriangle,
 } from "lucide-react";
 
 const styles = `
@@ -57,7 +58,7 @@ const styles = `
     color: #8a95a3; margin-top: 0.3rem; font-weight: 500;
   }
 
-  .lp-form { display: flex; flex-direction: column; gap: 1rem; }
+  .lp-form { display: flex; flex-direction: column; gap: 0; }
   .lp-field { display: flex; flex-direction: column; gap: 0.35rem; }
 
   .lp-label {
@@ -79,6 +80,21 @@ const styles = `
   }
   .lp-input:hover  { border-color: #b8c2ce; background: #f2f4f7; }
   .lp-input:focus  { border-color: #1a2e4a; background: #fff; box-shadow: 0 0 0 3px rgba(26,46,74,0.08); }
+  .lp-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
+
+  .lp-field-error {
+    min-height: 18px;
+    margin-top: 3px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    visibility: hidden;
+  }
+  .lp-field-error--visible { visibility: visible; }
 
   .lp-pw-row { display: flex; justify-content: space-between; align-items: center; }
   .lp-forgot {
@@ -195,8 +211,7 @@ const styles = `
     display: flex; align-items: center;
   }
 
-  .lp-modal-field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.8rem; }
-  .lp-modal-field:last-child { margin-bottom: 0; }
+  .lp-modal-field { display: flex; flex-direction: column; gap: 0.35rem; }
 
   .lp-modal-footer {
     display: flex; align-items: center; justify-content: flex-end;
@@ -242,25 +257,25 @@ const styles = `
     font-size: 0.74rem; line-height: 1.6;
   }
 
-  /* ── Create form grid ─────────────────────────────
-     Row 1: Full Name        (full width)
-     Row 2: Username | Email (half | half)
-     Row 3: Password | Confirm Password (half | half)
-  ──────────────────────────────────────────────── */
-  .lp-create-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 0.65rem;
+  /* Single-column create form */
+  .lp-create-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
-  .lp-span2 { grid-column: span 2; }
 
   /* Login extras */
-  .lp-keep-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.2rem; }
+  .lp-keep-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
   .lp-keep-checkbox {
     display: flex; align-items: center; gap: 0.4rem;
     font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #4a5568;
+    cursor: pointer;
   }
-  .lp-keep-checkbox input { width: 13px; height: 13px; }
+  .lp-keep-checkbox input { width: 13px; height: 13px; cursor: pointer; }
   .lp-create-link {
     font-family: 'Poppins', sans-serif;
     font-size: 0.72rem; color: #0b5fa5; background: none; border: none;
@@ -275,8 +290,6 @@ const styles = `
   }
 
   @media (max-width: 600px) {
-    .lp-create-grid { grid-template-columns: 1fr; }
-    .lp-span2 { grid-column: span 1; }
     .lp-card { margin: 1rem; padding: 2rem 1.5rem 1.75rem; }
     .lp-city-logo { width: 180px; }
     .lp-modal { max-width: 100%; }
@@ -284,32 +297,66 @@ const styles = `
   }
 `;
 
+// ── Inline field error — always reserves space, no layout shift ────────────────
+const FieldError = ({ msg }: { msg?: string }) => (
+<div style={{
+    minHeight: 18,
+    marginTop: 1,
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#dc2626",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={10} />
+    {msg ?? "placeholder"}
+  </div>
+);
+
 export default function LoginPage() {
   const [identifier, setIdentifier]     = useState("");
   const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showForgot, setShowForgot]     = useState(false);
-  const [error, setError]               = useState<string | null>(null);
   const [loading, setLoading]           = useState(false);
   const [showCreate, setShowCreate]     = useState(false);
   const [creating, setCreating]         = useState(false);
   const [createSent, setCreateSent]     = useState(false);
-  const [createError, setCreateError]   = useState<string | null>(null);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
+  const navigate = useNavigate();
+
+  // ── Login field errors ─────────────────────────────────────────────────────
+  const [loginErrors, setLoginErrors] = useState<{ identifier?: string; password?: string; general?: string }>({});
+
+  // ── Create account field errors ────────────────────────────────────────────
+  const [createErrors, setCreateErrors] = useState<{
+    full_name?: string;
+    username?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
+
   const [create, setCreate] = useState({
     full_name: "", username: "", email: "", password: "", confirmPassword: "",
   });
-  const [keepSignedIn, setKeepSignedIn] = useState(true);
-  const navigate = useNavigate();
 
   const supabase = createClient(
     import.meta.env.VITE_SUPABASE_URL as string,
     import.meta.env.VITE_SUPABASE_ANON_KEY as string
   );
 
+  // ── Login submit ───────────────────────────────────────────────────────────
   const performLogin = async () => {
-    setError(null);
+    const errors: typeof loginErrors = {};
     const ident = identifier.trim();
-    if (!ident || !password) { setError("Please enter your username/email and password."); return; }
+    if (!ident) errors.identifier = "Email or username is required.";
+    if (!password) errors.password = "Password is required.";
+    if (Object.keys(errors).length > 0) { setLoginErrors(errors); return; }
+
+    setLoginErrors({});
     setLoading(true);
     try {
       const { data, error: qErr } = await supabase
@@ -319,10 +366,22 @@ export default function LoginPage() {
         .limit(1);
       if (qErr) throw new Error(qErr.message);
       const user = (data ?? [])[0] as any | undefined;
-      if (!user) { setError("Invalid credentials."); setLoading(false); return; }
-      if (!user.is_active) { setError("Account is inactive. Please contact the admin."); setLoading(false); return; }
+      if (!user) {
+        setLoginErrors({ identifier: "No account found with that username or email." });
+        setLoading(false);
+        return;
+      }
+      if (!user.is_active) {
+        setLoginErrors({ general: "Account is inactive. Please contact the admin." });
+        setLoading(false);
+        return;
+      }
       const ok = await bcrypt.compare(password, user.password_hash);
-      if (!ok) { setError("Invalid credentials."); setLoading(false); return; }
+      if (!ok) {
+        setLoginErrors({ password: "Incorrect password." });
+        setLoading(false);
+        return;
+      }
       const ttlMs = keepSignedIn ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
       localStorage.setItem("session_token", crypto.randomUUID());
@@ -332,54 +391,99 @@ export default function LoginPage() {
       localStorage.setItem("session_expires_at", expiresAt);
       setTimeout(() => { navigate("/dashboard", { replace: true }); }, 3000);
     } catch (ex: any) {
-      setError(ex?.message ?? "Login failed.");
+      setLoginErrors({ general: ex?.message ?? "Login failed." });
       setLoading(false);
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); await performLogin(); };
+
+  // ── Modal helpers ──────────────────────────────────────────────────────────
   const closeForgot = () => setShowForgot(false);
   const closeCreate = () => {
     setShowCreate(false);
     setTimeout(() => {
-      setCreating(false); setCreateSent(false); setCreateError(null);
+      setCreating(false);
+      setCreateSent(false);
+      setCreateErrors({});
       setCreate({ full_name: "", username: "", email: "", password: "", confirmPassword: "" });
     }, 300);
   };
 
-  const validateCreate = () => {
-    if (!create.full_name.trim()) return "Full name is required.";
-    const u = create.username.trim();
-    if (u.length < 3) return "Username must be at least 3 characters.";
-    if (u.length > 32) return "Username must be at most 32 characters.";
-    if (!/^[A-Za-z0-9_]+$/.test(u)) return "Username can only contain letters, numbers, and underscore.";
-    const email = create.email.trim();
-    if (!email) return "Email is required.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Email is invalid.";
-    if (create.password.length < 8) return "Password must be at least 8 characters.";
-    if (create.password.length > 72) return "Password is too long (max 72 characters for bcrypt).";
-    if (create.password !== create.confirmPassword) return "Passwords do not match.";
-    return "";
-  };
-
+  // ── Create account submit ──────────────────────────────────────────────────
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreateError(null);
-    const err = validateCreate();
-    if (err) { setCreateError(err); return; }
+    const errors: typeof createErrors = {};
+
+    if (!create.full_name.trim()) errors.full_name = "Full name is required.";
+
+    const u = create.username.trim();
+    if (!u) errors.username = "Username is required.";
+    else if (u.length < 3) errors.username = "Must be at least 3 characters.";
+    else if (u.length > 32) errors.username = "Must be 32 characters or less.";
+    else if (!/^[A-Za-z0-9_]+$/.test(u)) errors.username = "Letters, numbers, and underscore only.";
+
+    const email = create.email.trim();
+    if (!email) errors.email = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email address.";
+
+    if (!create.password) errors.password = "Password is required.";
+    else if (create.password.length < 8) errors.password = "Must be at least 8 characters.";
+    else if (create.password.length > 72) errors.password = "Password is too long (max 72 chars).";
+
+    if (!create.confirmPassword) errors.confirmPassword = "Please confirm your password.";
+    else if (create.password !== create.confirmPassword) errors.confirmPassword = "Passwords do not match.";
+
+    if (Object.keys(errors).length > 0) { setCreateErrors(errors); return; }
+
+    // ── Check uniqueness against DB ──────────────────────────────────────────
     setCreating(true);
+    setCreateErrors({});
+
+    const { data: uData } = await supabase
+      .from("user_accounts").select("id").ilike("username", u).limit(1);
+    if (uData && uData.length > 0) {
+      setCreateErrors({ username: "Username is already taken." });
+      setCreating(false);
+      return;
+    }
+
+    const { data: eData } = await supabase
+      .from("user_accounts").select("id").ilike("email", email).limit(1);
+    if (eData && eData.length > 0) {
+      setCreateErrors({ email: "An account with this email already exists." });
+      setCreating(false);
+      return;
+    }
+
+    const { data: reqU } = await supabase
+      .from("signup_requests").select("id").ilike("username", u).eq("status", "pending").limit(1);
+    if (reqU && reqU.length > 0) {
+      setCreateErrors({ username: "A pending request already exists for this username." });
+      setCreating(false);
+      return;
+    }
+
+    const { data: reqE } = await supabase
+      .from("signup_requests").select("id").ilike("email", email).eq("status", "pending").limit(1);
+    if (reqE && reqE.length > 0) {
+      setCreateErrors({ email: "A pending request already exists for this email." });
+      setCreating(false);
+      return;
+    }
+
     try {
       const password_hash = await bcrypt.hash(create.password, 10);
       const { error: insertError } = await supabase.from("signup_requests").insert({
         full_name: create.full_name.trim(),
-        username: create.username.trim(),
-        email: create.email.trim(),
+        username: u,
+        email,
         password_hash,
       });
       if (insertError) throw new Error(insertError.message);
       setCreateSent(true);
     } catch (ex: any) {
-      setCreateError(ex?.message ?? "Unable to submit request.");
+      setCreateErrors({ full_name: ex?.message ?? "Unable to submit request." });
     } finally {
       setCreating(false);
     }
@@ -401,7 +505,7 @@ export default function LoginPage() {
         <div className="lp-bg" />
         <div className="lp-bg-overlay" />
 
-        {/* Login Card */}
+        {/* ── Login Card ── */}
         <div className="lp-card">
           <div className="lp-brand">
             <img src="./tarlac-city-logo-masaya.png" alt="Masaya sa Tarlac City" className="lp-city-logo" />
@@ -409,16 +513,27 @@ export default function LoginPage() {
           </div>
 
           <form className="lp-form" onSubmit={handleLogin}>
+
+            {/* Identifier */}
             <div className="lp-field">
               <label className="lp-label" htmlFor="identifier">Email or Username</label>
               <div className="lp-icon-input">
                 <span className="lp-input-icon"><Mail size={13} strokeWidth={2} /></span>
-                <input id="identifier" className="lp-input" type="text" placeholder="you@example.com"
-                  autoComplete="username" value={identifier}
-                  onChange={e => setIdentifier(e.target.value)} disabled={loading} />
+                <input
+                  id="identifier"
+                  className={`lp-input${loginErrors.identifier ? " lp-input--error" : ""}`}
+                  type="text"
+                  placeholder="you@example.com"
+                  autoComplete="username"
+                  value={identifier}
+                  onChange={e => { setIdentifier(e.target.value); setLoginErrors(prev => ({ ...prev, identifier: undefined })); }}
+                  disabled={loading}
+                />
               </div>
+              <FieldError msg={loginErrors.identifier} />
             </div>
 
+            {/* Password */}
             <div className="lp-field">
               <div className="lp-pw-row">
                 <label className="lp-label" htmlFor="password">Password</label>
@@ -428,28 +543,44 @@ export default function LoginPage() {
               </div>
               <div className="lp-icon-input" style={{ position: "relative" }}>
                 <span className="lp-input-icon"><Lock size={13} strokeWidth={2} /></span>
-                <input id="password" className="lp-input"
-                  type={showPassword ? "text" : "password"} placeholder="••••••••"
-                  autoComplete="current-password" value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  style={{ paddingRight: "2.5rem" }} disabled={loading} />
+                <input
+                  id="password"
+                  className={`lp-input${loginErrors.password ? " lp-input--error" : ""}`}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setLoginErrors(prev => ({ ...prev, password: undefined })); }}
+                  style={{ paddingRight: "2.5rem" }}
+                  disabled={loading}
+                />
                 <button type="button" className="lp-toggle" onClick={() => setShowPassword(v => !v)}>
                   {showPassword ? <EyeOff size={14} strokeWidth={2} /> : <Eye size={14} strokeWidth={2} />}
                 </button>
               </div>
+              <FieldError msg={loginErrors.password} />
             </div>
 
-            {error && (
-              <div style={{ padding: "0.5rem 0.75rem", borderRadius: 7,
+            {/* General error (inactive account, server error) */}
+            {loginErrors.general && (
+              <div style={{
+                padding: "0.5rem 0.75rem", borderRadius: 7, marginTop: 4,
                 backgroundColor: "#fef2f2", border: "1px solid #fecaca",
-                color: "#b91c1c", fontFamily: "'Poppins', sans-serif", fontSize: "0.71rem" }}>
-                {error}
+                color: "#b91c1c", fontFamily: "'Poppins', sans-serif", fontSize: "0.71rem",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <AlertTriangle size={11} /> {loginErrors.general}
               </div>
             )}
 
+            {/* Keep me signed in — sits between error area and the Sign In button */}
             <div className="lp-keep-row">
               <label className="lp-keep-checkbox">
-                <input type="checkbox" checked={keepSignedIn} onChange={e => setKeepSignedIn(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={e => setKeepSignedIn(e.target.checked)}
+                />
                 <span>Keep me signed in</span>
               </label>
             </div>
@@ -475,9 +606,7 @@ export default function LoginPage() {
                 <span style={{ fontSize: "0.75rem", lineHeight: 1 }}>✕</span>
               </button>
               <div className="lp-modal-header">
-                <div className="lp-modal-header-icon">
-                  <Key size={16} strokeWidth={2} />
-                </div>
+                <div className="lp-modal-header-icon"><Key size={16} strokeWidth={2} /></div>
                 <div className="lp-modal-header-text">
                   <span className="lp-modal-title">Forgot Password</span>
                   <span className="lp-modal-subtitle">Account recovery assistance</span>
@@ -485,9 +614,7 @@ export default function LoginPage() {
               </div>
               <div className="lp-modal-body">
                 <div className="lp-admin-notice">
-                  <span className="lp-admin-notice-icon">
-                    <ShieldAlert size={16} strokeWidth={2} />
-                  </span>
+                  <span className="lp-admin-notice-icon"><ShieldAlert size={16} strokeWidth={2} /></span>
                   <div className="lp-admin-notice-text">
                     <span className="lp-admin-notice-title">Contact your Administrator</span>
                     <span className="lp-admin-notice-desc">
@@ -499,9 +626,7 @@ export default function LoginPage() {
                 </div>
               </div>
               <div className="lp-modal-footer">
-                <button className="lp-modal-btn-submit" type="button" onClick={closeForgot}>
-                  Got it
-                </button>
+                <button className="lp-modal-btn-submit" type="button" onClick={closeForgot}>Got it</button>
               </div>
             </div>
           </div>
@@ -515,9 +640,7 @@ export default function LoginPage() {
                 <span style={{ fontSize: "0.75rem", lineHeight: 1 }}>✕</span>
               </button>
               <div className="lp-modal-header">
-                <div className="lp-modal-header-icon">
-                  <UserPlus size={16} strokeWidth={2} />
-                </div>
+                <div className="lp-modal-header-icon"><UserPlus size={16} strokeWidth={2} /></div>
                 <div className="lp-modal-header-text">
                   <span className="lp-modal-title">Request an Account</span>
                   <span className="lp-modal-subtitle">Requires admin approval</span>
@@ -528,77 +651,100 @@ export default function LoginPage() {
                 <>
                   <div className="lp-modal-body">
                     <form id="create-form" onSubmit={handleCreateAccount}>
-                      <div className="lp-create-grid">
+                      <div className="lp-create-stack">
 
-                        {/* Row 1 — Full Name (full width) */}
-                        <div className="lp-modal-field lp-span2">
+                        {/* Full Name */}
+                        <div className="lp-modal-field">
                           <label className="lp-label" htmlFor="ca-fullname">Full Name</label>
                           <div className="lp-icon-input">
                             <span className="lp-input-icon"><User size={13} strokeWidth={2} /></span>
-                            <input id="ca-fullname" className="lp-input" type="text"
-                              placeholder="Juan Dela Cruz" value={create.full_name}
-                              onChange={e => setCreate(c => ({ ...c, full_name: e.target.value }))} required />
+                            <input
+                              id="ca-fullname"
+                              className={`lp-input${createErrors.full_name ? " lp-input--error" : ""}`}
+                              type="text"
+                              placeholder="Juan Dela Cruz"
+                              value={create.full_name}
+                              onChange={e => { setCreate(c => ({ ...c, full_name: e.target.value })); setCreateErrors(p => ({ ...p, full_name: undefined })); }}
+                            />
                           </div>
+                          <FieldError msg={createErrors.full_name} />
                         </div>
 
-                        {/* Row 2 — Username | Email */}
+                        {/* Username */}
                         <div className="lp-modal-field">
                           <label className="lp-label" htmlFor="ca-username">Username</label>
                           <div className="lp-icon-input">
                             <span className="lp-input-icon"><AtSign size={13} strokeWidth={2} /></span>
-                            <input id="ca-username" className="lp-input" type="text"
-                              placeholder="juan_dc" value={create.username}
-                              onChange={e => setCreate(c => ({ ...c, username: e.target.value }))} required />
+                            <input
+                              id="ca-username"
+                              className={`lp-input${createErrors.username ? " lp-input--error" : ""}`}
+                              type="text"
+                              placeholder="juan_dc"
+                              value={create.username}
+                              onChange={e => { setCreate(c => ({ ...c, username: e.target.value })); setCreateErrors(p => ({ ...p, username: undefined })); }}
+                            />
                           </div>
+                          <FieldError msg={createErrors.username} />
                         </div>
 
+                        {/* Email */}
                         <div className="lp-modal-field">
                           <label className="lp-label" htmlFor="ca-email">Email</label>
                           <div className="lp-icon-input">
                             <span className="lp-input-icon"><Mail size={13} strokeWidth={2} /></span>
-                            <input id="ca-email" className="lp-input" type="email"
-                              placeholder="you@example.com" value={create.email}
-                              onChange={e => setCreate(c => ({ ...c, email: e.target.value }))} required />
+                            <input
+                              id="ca-email"
+                              className={`lp-input${createErrors.email ? " lp-input--error" : ""}`}
+                              type="email"
+                              placeholder="you@example.com"
+                              value={create.email}
+                              onChange={e => { setCreate(c => ({ ...c, email: e.target.value })); setCreateErrors(p => ({ ...p, email: undefined })); }}
+                            />
                           </div>
+                          <FieldError msg={createErrors.email} />
                         </div>
 
-                        {/* Row 3 — Password | Confirm Password */}
+                        {/* Password */}
                         <div className="lp-modal-field">
                           <label className="lp-label" htmlFor="ca-password">Password</label>
                           <div className="lp-icon-input">
                             <span className="lp-input-icon"><Lock size={13} strokeWidth={2} /></span>
-                            <input id="ca-password" className="lp-input" type="password"
-                              placeholder="Min. 8 characters" value={create.password}
-                              onChange={e => setCreate(c => ({ ...c, password: e.target.value }))} required />
+                            <input
+                              id="ca-password"
+                              className={`lp-input${createErrors.password ? " lp-input--error" : ""}`}
+                              type="password"
+                              placeholder="Min. 8 characters"
+                              value={create.password}
+                              onChange={e => { setCreate(c => ({ ...c, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })); }}
+                            />
                           </div>
+                          <FieldError msg={createErrors.password} />
                         </div>
 
+                        {/* Confirm Password */}
                         <div className="lp-modal-field">
                           <label className="lp-label" htmlFor="ca-confirm">Confirm Password</label>
                           <div className="lp-icon-input">
                             <span className="lp-input-icon"><Lock size={13} strokeWidth={2} /></span>
-                            <input id="ca-confirm" className="lp-input" type="password"
-                              placeholder="Repeat password" value={create.confirmPassword}
-                              onChange={e => setCreate(c => ({ ...c, confirmPassword: e.target.value }))} required />
+                            <input
+                              id="ca-confirm"
+                              className={`lp-input${createErrors.confirmPassword ? " lp-input--error" : ""}`}
+                              type="password"
+                              placeholder="Repeat password"
+                              value={create.confirmPassword}
+                              onChange={e => { setCreate(c => ({ ...c, confirmPassword: e.target.value })); setCreateErrors(p => ({ ...p, confirmPassword: undefined })); }}
+                            />
                           </div>
+                          <FieldError msg={createErrors.confirmPassword} />
                         </div>
 
                       </div>
-
-                      {createError && (
-                        <div style={{ padding: "0.45rem 0.7rem", borderRadius: 7,
-                          backgroundColor: "#fef2f2", border: "1px solid #fecaca",
-                          color: "#b91c1c", fontFamily: "'Poppins', sans-serif",
-                          fontSize: "0.71rem", marginTop: "0.5rem" }}>
-                          {createError}
-                        </div>
-                      )}
                     </form>
                   </div>
                   <div className="lp-modal-footer">
                     <button className="lp-modal-btn-cancel" type="button" onClick={closeCreate}>Cancel</button>
                     <button className="lp-modal-btn-submit" type="submit" form="create-form" disabled={creating}>
-                      {creating ? "Submitting…" : "Submit Request"}
+                      {creating ? "Checking…" : "Submit Request"}
                     </button>
                   </div>
                 </>

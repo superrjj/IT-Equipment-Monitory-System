@@ -150,7 +150,7 @@ const fmtDate = (iso: string | null | undefined) =>
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   <div style={{
     minHeight: 18,
-    marginTop: 3,
+    marginTop: 1,
     fontSize: 11,
     fontWeight: 600,
     color: "#dc2626",

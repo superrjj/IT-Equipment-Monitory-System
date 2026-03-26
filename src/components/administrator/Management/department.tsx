@@ -37,6 +37,13 @@ type SortField = "name" | "created_at";
 type SortDir = "asc" | "desc";
 type ModalMode = "add" | "edit" | "view" | null;
 
+// Per-field form errors for the add/edit modal
+type DeptFormErrors = {
+  name?: string;
+  description?: string;
+  location?: string;
+};
+
 const brandBlue = "#0a4c86";
 const PAGE_SIZE = 8;
 
@@ -90,6 +97,27 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
+// ── Inline field error ─────────────────────────────────────────────────────────
+const FieldError = ({ msg }: { msg?: string }) => {
+  if (!msg) return null;
+  return (
+   <div style={{
+       minHeight: 18,
+       marginTop: 1,
+       fontSize: 11,
+       fontWeight: 600,
+       color: "#dc2626",
+       display: "flex",
+       alignItems: "center",
+       gap: 4,
+       visibility: msg ? "visible" : "hidden",
+     }}>
+       <AlertTriangle size={10} />
+       {msg ?? "placeholder"}
+     </div>
+  );
+};
+
 // ── Main component ─────────────────────────────────────────────────────────────
 const Departments: React.FC = () => {
   const [departments, setDepartments]   = useState<Department[]>([]);
@@ -105,7 +133,8 @@ const Departments: React.FC = () => {
   const [toast, setToast]               = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [form, setForm]                 = useState({ name: "", description: "", location: "" });
-  const [formError, setFormError]       = useState("");
+  // ── Per-field errors (replaces single formError string) ─────────────────────
+  const [formErrors, setFormErrors]     = useState<DeptFormErrors>({});
   const [submitting, setSubmitting]     = useState(false);
 
   // ── Fetch departments with ticket count ──────────────────────────────────────
@@ -165,14 +194,14 @@ const Departments: React.FC = () => {
   // ── Open modals ──────────────────────────────────────────────────────────────
   const openAdd = () => {
     setForm({ name: "", description: "", location: "" });
-    setFormError("");
+    setFormErrors({});
     setModalMode("add");
   };
 
   const openEdit = (d: Department) => {
     setSelected(d);
     setForm({ name: d.name, description: d.description ?? "", location: d.location ?? "" });
-    setFormError("");
+    setFormErrors({});
     setModalMode("edit");
   };
 
@@ -194,13 +223,23 @@ const Departments: React.FC = () => {
 
   // ── Submit add/edit ──────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!form.name.trim()) { setFormError("Department name is required."); return; }
+    // Per-field validation
+    const errors: DeptFormErrors = {};
+    if (!form.name.trim()) {
+      errors.name = "Department name is required.";
+    }
 
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    // Uniqueness check — report on the name field
     const dupQuery = supabase.from("departments").select("id").ilike("name", form.name.trim());
     if (modalMode === "edit" && selected) dupQuery.neq("id", selected.id);
     const { data: dup } = await dupQuery;
     if (dup && dup.length > 0) {
-      setFormError("A department with that name already exists. Please use a different name.");
+      setFormErrors({ name: "A department with that name already exists. Please use a different name." });
       return;
     }
 
@@ -212,7 +251,11 @@ const Departments: React.FC = () => {
         location: form.location.trim(),
       };
       const { data: inserted, error } = await supabase.from("departments").insert(payload).select("id").single();
-      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFormErrors({ name: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "department_created",
@@ -228,7 +271,11 @@ const Departments: React.FC = () => {
         location: form.location.trim(),
       };
       const { error } = await supabase.from("departments").update(payload).eq("id", selected.id);
-      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFormErrors({ name: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "department_updated",
@@ -296,6 +343,12 @@ const Departments: React.FC = () => {
     width: "100%", padding: "0.5rem 0.75rem", borderRadius: 8,
     border: "1px solid #e2e8f0", fontSize: 13, fontFamily: "'Poppins', sans-serif",
     outline: "none", color: "#0f172a", background: "#f8fafc", boxSizing: "border-box",
+  };
+
+  const inputErrorStyle: React.CSSProperties = {
+    ...inputStyle,
+    borderColor: "#fca5a5",
+    background: "#fff8f8",
   };
 
   const labelStyle: React.CSSProperties = {
@@ -495,38 +548,51 @@ const Departments: React.FC = () => {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+                {/* Department Name — with per-field error */}
                 <div>
                   <label style={labelStyle}>Department Name <span style={{ color: "#dc2626" }}>*</span></label>
                   <input
                     value={form.name}
-                    onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setFormError(""); }}
+                    onChange={e => {
+                      setForm(f => ({ ...f, name: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, name: undefined }));
+                    }}
                     placeholder="e.g. CENRO"
-                    style={{ ...inputStyle, borderColor: formError ? "#fca5a5" : "#e2e8f0" }}
+                    style={formErrors.name ? inputErrorStyle : inputStyle}
                   />
-                  {formError && (
-                    <p style={{ fontSize: 11, color: "#dc2626", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                      <AlertTriangle size={11} /> {formError}
-                    </p>
-                  )}
+                  <FieldError msg={formErrors.name} />
                 </div>
+
+                {/* Description */}
                 <div>
                   <label style={labelStyle}>Description</label>
                   <textarea
                     value={form.description}
-                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    onChange={e => {
+                      setForm(f => ({ ...f, description: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, description: undefined }));
+                    }}
                     placeholder="Brief description of the department…"
                     rows={3}
-                    style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
+                    style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, borderColor: formErrors.description ? "#fca5a5" : "#e2e8f0", background: formErrors.description ? "#fff8f8" : "#f8fafc" }}
                   />
+                  <FieldError msg={formErrors.description} />
                 </div>
+
+                {/* Location */}
                 <div>
                   <label style={labelStyle}>Location <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>(optional)</span></label>
                   <input
                     value={form.location}
-                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                    onChange={e => {
+                      setForm(f => ({ ...f, location: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, location: undefined }));
+                    }}
                     placeholder="e.g. 2nd Floor, Room 201"
-                    style={inputStyle}
+                    style={formErrors.location ? inputErrorStyle : inputStyle}
                   />
+                  <FieldError msg={formErrors.location} />
                 </div>
               </div>
 

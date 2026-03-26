@@ -115,12 +115,23 @@ const emptyForm = (): FormState => ({
   department_id: "",
 });
 
-const FieldError: React.FC<{ msg?: string }> = ({ msg }) =>
-  msg ? (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, color: "#b91c1c", fontWeight: 500 }}>
-      <AlertTriangle size={11} /> {msg}
+// ── Per-field error — visibility:hidden keeps space, no layout shift ───────────
+const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
+   <div style={{
+      minHeight: 18,
+      marginTop: 1,
+      fontSize: 11,
+      fontWeight: 600,
+      color: "#dc2626",
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      visibility: msg ? "visible" : "hidden",
+    }}>
+      <AlertTriangle size={10} />
+      {msg ?? "placeholder"}
     </div>
-  ) : null;
+);
 
 const StaffSinglePicker: React.FC<{
   users: UserOption[];
@@ -205,7 +216,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const [deleteTarget, setDeleteTarget] = useState<OutgoingUnitRow | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
@@ -249,9 +259,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void fetchAll(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
       .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return () => { void supabase.removeChannel(channel); };
   }, [sortField, sortDir]);
 
   const rowsEnriched = useMemo(
@@ -295,7 +303,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setSelected(null);
     setForm(emptyForm());
     setFieldErrors({});
-    setSubmitError("");
     setSubmitting(false);
   };
 
@@ -326,7 +333,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setSubmitting(true);
-    setSubmitError("");
 
     const basePayload = {
       date_released: new Date(form.date_released).toISOString(),
@@ -339,7 +345,11 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
     if (modalMode === "add") {
       const { data: inserted, error } = await supabase.from("outgoing_units").insert(basePayload).select("id").single();
-      if (error) { setSubmitError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFieldErrors({ unit_name: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "outgoing_unit_created",
@@ -352,7 +362,11 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       const { error } = await supabase.from("outgoing_units")
         .update({ ...basePayload, updated_at: new Date().toISOString() })
         .eq("id", selected.id);
-      if (error) { setSubmitError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFieldErrors({ unit_name: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "outgoing_unit_updated",
@@ -564,9 +578,9 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.9rem" }}>
 
-                {/* Date + Unit */}
+                {/* Date */}
                 <div>
                   <label style={labelStyle}>Date released <span style={{ color: "#dc2626" }}>*</span></label>
                   <input type="date" value={form.date_released} max={today}
@@ -575,6 +589,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.date_released} />
                 </div>
 
+                {/* Unit */}
                 <div>
                   <label style={labelStyle}>Unit name <span style={{ color: "#dc2626" }}>*</span></label>
                   <input value={form.unit_name} onChange={e => { setForm(f => ({ ...f, unit_name: e.target.value })); clearError("unit_name"); }}
@@ -623,19 +638,15 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <textarea value={form.release_notes} onChange={e => { setForm(f => ({ ...f, release_notes: e.target.value })); clearError("release_notes"); }}
                     placeholder="Work performed, condition on release, or other handover details…" rows={4} maxLength={2000}
                     style={{ ...inputStyle(!!fieldErrors.release_notes), resize: "vertical", lineHeight: 1.6 }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <FieldError msg={fieldErrors.release_notes} />
-                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{form.release_notes.length}/2000</span>
+                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto", paddingTop: 3 }}>
+                      {form.release_notes.length}/2000
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              {/* DB-level error only */}
-              {submitError && (
-                <div style={{ marginTop: "0.85rem", padding: "0.55rem 0.8rem", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  <AlertTriangle size={13} /> {submitError}
-                </div>
-              )}
+              </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
                 <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Cancel</button>
