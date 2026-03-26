@@ -7,12 +7,13 @@ import {
   ShieldAlert,
   UserPlus,
   User,
-  AtSign,
   Mail,
   Lock,
   Eye,
   EyeOff,
   AlertTriangle,
+  AtSign,
+  X,
 } from "lucide-react";
 
 const styles = `
@@ -68,35 +69,39 @@ const styles = `
   }
 
   .lp-input {
-    background: #f7f8fa; border: 1.5px solid #e2e6ed; border-radius: 8px;
-    color: #1a2e4a; font-family: 'Poppins', sans-serif;
-    font-size: 0.82rem; font-weight: 400; padding: 0.65rem 0.9rem;
-    outline: none; transition: border-color 0.2s, background 0.2s, box-shadow 0.2s; width: 100%;
+    background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    color: #0f172a; font-family: 'Poppins', sans-serif;
+    font-size: 13px; font-weight: 400;
+    padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+    outline: none; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; width: 100%;
   }
   .lp-input::placeholder {
     color: #b0b8c4;
     font-family: 'Poppins', sans-serif;
-    font-size: 0.78rem;
+    font-size: 13px;
   }
   .lp-input:hover  { border-color: #b8c2ce; background: #f2f4f7; }
-  .lp-input:focus  { border-color: #1a2e4a; background: #fff; box-shadow: 0 0 0 3px rgba(26,46,74,0.08); }
+  .lp-input:focus  { border-color: #0a4c86 !important; background: #fff; box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important; outline: none; }
   .lp-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
 
   .lp-field-error {
     min-height: 18px;
     margin-top: 3px;
     font-family: 'Poppins', sans-serif;
-    font-size: 0.68rem;
+    font-size: 11px;
     font-weight: 600;
     color: #dc2626;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 4px;
+    line-height: 1.4;
     visibility: hidden;
   }
   .lp-field-error--visible { visibility: visible; }
 
-  .lp-pw-row { display: flex; justify-content: space-between; align-items: center; }
+  .lp-pw-row {
+    display: flex; justify-content: space-between; align-items: center;
+  }
   .lp-forgot {
     font-family: 'Poppins', sans-serif;
     font-size: 0.7rem; color: #0a4c86; background: none; border: none;
@@ -149,7 +154,96 @@ const styles = `
     font-size: 0.74rem; margin-top: -0.65rem;
   }
 
-  /* ══ MODAL ══ */
+  /* ── UA-style Modal (matches UserAccounts modal exactly) ── */
+  .ua-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 16px;
+    animation: fadeIn 0.15s ease;
+  }
+  .ua-modal-box {
+    width: min(580px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto; overflow-x: hidden;
+    background: #fff; border-radius: 20px;
+    box-shadow: 0 32px 80px rgba(10,20,60,0.22), 0 0 0 1px rgba(10,76,134,0.07);
+    animation: slideUp 0.2s ease;
+    font-family: 'Poppins', sans-serif;
+  }
+  .ua-modal-box--sm { width: min(420px, calc(100vw - 32px)); }
+  .ua-modal-header {
+    padding: 1.3rem 1.4rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%);
+    border-radius: 20px 20px 0 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .ua-modal-body {
+    padding: 1.2rem 1.4rem;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .ua-modal-footer {
+    padding: 1rem 1.4rem;
+    border-top: 1px solid #f1f5f9;
+    background: #fafbfc;
+    border-radius: 0 0 20px 20px;
+    display: flex; justify-content: flex-end; gap: 10px;
+  }
+  .ua-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ua-span2 { grid-column: span 2; }
+
+  .ua-field-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    display: block;
+  }
+  .ua-input {
+    width: 100%;
+    padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+    border-radius: 10px;
+    border: 1.5px solid #e2e8f0;
+    background: #f8fafc;
+    font-size: 13px;
+    color: #0f172a;
+    outline: none;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ua-input:focus {
+    border-color: #0a4c86 !important;
+    box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important;
+    outline: none;
+  }
+  .ua-input--error {
+    border-color: #fca5a5 !important;
+    background: #fff8f8 !important;
+  }
+  .ua-field-error {
+    min-height: 18px;
+    margin-top: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #dc2626;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    line-height: 1.4;
+    font-family: 'Poppins', sans-serif;
+    visibility: hidden;
+  }
+  .ua-field-error--visible { visibility: visible; }
+
+  .ua-btn-close:hover { background: #f1f5f9 !important; }
+  .ua-btn-cancel:hover { background: #f8fafc !important; }
+  .ua-btn-save:hover { opacity: 0.92; }
+
+  /* Forgot modal (original style kept) */
   .lp-modal-overlay {
     position: fixed; inset: 0; z-index: 200;
     background: rgba(0,0,0,0.45);
@@ -158,7 +252,6 @@ const styles = `
     animation: modalOverlayIn 0.2s ease both;
   }
   @keyframes modalOverlayIn { from { opacity: 0; } to { opacity: 1; } }
-
   .lp-modal {
     background: #ffffff; border-radius: 14px;
     width: 100%; max-width: 420px;
@@ -172,7 +265,6 @@ const styles = `
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-
   .lp-modal-header {
     display: flex; align-items: center; gap: 0.75rem;
     padding: 1.1rem 1.3rem 1rem;
@@ -185,11 +277,8 @@ const styles = `
     flex-shrink: 0; color: #0a4c86;
   }
   .lp-modal-header-text { display: flex; flex-direction: column; gap: 1px; }
-  .lp-modal-title {
-    font-size: 0.88rem; font-weight: 700; color: #1a2e4a; line-height: 1.2;
-  }
+  .lp-modal-title { font-size: 0.88rem; font-weight: 700; color: #1a2e4a; line-height: 1.2; }
   .lp-modal-subtitle { font-size: 0.7rem; color: #94a3b8; font-weight: 400; }
-
   .lp-modal-close {
     position: absolute; top: 0.9rem; right: 0.9rem;
     background: #f2f4f7; border: none; border-radius: 50%;
@@ -199,26 +288,12 @@ const styles = `
     transition: background 0.2s, color 0.2s;
   }
   .lp-modal-close:hover { background: #e2e6ed; color: #1a2e4a; }
-
   .lp-modal-body { padding: 1.15rem 1.3rem; }
-
-  .lp-icon-input { position: relative; }
-  .lp-icon-input .lp-input { padding-left: 2.25rem; }
-  .lp-icon-input .lp-input-icon {
-    position: absolute; left: 0.7rem; top: 50%;
-    transform: translateY(-50%);
-    color: #b0b8c4; pointer-events: none;
-    display: flex; align-items: center;
-  }
-
-  .lp-modal-field { display: flex; flex-direction: column; gap: 0.35rem; }
-
   .lp-modal-footer {
     display: flex; align-items: center; justify-content: flex-end;
     gap: 0.55rem; padding: 0.85rem 1.3rem 1.1rem;
     border-top: 1px solid #f0f2f5;
   }
-
   .lp-modal-btn-cancel {
     padding: 0.48rem 1rem; border-radius: 7px;
     border: 1.5px solid #e2e6ed; background: transparent;
@@ -227,7 +302,6 @@ const styles = `
     transition: background 0.15s, border-color 0.15s;
   }
   .lp-modal-btn-cancel:hover { background: #f7f8fa; border-color: #c8d0db; }
-
   .lp-modal-btn-submit {
     padding: 0.48rem 1.2rem; border-radius: 7px; border: none;
     background: #0a4c86; color: #fff;
@@ -238,8 +312,6 @@ const styles = `
   .lp-modal-btn-submit:hover    { background: #083d6e; transform: translateY(-1px); }
   .lp-modal-btn-submit:active   { transform: translateY(0); }
   .lp-modal-btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-  /* Admin notice */
   .lp-admin-notice {
     display: flex; gap: 0.7rem; align-items: flex-start;
     background: #f0f6ff; border: 1px solid #bfdbfe;
@@ -257,14 +329,6 @@ const styles = `
     font-size: 0.74rem; line-height: 1.6;
   }
 
-  /* Single-column create form */
-  .lp-create-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  /* Login extras */
   .lp-keep-row {
     display: flex;
     align-items: center;
@@ -289,27 +353,69 @@ const styles = `
     font-size: 0.72rem; color: #6b7280;
   }
 
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+
+  @media (max-width: 680px) {
+    .ua-grid { grid-template-columns: 1fr; }
+    .ua-span2 { grid-column: span 1; }
+  }
   @media (max-width: 600px) {
     .lp-card { margin: 1rem; padding: 2rem 1.5rem 1.75rem; }
     .lp-city-logo { width: 180px; }
-    .lp-modal { max-width: 100%; }
-    .lp-modal-header, .lp-modal-body, .lp-modal-footer { padding-left: 1rem; padding-right: 1rem; }
+    .ua-modal-box { border-radius: 16px; }
   }
 `;
 
-// ── Inline field error — always reserves space, no layout shift ────────────────
+const BRAND = "#0a4c86";
+
+// ── Shared field error component (UA style) ────────────────────────────────
+const UAFieldError = ({ msg }: { msg?: string }) => (
+  <div className={`ua-field-error${msg ? " ua-field-error--visible" : ""}`}>
+    <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} />
+    <span>{msg ?? "placeholder"}</span>
+  </div>
+);
+
+// ── UA-style InputField wrapper ────────────────────────────────────────────
+function UAInputField({
+  label,
+  icon,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <label className="ua-field-label">
+        {label}
+        {required && <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>}
+      </label>
+      <div style={{ position: "relative" }}>
+        {icon && (
+          <span style={{
+            position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+            color: "#94a3b8", pointerEvents: "none", display: "flex", zIndex: 1,
+          }}>
+            {icon}
+          </span>
+        )}
+        {children}
+      </div>
+      <UAFieldError msg={error} />
+    </div>
+  );
+}
+
+// ── Login FieldError (original style) ─────────────────────────────────────
 const FieldError = ({ msg }: { msg?: string }) => (
-<div style={{
-    minHeight: 18,
-    marginTop: 1,
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#dc2626",
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    visibility: msg ? "visible" : "hidden",
-  }}>
+  <div className={`lp-field-error${msg ? " lp-field-error--visible" : ""}`}>
     <AlertTriangle size={10} />
     {msg ?? "placeholder"}
   </div>
@@ -327,10 +433,12 @@ export default function LoginPage() {
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const navigate = useNavigate();
 
-  // ── Login field errors ─────────────────────────────────────────────────────
-  const [loginErrors, setLoginErrors] = useState<{ identifier?: string; password?: string; general?: string }>({});
+  const [loginErrors, setLoginErrors] = useState<{
+    identifier?: string;
+    password?: string;
+    general?: string;
+  }>({});
 
-  // ── Create account field errors ────────────────────────────────────────────
   const [createErrors, setCreateErrors] = useState<{
     full_name?: string;
     username?: string;
@@ -436,7 +544,6 @@ export default function LoginPage() {
 
     if (Object.keys(errors).length > 0) { setCreateErrors(errors); return; }
 
-    // ── Check uniqueness against DB ──────────────────────────────────────────
     setCreating(true);
     setCreateErrors({});
 
@@ -513,12 +620,13 @@ export default function LoginPage() {
           </div>
 
           <form className="lp-form" onSubmit={handleLogin}>
-
             {/* Identifier */}
             <div className="lp-field">
               <label className="lp-label" htmlFor="identifier">Email or Username</label>
-              <div className="lp-icon-input">
-                <span className="lp-input-icon"><Mail size={13} strokeWidth={2} /></span>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#b0b8c4", pointerEvents: "none", display: "flex", alignItems: "center" }}>
+                  <Mail size={13} strokeWidth={2} />
+                </span>
                 <input
                   id="identifier"
                   className={`lp-input${loginErrors.identifier ? " lp-input--error" : ""}`}
@@ -541,8 +649,10 @@ export default function LoginPage() {
                   Forgot password?
                 </button>
               </div>
-              <div className="lp-icon-input" style={{ position: "relative" }}>
-                <span className="lp-input-icon"><Lock size={13} strokeWidth={2} /></span>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#b0b8c4", pointerEvents: "none", display: "flex", alignItems: "center" }}>
+                  <Lock size={13} strokeWidth={2} />
+                </span>
                 <input
                   id="password"
                   className={`lp-input${loginErrors.password ? " lp-input--error" : ""}`}
@@ -561,7 +671,7 @@ export default function LoginPage() {
               <FieldError msg={loginErrors.password} />
             </div>
 
-            {/* General error (inactive account, server error) */}
+            {/* General error */}
             {loginErrors.general && (
               <div style={{
                 padding: "0.5rem 0.75rem", borderRadius: 7, marginTop: 4,
@@ -573,7 +683,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Keep me signed in — sits between error area and the Sign In button */}
             <div className="lp-keep-row">
               <label className="lp-keep-checkbox">
                 <input
@@ -598,7 +707,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* ══ Forgot Password Modal ══ */}
+        {/* ══ Forgot Password Modal (original style) ══ */}
         {showForgot && (
           <div className="lp-modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeForgot(); }}>
             <div className="lp-modal" role="dialog" aria-modal="true">
@@ -632,132 +741,169 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* ══ Create Account Modal ══ */}
+        {/* ══ Create Account Modal — UA style ══ */}
         {showCreate && (
-          <div className="lp-modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeCreate(); }}>
-            <div className="lp-modal" role="dialog" aria-modal="true">
-              <button className="lp-modal-close" onClick={closeCreate} aria-label="Close">
-                <span style={{ fontSize: "0.75rem", lineHeight: 1 }}>✕</span>
-              </button>
-              <div className="lp-modal-header">
-                <div className="lp-modal-header-icon"><UserPlus size={16} strokeWidth={2} /></div>
-                <div className="lp-modal-header-text">
-                  <span className="lp-modal-title">Request an Account</span>
-                  <span className="lp-modal-subtitle">Requires admin approval</span>
+          <div className="ua-modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeCreate(); }}>
+            <div className="ua-modal-box" role="dialog" aria-modal="true">
+
+              {/* Header */}
+              <div className="ua-modal-header">
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, background: BRAND,
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                    <UserPlus size={17} color="#fff" />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>Request an Account</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>Requires admin approval</div>
+                  </div>
                 </div>
+                <button
+                  className="ua-btn-close"
+                  onClick={closeCreate}
+                  aria-label="Close"
+                  style={{
+                    border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10,
+                    width: 32, height: 32, cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    color: "#94a3b8", flexShrink: 0, transition: "background 0.15s",
+                  }}
+                >
+                  <X size={15} />
+                </button>
               </div>
 
               {!createSent ? (
                 <>
-                  <div className="lp-modal-body">
-                    <form id="create-form" onSubmit={handleCreateAccount}>
-                      <div className="lp-create-stack">
+                  {/* Body */}
+                  <div className="ua-modal-body">
+                    <div className="ua-grid">
 
-                        {/* Full Name */}
-                        <div className="lp-modal-field">
-                          <label className="lp-label" htmlFor="ca-fullname">Full Name</label>
-                          <div className="lp-icon-input">
-                            <span className="lp-input-icon"><User size={13} strokeWidth={2} /></span>
-                            <input
-                              id="ca-fullname"
-                              className={`lp-input${createErrors.full_name ? " lp-input--error" : ""}`}
-                              type="text"
-                              placeholder="Juan Dela Cruz"
-                              value={create.full_name}
-                              onChange={e => { setCreate(c => ({ ...c, full_name: e.target.value })); setCreateErrors(p => ({ ...p, full_name: undefined })); }}
-                            />
-                          </div>
-                          <FieldError msg={createErrors.full_name} />
-                        </div>
-
-                        {/* Username */}
-                        <div className="lp-modal-field">
-                          <label className="lp-label" htmlFor="ca-username">Username</label>
-                          <div className="lp-icon-input">
-                            <span className="lp-input-icon"><AtSign size={13} strokeWidth={2} /></span>
-                            <input
-                              id="ca-username"
-                              className={`lp-input${createErrors.username ? " lp-input--error" : ""}`}
-                              type="text"
-                              placeholder="juan_dc"
-                              value={create.username}
-                              onChange={e => { setCreate(c => ({ ...c, username: e.target.value })); setCreateErrors(p => ({ ...p, username: undefined })); }}
-                            />
-                          </div>
-                          <FieldError msg={createErrors.username} />
-                        </div>
-
-                        {/* Email */}
-                        <div className="lp-modal-field">
-                          <label className="lp-label" htmlFor="ca-email">Email</label>
-                          <div className="lp-icon-input">
-                            <span className="lp-input-icon"><Mail size={13} strokeWidth={2} /></span>
-                            <input
-                              id="ca-email"
-                              className={`lp-input${createErrors.email ? " lp-input--error" : ""}`}
-                              type="email"
-                              placeholder="you@example.com"
-                              value={create.email}
-                              onChange={e => { setCreate(c => ({ ...c, email: e.target.value })); setCreateErrors(p => ({ ...p, email: undefined })); }}
-                            />
-                          </div>
-                          <FieldError msg={createErrors.email} />
-                        </div>
-
-                        {/* Password */}
-                        <div className="lp-modal-field">
-                          <label className="lp-label" htmlFor="ca-password">Password</label>
-                          <div className="lp-icon-input">
-                            <span className="lp-input-icon"><Lock size={13} strokeWidth={2} /></span>
-                            <input
-                              id="ca-password"
-                              className={`lp-input${createErrors.password ? " lp-input--error" : ""}`}
-                              type="password"
-                              placeholder="Min. 8 characters"
-                              value={create.password}
-                              onChange={e => { setCreate(c => ({ ...c, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })); }}
-                            />
-                          </div>
-                          <FieldError msg={createErrors.password} />
-                        </div>
-
-                        {/* Confirm Password */}
-                        <div className="lp-modal-field">
-                          <label className="lp-label" htmlFor="ca-confirm">Confirm Password</label>
-                          <div className="lp-icon-input">
-                            <span className="lp-input-icon"><Lock size={13} strokeWidth={2} /></span>
-                            <input
-                              id="ca-confirm"
-                              className={`lp-input${createErrors.confirmPassword ? " lp-input--error" : ""}`}
-                              type="password"
-                              placeholder="Repeat password"
-                              value={create.confirmPassword}
-                              onChange={e => { setCreate(c => ({ ...c, confirmPassword: e.target.value })); setCreateErrors(p => ({ ...p, confirmPassword: undefined })); }}
-                            />
-                          </div>
-                          <FieldError msg={createErrors.confirmPassword} />
-                        </div>
-
+                      {/* Full Name — spans both columns */}
+                      <div className="ua-span2">
+                        <UAInputField label="Full Name" icon={<User size={13} />} required error={createErrors.full_name}>
+                          <input
+                            className={`ua-input${createErrors.full_name ? " ua-input--error" : ""}`}
+                            type="text"
+                            placeholder="e.g. Juan Dela Cruz"
+                            value={create.full_name}
+                            onChange={e => { setCreate(c => ({ ...c, full_name: e.target.value })); setCreateErrors(p => ({ ...p, full_name: undefined })); }}
+                          />
+                        </UAInputField>
                       </div>
-                    </form>
+
+                      {/* Username */}
+                      <UAInputField label="Username" icon={<AtSign size={13} />} required error={createErrors.username}>
+                        <input
+                          className={`ua-input${createErrors.username ? " ua-input--error" : ""}`}
+                          type="text"
+                          placeholder="e.g. juan_dc"
+                          value={create.username}
+                          onChange={e => { setCreate(c => ({ ...c, username: e.target.value })); setCreateErrors(p => ({ ...p, username: undefined })); }}
+                        />
+                      </UAInputField>
+
+                      {/* Email */}
+                      <UAInputField label="Email Address" icon={<Mail size={13} />} required error={createErrors.email}>
+                        <input
+                          className={`ua-input${createErrors.email ? " ua-input--error" : ""}`}
+                          type="email"
+                          placeholder="you@example.com"
+                          value={create.email}
+                          onChange={e => { setCreate(c => ({ ...c, email: e.target.value })); setCreateErrors(p => ({ ...p, email: undefined })); }}
+                        />
+                      </UAInputField>
+
+                      {/* Password */}
+                      <UAInputField label="Password" icon={<Lock size={13} />} required error={createErrors.password}>
+                        <input
+                          className={`ua-input${createErrors.password ? " ua-input--error" : ""}`}
+                          type="password"
+                          placeholder="Min. 8 characters"
+                          value={create.password}
+                          onChange={e => { setCreate(c => ({ ...c, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })); }}
+                        />
+                      </UAInputField>
+
+                      {/* Confirm Password */}
+                      <UAInputField label="Confirm Password" icon={<Lock size={13} />} required error={createErrors.confirmPassword}>
+                        <input
+                          className={`ua-input${createErrors.confirmPassword ? " ua-input--error" : ""}`}
+                          type="password"
+                          placeholder="Repeat password"
+                          value={create.confirmPassword}
+                          onChange={e => { setCreate(c => ({ ...c, confirmPassword: e.target.value })); setCreateErrors(p => ({ ...p, confirmPassword: undefined })); }}
+                        />
+                      </UAInputField>
+
+                    </div>
                   </div>
-                  <div className="lp-modal-footer">
-                    <button className="lp-modal-btn-cancel" type="button" onClick={closeCreate}>Cancel</button>
-                    <button className="lp-modal-btn-submit" type="submit" form="create-form" disabled={creating}>
+
+                  {/* Footer */}
+                  <div className="ua-modal-footer">
+                    <button
+                      className="ua-btn-cancel"
+                      type="button"
+                      onClick={closeCreate}
+                      style={{
+                        border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10,
+                        padding: "0.55rem 1rem", cursor: "pointer", fontWeight: 700,
+                        fontSize: 13, color: "#475569", fontFamily: "'Poppins', sans-serif",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="ua-btn-save"
+                      type="button"
+                      disabled={creating}
+                      onClick={handleCreateAccount as any}
+                      style={{
+                        border: "none",
+                        background: creating ? "#94a3b8" : BRAND,
+                        color: "#fff", borderRadius: 10,
+                        padding: "0.55rem 1.2rem",
+                        cursor: creating ? "not-allowed" : "pointer",
+                        fontWeight: 800, fontSize: 13,
+                        fontFamily: "'Poppins', sans-serif",
+                        boxShadow: creating ? "none" : "0 4px 14px rgba(10,76,134,0.28)",
+                        transition: "all 0.15s",
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}
+                    >
                       {creating ? "Checking…" : "Submit Request"}
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="lp-modal-body">
-                    <div className="lp-success-msg">
+                  <div className="ua-modal-body">
+                    <div style={{
+                      textAlign: "center", padding: "1rem",
+                      background: "#f0fdf4", border: "1px solid #86efac",
+                      borderRadius: 12, color: "#166534",
+                      fontSize: 13, lineHeight: 1.7,
+                      fontFamily: "'Poppins', sans-serif",
+                    }}>
                       Your request has been submitted successfully.<br />
                       You can sign in once an admin approves your account.
                     </div>
                   </div>
-                  <div className="lp-modal-footer">
-                    <button className="lp-modal-btn-submit" type="button" onClick={closeCreate}>
+                  <div className="ua-modal-footer">
+                    <button
+                      type="button"
+                      onClick={closeCreate}
+                      style={{
+                        border: "none", background: BRAND, color: "#fff",
+                        borderRadius: 10, padding: "0.55rem 1.2rem",
+                        cursor: "pointer", fontWeight: 800, fontSize: 13,
+                        fontFamily: "'Poppins', sans-serif",
+                        boxShadow: "0 4px 14px rgba(10,76,134,0.28)",
+                      }}
+                    >
                       Back to sign in
                     </button>
                   </div>
