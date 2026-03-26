@@ -21,7 +21,6 @@ type TicketRow = {
   id: string;
   ticket_number: string | null;
   title: string;
-  description: string;
   status: Status;
   employee_name: string;
   department_id: string;
@@ -115,7 +114,7 @@ const MyTickets: React.FC = () => {
     const [{ data: tix, error: e1 }, { data: dlist }] = await Promise.all([
       supabase
         .from("file_reports")
-        .select("id, ticket_number, title, description, status, employee_name, department_id, issue_type, date_submitted, assigned_to, action_taken, started_at, completed_at")
+        .select("id, ticket_number, title, status, employee_name, department_id, issue_type, date_submitted, assigned_to, action_taken, started_at, completed_at")
         .contains("assigned_to", [userId])
         .not("status", "eq", "Resolved")
         .order("date_submitted", { ascending: false }),
@@ -163,7 +162,7 @@ const MyTickets: React.FC = () => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(r =>
-      [r.title, r.description, r.employee_name, r.ticket_number ?? "", r.issue_type, r.status]
+      [r.title, r.employee_name, r.ticket_number ?? "", r.issue_type, r.status]
         .join(" ").toLowerCase().includes(q)
     );
   }, [rows, search]);
@@ -510,13 +509,6 @@ const MyTickets: React.FC = () => {
                         <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
                           <Clock size={12} color={BRAND} /> {fmtDate(selected.date_submitted)}
                         </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Description</div>
-                      <div style={{ background: "#f8fafc", padding: "0.85rem", borderRadius: 10, border: "1px solid #f1f5f9", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.6 }}>
-                        {selected.description || "—"}
                       </div>
                     </div>
 
