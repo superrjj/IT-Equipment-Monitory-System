@@ -34,6 +34,15 @@ type TicketRow = {
 
 type DeptMap = Record<string, string>;
 
+// Per-field error shape for the work form
+type FormErrors = {
+  status?: string;
+  started_at?: string;
+  completed_at?: string;
+  action_taken?: string;
+  general?: string; // for assignment / save errors
+};
+
 const BRAND = "#0a4c86";
 
 // Returns today's date as YYYY-MM-DD in Asia/Manila timezone
@@ -54,20 +63,37 @@ function validateTechUpdate(form: {
   action_taken: string;
   started_at: string;
   completed_at: string;
-}): string {
+}): FormErrors {
   const today = todayPH();
-  if (!["In Progress", "Resolved"].includes(form.status)) return "Invalid status.";
-  if (!form.started_at.trim()) return "Start date is required.";
-  if (form.started_at < today) return "Start date cannot be in the past.";
-  if (form.status === "Resolved") {
-    if (!form.completed_at.trim()) return "End date is required.";
-    if (!form.action_taken.trim()) return "Action taken is required.";
-    if (form.action_taken.trim().length > 2000) return "Action taken must be 2000 characters or less.";
-    if (form.completed_at < today) return "End date cannot be in the past.";
-    if (new Date(form.completed_at) < new Date(form.started_at))
-      return "End date cannot be before start date.";
+  const errors: FormErrors = {};
+
+  if (!["In Progress", "Resolved"].includes(form.status)) {
+    errors.status = "Invalid status.";
   }
-  return "";
+
+  if (!form.started_at.trim()) {
+    errors.started_at = "Start date is required.";
+  } else if (form.started_at < today) {
+    errors.started_at = "Start date cannot be in the past.";
+  }
+
+  if (form.status === "Resolved") {
+    if (!form.completed_at.trim()) {
+      errors.completed_at = "End date is required.";
+    } else if (form.completed_at < today) {
+      errors.completed_at = "End date cannot be in the past.";
+    } else if (new Date(form.completed_at) < new Date(form.started_at)) {
+      errors.completed_at = "End date cannot be before start date.";
+    }
+
+    if (!form.action_taken.trim()) {
+      errors.action_taken = "Action taken is required.";
+    } else if (form.action_taken.trim().length > 2000) {
+      errors.action_taken = "Action taken must be 2000 characters or less.";
+    }
+  }
+
+  return errors;
 }
 
 const fmtDate = (iso: string | null | undefined) =>
@@ -82,6 +108,24 @@ const statusStyle: Record<string, { bg: string; color: string; dot: string }> = 
   "In Progress": { bg: "rgba(234,179,8,0.10)",   color: "#a16207", dot: "#eab308" },
   Resolved:      { bg: "rgba(22,163,74,0.10)",   color: "#15803d", dot: "#22c55e" },
 };
+
+// ── Inline field error ──────────────────────────────────────────────────────
+const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
+  <div style={{
+    minHeight: 18,
+    marginTop: 1,
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#dc2626",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={10} />
+    {msg ?? "placeholder"}
+  </div>
+);
 
 const MyTickets: React.FC = () => {
   const userId = getSessionUserId();
@@ -98,13 +142,22 @@ const MyTickets: React.FC = () => {
     started_at: "",
     completed_at: "",
   });
-  const [formError, setFormError]     = useState("");
+  const [formErrors, setFormErrors]   = useState<FormErrors>({});
   const [saving, setSaving]           = useState(false);
   const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const clearFieldError = (field: keyof FormErrors) => {
+    setFormErrors(prev => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
   };
 
   const fetchAll = async () => {
@@ -142,9 +195,7 @@ const MyTickets: React.FC = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchAll(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
       .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return () => { void supabase.removeChannel(channel); };
   }, [userId]);
 
   useEffect(() => {
@@ -175,41 +226,35 @@ const MyTickets: React.FC = () => {
     setFocusedTicketId(r.id);
     setSelected(r);
     const today = todayPH();
-
-    // If ticket was already set to In Progress before, keep that started_at; else default today
-    const existingStarted = r.started_at ? r.started_at.slice(0, 10) : "";
+    const existingStarted  = r.started_at   ? r.started_at.slice(0, 10)   : "";
     const existingCompleted = r.completed_at ? r.completed_at.slice(0, 10) : "";
-
-    // Determine initial status: if ticket was already In Progress, force Resolved-only toggle
-    // (can't go back to In Progress once saved as In Progress)
-    const wasInProgress = r.status === "In Progress";
+    const wasInProgress    = r.status === "In Progress";
     const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
-
     setForm({
       status: initialStatus,
       action_taken: r.action_taken ?? "",
-      // If already in progress, lock start date to existing; else default today
-      started_at: existingStarted || today,
+      started_at:   existingStarted  || today,
       completed_at: existingCompleted || (initialStatus === "Resolved" ? today : ""),
     });
-    setFormError("");
+    setFormErrors({});
     setModal("work");
   };
 
   const closeModal = () => {
-    setModal(null); setSelected(null); setFormError(""); setSaving(false);
+    setModal(null); setSelected(null); setFormErrors({}); setSaving(false);
   };
 
-  // Whether the ticket has already been saved as "In Progress" (so can't go back)
   const isAlreadyInProgress = selected?.status === "In Progress";
 
   const saveWork = async () => {
     if (!selected || !userId) return;
     if (!selected.assigned_to.includes(userId)) {
-      setFormError("You are no longer assigned to this ticket."); return;
+      setFormErrors({ general: "You are no longer assigned to this ticket." });
+      return;
     }
-    const err = validateTechUpdate(form);
-    if (err) { setFormError(err); return; }
+    const errors = validateTechUpdate(form);
+    if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
+
     setSaving(true);
     const payload = {
       status:       form.status,
@@ -219,7 +264,7 @@ const MyTickets: React.FC = () => {
       updated_at:   new Date().toISOString(),
     };
     const { error } = await supabase.from("file_reports").update(payload).eq("id", selected.id);
-    if (error) { setFormError(error.message); setSaving(false); return; }
+    if (error) { setFormErrors({ general: error.message }); setSaving(false); return; }
     await insertActivityLog(supabase, {
       actorUserId: userId, action: "ticket_technician_update",
       entityType: "file_report", entityId: selected.id,
@@ -242,6 +287,12 @@ const MyTickets: React.FC = () => {
     fontFamily: "'Poppins', sans-serif", background: "#f8fafc",
     boxSizing: "border-box", outline: "none", transition: "border-color 0.15s",
     color: "#0f172a", cursor: "pointer",
+  };
+
+  const inputError: React.CSSProperties = {
+    ...inputBase,
+    border: "1.5px solid #fca5a5",
+    background: "#fff5f5",
   };
 
   const readonlyInput: React.CSSProperties = {
@@ -267,23 +318,14 @@ const MyTickets: React.FC = () => {
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .mt-row:hover { background: #f8fafc !important; }
         .mt-input:focus { border-color: ${BRAND} !important; box-shadow: 0 0 0 3px ${BRAND}18; }
+        .mt-input-err:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
         .mt-btn-cancel:hover { background: #f1f5f9 !important; }
 
-        /* Make date input open calendar on full-field click */
-        input[type="date"] {
-          position: relative;
-          cursor: pointer;
-        }
+        input[type="date"] { position: relative; cursor: pointer; }
         input[type="date"]::-webkit-calendar-picker-indicator {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 100%;
-          background: transparent;
-          color: transparent;
-          cursor: pointer;
-          opacity: 0;
+          position: absolute; left: 0; top: 0;
+          width: 100%; height: 100%;
+          background: transparent; color: transparent; cursor: pointer; opacity: 0;
         }
 
         .status-option {
@@ -296,15 +338,10 @@ const MyTickets: React.FC = () => {
           transition: all 0.15s; color: #64748b;
         }
         .status-option:hover:not(:disabled) { border-color: #cbd5e1; background: #f1f5f9; }
-        .status-option:disabled {
-          opacity: 0.45; cursor: not-allowed;
-        }
-        .status-option.active-inprog {
-          border-color: #eab308; background: rgba(234,179,8,0.08); color: #a16207;
-        }
-        .status-option.active-resolved {
-          border-color: #22c55e; background: rgba(22,163,74,0.08); color: #15803d;
-        }
+        .status-option:disabled { opacity: 0.45; cursor: not-allowed; }
+        .status-option.active-inprog  { border-color: #eab308; background: rgba(234,179,8,0.08); color: #a16207; }
+        .status-option.active-resolved { border-color: #22c55e; background: rgba(22,163,74,0.08); color: #15803d; }
+        .status-option.error-border   { border-color: #fca5a5 !important; }
 
         @keyframes slideDown {
           from { opacity: 0; transform: translateY(-6px); }
@@ -345,7 +382,7 @@ const MyTickets: React.FC = () => {
 
         {/* ── Page header ── */}
         <div style={{ marginBottom: "1rem" }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
             <Ticket size={20} color={BRAND} /> My Tickets
           </h2>
           <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>
@@ -484,21 +521,18 @@ const MyTickets: React.FC = () => {
               {modal === "view" && (
                 <div style={{ padding: "1.25rem 1.5rem" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "#374151" }}>
-
                     <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Requester</div>
                       <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
                         <User size={12} color={BRAND} /> {selected.employee_name}
                       </div>
                     </div>
-
                     <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Office</div>
                       <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
                         <Building2 size={12} color={BRAND} /> {depts[selected.department_id] ?? "—"}
                       </div>
                     </div>
-
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                         <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Issue Type</div>
@@ -511,7 +545,6 @@ const MyTickets: React.FC = () => {
                         </div>
                       </div>
                     </div>
-
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 600, color: BRAND, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Your Response</div>
                       <div style={{ background: `${BRAND}06`, padding: "0.85rem", borderRadius: 10, border: `1px solid ${BRAND}18`, fontSize: 13, lineHeight: 1.6 }}>
@@ -519,7 +552,6 @@ const MyTickets: React.FC = () => {
                       </div>
                     </div>
                   </div>
-
                   <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "flex-end", gap: 8 }}>
                     <button type="button" onClick={closeModal} className="mt-btn-cancel"
                       style={{ padding: "0.55rem 1rem", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: "'Poppins', sans-serif" }}>
@@ -535,7 +567,7 @@ const MyTickets: React.FC = () => {
 
               {/* ── WORK body ── */}
               {modal === "work" && (
-                <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
 
                   {/* Status toggle */}
                   <div>
@@ -543,57 +575,49 @@ const MyTickets: React.FC = () => {
                       Status <span style={{ color: "#ef4444" }}>*</span>
                     </label>
                     <div style={{ display: "flex", gap: 8 }}>
-                      {/* In Progress button — disabled once ticket is already In Progress */}
                       <button
                         type="button"
                         disabled={isAlreadyInProgress}
-                        className={`status-option ${form.status === "In Progress" ? "active-inprog" : ""}`}
+                        className={[
+                          "status-option",
+                          form.status === "In Progress" ? "active-inprog" : "",
+                          formErrors.status ? "error-border" : "",
+                        ].join(" ")}
                         title={isAlreadyInProgress ? "Cannot revert to In Progress once saved" : undefined}
                         onClick={() => {
                           if (isAlreadyInProgress) return;
-                          setForm(f => ({
-                            ...f,
-                            status: "In Progress",
-                            completed_at: "",
-                            // Auto-fill today when switching to In Progress
-                            started_at: f.started_at || today,
-                          }));
-                          setFormError("");
+                          setForm(f => ({ ...f, status: "In Progress", completed_at: "", started_at: f.started_at || today }));
+                          clearFieldError("status");
                         }}
                       >
                         <Timer size={13} /> In Progress
                       </button>
-
-                      {/* Resolved button */}
                       <button
                         type="button"
-                        className={`status-option ${form.status === "Resolved" ? "active-resolved" : ""}`}
+                        className={[
+                          "status-option",
+                          form.status === "Resolved" ? "active-resolved" : "",
+                          formErrors.status ? "error-border" : "",
+                        ].join(" ")}
                         onClick={() => {
-                          setForm(f => ({
-                            ...f,
-                            status: "Resolved",
-                            // Auto-fill today for end date when switching to Resolved
-                            completed_at: f.completed_at || today,
-                            // Keep or set start date
-                            started_at: f.started_at || today,
-                          }));
-                          setFormError("");
+                          setForm(f => ({ ...f, status: "Resolved", completed_at: f.completed_at || today, started_at: f.started_at || today }));
+                          clearFieldError("status");
                         }}
                       >
                         <CheckCircle2 size={13} /> Resolved
                       </button>
                     </div>
+                    <FieldError msg={formErrors.status} />
 
-                    {/* Helper note when already In Progress */}
                     {isAlreadyInProgress && (
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
                         <AlertTriangle size={11} color="#eab308" />
                         This ticket is already In Progress — you can only mark it as Resolved.
                       </div>
                     )}
                   </div>
 
-                  {/* Start date — always shown, locked when Resolved */}
+                  {/* Start date */}
                   <div className="field-appear">
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>
                       Start Date <span style={{ color: "#ef4444" }}>*</span>
@@ -609,11 +633,12 @@ const MyTickets: React.FC = () => {
                       onChange={e => {
                         if (isResolved) return;
                         setForm(f => ({ ...f, started_at: e.target.value }));
-                        setFormError("");
+                        clearFieldError("started_at");
                       }}
-                      className={isResolved ? "" : "mt-input"}
-                      style={isResolved ? readonlyInput : inputBase}
+                      className={isResolved ? "" : formErrors.started_at ? "mt-input-err" : "mt-input"}
+                      style={isResolved ? readonlyInput : formErrors.started_at ? inputError : inputBase}
                     />
+                    <FieldError msg={formErrors.started_at} />
                   </div>
 
                   {/* End date — only for Resolved */}
@@ -628,11 +653,12 @@ const MyTickets: React.FC = () => {
                         min={today}
                         onChange={e => {
                           setForm(f => ({ ...f, completed_at: e.target.value }));
-                          setFormError("");
+                          clearFieldError("completed_at");
                         }}
-                        className="mt-input"
-                        style={inputBase}
+                        className={formErrors.completed_at ? "mt-input-err" : "mt-input"}
+                        style={formErrors.completed_at ? inputError : inputBase}
                       />
+                      <FieldError msg={formErrors.completed_at} />
                     </div>
                   )}
 
@@ -646,29 +672,35 @@ const MyTickets: React.FC = () => {
                         value={form.action_taken}
                         onChange={e => {
                           setForm(f => ({ ...f, action_taken: e.target.value }));
-                          setFormError("");
+                          clearFieldError("action_taken");
                         }}
                         rows={4}
                         maxLength={2000}
                         placeholder="Describe what was done to resolve this ticket…"
-                        className="mt-input"
-                        style={{ ...inputBase, resize: "vertical", lineHeight: 1.6, cursor: "text" }}
+                        className={formErrors.action_taken ? "mt-input-err" : "mt-input"}
+                        style={{
+                          ...(formErrors.action_taken ? inputError : inputBase),
+                          resize: "vertical", lineHeight: 1.6, cursor: "text",
+                        }}
                       />
-                      <div style={{ textAlign: "right", fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                        {form.action_taken.length} / 2000
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 1 }}>
+                        <FieldError msg={formErrors.action_taken} />
+                        <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0, marginLeft: 8 }}>
+                          {form.action_taken.length} / 2000
+                        </span>
                       </div>
                     </div>
                   )}
 
-                  {/* Error */}
-                  {formError && (
+                  {/* General / assignment error */}
+                  {formErrors.general && (
                     <div style={{
                       display: "flex", alignItems: "center", gap: 8,
                       color: "#b91c1c", fontSize: 12, fontWeight: 600,
                       background: "#fee2e2", padding: "0.6rem 0.85rem",
                       borderRadius: 10, border: "1px solid #fecaca",
                     }}>
-                      <AlertTriangle size={14} /> {formError}
+                      <AlertTriangle size={14} /> {formErrors.general}
                     </div>
                   )}
 

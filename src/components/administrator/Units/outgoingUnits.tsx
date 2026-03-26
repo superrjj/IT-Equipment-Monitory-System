@@ -79,7 +79,7 @@ function validateForm(form: FormState): FieldErrors {
     errors.department_id = "Office / Department is required.";
 
   if (!form.released_by_user_id.trim())
-    errors.released_by_user_id = "Please select the IT staff member who released the unit.";
+    errors.released_by_user_id = "Please select the IT Technician member who released the unit.";
 
   const notes = form.release_notes.trim();
   if (!notes) errors.release_notes = "Release notes are required.";
@@ -574,7 +574,8 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{modalMode === "add" ? "Log outgoing unit" : "Edit outgoing unit"}</h2>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}
+                >{modalMode === "add" ? "Log outgoing unit" : "Edit outgoing unit"}</h2>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
 

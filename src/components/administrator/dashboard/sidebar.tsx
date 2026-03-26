@@ -31,7 +31,7 @@ const adminMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "Submit Ticket", icon: TicketIcon },
-      { label: "Resolved Tickets", icon: CheckCircle2 }, // Admin: all resolved
+      { label: "Resolved Tickets", icon: CheckCircle2 }, 
     ],
   },
   {
@@ -64,7 +64,7 @@ const technicianMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "My Tickets", icon: TicketIcon },
-      { label: "Work History", icon: ScrollText }, // Technician: own work
+      { label: "Work History", icon: ScrollText }, 
     ],
   },
   {
