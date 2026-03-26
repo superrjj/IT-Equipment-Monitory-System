@@ -115,7 +115,7 @@ const emptyForm = (): FormState => ({
   issue_type:     "Hardware",
   title:          "",
   description:    "",
-  date_submitted: new Date().toISOString().slice(0, 10),
+  date_submitted: new Date().toLocaleDateString("en-CA",{ timeZone: "Asia/Manila" }),
   assigned_to:    [],
 });
 
@@ -403,7 +403,7 @@ const SubmitTicket: React.FC = () => {
   };
   const openView = (r: FileReport) => { setSelected(r); setModalMode("view"); };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today =  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
   const handleSubmit = async () => {
     const err = validateForm(form);
