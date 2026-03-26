@@ -59,9 +59,18 @@ type AdminForm = {
 
 type FormState = AdminForm;
 
+// ── Per-field error type ───────────────────────────────────────────────────────
+type FormErrors = {
+  title?:          string;
+  employee_name?:  string;
+  department_id?:  string;
+  date_submitted?: string;
+  assigned_to?:    string;
+};
+
 const BRAND     = "#0a4c86";
 const PAGE_SIZE = 10;
-const MAX_ACTIVE_TICKETS = 3; // max Pending + In Progress tickets per technician
+const MAX_ACTIVE_TICKETS = 3;
 
 const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
@@ -76,10 +85,10 @@ const ISSUE_TYPE_BADGE_CONFIG: Record<
   IssueType | "Network / Internet",
   { icon: React.ReactNode; bg: string; color: string }
 > = {
-  Hardware:           { icon: <Cpu size={11} />,     bg: "rgba(10,76,134,0.09)",  color: "#0a4c86" },
-  Software:           { icon: <Monitor size={11} />, bg: "rgba(124,58,237,0.09)", color: "#7c3aed" },
-  Internet:           { icon: <Wifi size={11} />,    bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
-  "Network / Internet": { icon: <Wifi size={11} />, bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
+  Hardware:             { icon: <Cpu size={11} />,     bg: "rgba(10,76,134,0.09)",  color: "#0a4c86" },
+  Software:             { icon: <Monitor size={11} />, bg: "rgba(124,58,237,0.09)", color: "#7c3aed" },
+  Internet:             { icon: <Wifi size={11} />,    bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
+  "Network / Internet": { icon: <Wifi size={11} />,    bg: "rgba(6,182,212,0.09)",  color: "#0891b2" },
 };
 
 const STATUS_CONFIG: Record<Status, { icon: React.ReactNode; bg: string; color: string }> = {
@@ -93,18 +102,29 @@ function sanitize(val: string): string {
     .replace(/&(?!amp;|lt;|gt;|quot;|#)/g, "&amp;").trim();
 }
 
-function validateForm(form: FormState): string {
+// ── Per-field validation — returns an errors object ───────────────────────────
+function validateForm(form: FormState): FormErrors {
+  const errors: FormErrors = {};
   const title = form.title.trim();
-  if (!title)              return "Title is required.";
-  if (title.length < 5)    return "Title must be at least 5 characters.";
-  if (title.length > 150)  return "Title must be 150 characters or less.";
-  if (!form.employee_name.trim()) return "Employee name is required.";
-  if (form.employee_name.trim().length > 100) return "Employee name must be 100 characters or less.";
-  if (!form.department_id) return "Department is required.";
-  if (form.assigned_to.length === 0) return "Please assign at least one IT Staff.";
-  if (!ISSUE_TYPES.includes(form.issue_type)) return "Invalid issue type.";
-  if (!form.date_submitted) return "Date submitted is required.";
-  return "";
+  if (!title)                   errors.title = "Issue is required.";
+  else if (title.length < 10)    errors.title = "Must be at least 6 characters.";
+  else if (title.length > 150)  errors.title = "Must be 150 characters or less.";
+
+  if (!form.employee_name.trim())
+    errors.employee_name = "Employee name is required.";
+  else if (form.employee_name.trim().length > 100)
+    errors.employee_name = "Must be 100 characters or less.";
+
+  if (!form.department_id)
+    errors.department_id = "Department is required.";
+
+  if (!form.date_submitted)
+    errors.date_submitted = "Date submitted is required.";
+
+  if (form.assigned_to.length === 0)
+    errors.assigned_to = "Please assign at least one IT Technician.";
+
+  return errors;
 }
 
 const emptyForm = (): FormState => ({
@@ -125,6 +145,24 @@ function friendlyError(msg: string): string {
 
 const fmtDate = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }) : "—";
+
+// ── Inline field error — visibility:hidden keeps space, no layout shift ────────
+const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
+  <div style={{
+    minHeight: 18,
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#dc2626",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={10} />
+    {msg ?? "placeholder"}
+  </div>
+);
 
 // ── Badges ─────────────────────────────────────────────────────────────────────
 const IssueTypeBadge: React.FC<{ type: string }> = ({ type }) => {
@@ -184,20 +222,19 @@ const TechnicianPicker: React.FC<{
   selected: string[];
   onChange: (ids: string[]) => void;
   hasError: boolean;
-  loadMap: Record<string, number>;       // active ticket count per technician id
-  editingTicketId?: string | null;       // id of ticket being edited (to avoid double-count)
+  loadMap: Record<string, number>;
+  editingTicketId?: string | null;
 }> = ({ users, selected, onChange, hasError, loadMap, editingTicketId }) => {
 
   const toggle = (id: string, blocked: boolean) => {
-    if (blocked) return; // already at max and not currently selected — do nothing
+    if (blocked) return;
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
   };
 
-  // Load badge colour thresholds
   const loadColor = (count: number, isFull: boolean) => {
-    if (isFull)    return { bg: "rgba(220,38,38,0.10)",  color: "#dc2626" };
+    if (isFull)     return { bg: "rgba(220,38,38,0.10)",  color: "#dc2626" };
     if (count >= 2) return { bg: "rgba(234,179,8,0.13)",  color: "#a16207" };
-    return           { bg: "rgba(22,163,74,0.10)",        color: "#15803d" };
+    return            { bg: "rgba(22,163,74,0.10)",        color: "#15803d" };
   };
 
   return (
@@ -210,17 +247,13 @@ const TechnicianPicker: React.FC<{
       {users.length === 0 ? (
         <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Staff found.</div>
       ) : users.map(u => {
-        const isSelected = selected.includes(u.id);
-
-        // When editing, exclude the current ticket's own count for this technician
-        // so they don't appear "full" just because they're already assigned here.
-        const rawCount   = loadMap[u.id] ?? 0;
+        const isSelected  = selected.includes(u.id);
+        const rawCount    = loadMap[u.id] ?? 0;
         const activeCount = (editingTicketId && isSelected)
-          ? Math.max(0, rawCount - 1)   // subtract the ticket currently being edited
+          ? Math.max(0, rawCount - 1)
           : rawCount;
-
         const isFull    = activeCount >= MAX_ACTIVE_TICKETS && !isSelected;
-        const isBlocked = isFull; // can't be newly selected when full
+        const isBlocked = isFull;
         const lc        = loadColor(activeCount, isFull);
 
         return (
@@ -239,7 +272,6 @@ const TechnicianPicker: React.FC<{
               opacity: isBlocked ? 0.52 : 1,
             }}
           >
-            {/* Checkbox */}
             <span style={{
               width: 16, height: 16, borderRadius: 4, flexShrink: 0,
               border: `1.5px solid ${isSelected ? BRAND : "#cbd5e1"}`,
@@ -253,24 +285,16 @@ const TechnicianPicker: React.FC<{
                 </svg>
               )}
             </span>
-
-            {/* Name */}
             <span style={{
-              fontSize: 13,
-              fontWeight: isSelected ? 600 : 400,
+              fontSize: 13, fontWeight: isSelected ? 600 : 400,
               color: isBlocked ? "#94a3b8" : isSelected ? BRAND : "#374151",
-              fontFamily: "'Poppins', sans-serif",
-              flex: 1,
+              fontFamily: "'Poppins', sans-serif", flex: 1,
             }}>
               {u.full_name}
             </span>
-
-            {/* Ticket load badge */}
             <span style={{
-              fontSize: 10, fontWeight: 700,
-              padding: "1px 7px", borderRadius: 999,
-              background: lc.bg, color: lc.color,
-              whiteSpace: "nowrap", flexShrink: 0,
+              fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999,
+              background: lc.bg, color: lc.color, whiteSpace: "nowrap", flexShrink: 0,
             }}>
               {activeCount}/{MAX_ACTIVE_TICKETS}{isFull ? " · Full" : " tickets"}
             </span>
@@ -297,7 +321,7 @@ const SubmitTicket: React.FC = () => {
   const [selected, setSelected]       = useState<FileReport | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileReport | null>(null);
   const [form, setForm]               = useState<FormState>(emptyForm());
-  const [formError, setFormError]     = useState("");
+  const [formErrors, setFormErrors]   = useState<FormErrors>({});
   const [submitting, setSubmitting]   = useState(false);
   const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
@@ -312,8 +336,7 @@ const SubmitTicket: React.FC = () => {
     return m;
   }, [itStaff]);
 
-  // ── Technician active-ticket load map ────────────────────────────────────────
-  // Counts Pending + In Progress tickets per technician (Resolved does NOT count).
+  // Counts Pending + In Progress tickets per technician (Resolved does NOT count)
   const technicianLoadMap = useMemo(() => {
     const map: Record<string, number> = {};
     reports.forEach(r => {
@@ -346,7 +369,6 @@ const SubmitTicket: React.FC = () => {
 
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
-  // ── Supabase Realtime ─────────────────────────────────────────────────────────
   useEffect(() => {
     const channel = supabase
       .channel("file_reports_realtime", { config: { broadcast: { self: false } } })
@@ -376,13 +398,12 @@ const SubmitTicket: React.FC = () => {
         setSelected(prev => (prev?.id === deletedId ? null : prev));
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
   useEffect(() => {
     if (!selected && (modalMode === "view" || modalMode === "edit")) {
-      setModalMode(null); setForm(emptyForm()); setFormError("");
+      setModalMode(null); setForm(emptyForm()); setFormErrors({});
     }
   }, [selected]);
 
@@ -431,7 +452,7 @@ const SubmitTicket: React.FC = () => {
 
   const closeModal = () => {
     setModalMode(null); setSelected(null);
-    setForm(emptyForm()); setFormError(""); setSubmitting(false);
+    setForm(emptyForm()); setFormErrors({}); setSubmitting(false);
   };
   const openAdd  = () => { closeModal(); setModalMode("add"); };
   const openEdit = (r: FileReport) => {
@@ -450,9 +471,17 @@ const SubmitTicket: React.FC = () => {
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
+  // Clear a single field's error as the user types/changes it
+  const clearError = (field: keyof FormErrors) =>
+    setFormErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
+
   const handleSubmit = async () => {
-    const err = validateForm(form);
-    if (err) { setFormError(err); return; }
+    const errors = validateForm(form);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     setSubmitting(true);
 
     const payload = {
@@ -470,7 +499,11 @@ const SubmitTicket: React.FC = () => {
         .insert({ ...payload, status: "Pending" })
         .select("id, ticket_number")
         .single();
-      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFormErrors({ title: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       if (row?.id && form.assigned_to.length > 0) {
         await notifyTicketAssignees(supabase, form.assigned_to, {
           ticketId: row.id,
@@ -489,7 +522,11 @@ const SubmitTicket: React.FC = () => {
     } else if (modalMode === "edit" && selected) {
       const prevAssigned = Array.isArray(selected.assigned_to) ? selected.assigned_to : [];
       const { error } = await supabase.from("file_reports").update(payload).eq("id", selected.id);
-      if (error) { setFormError(friendlyError(error.message)); setSubmitting(false); return; }
+      if (error) {
+        setFormErrors({ title: friendlyError(error.message) });
+        setSubmitting(false);
+        return;
+      }
       const added = diffNewAssignees(prevAssigned, form.assigned_to);
       if (added.length > 0) {
         await notifyTicketAssignees(supabase, added, {
@@ -557,7 +594,6 @@ const SubmitTicket: React.FC = () => {
         .ticket-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 140px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
         @media (max-width: 1024px) { .ticket-stat-cards { grid-template-columns: repeat(2, 1fr) !important; } }
         @media (max-width: 480px) { .ticket-stat-cards { grid-template-columns: 1fr !important; } .ticket-header-row { flex-direction: column; align-items: flex-start !important; } }
-        .tech-picker-btn:not(:disabled):hover { background: rgba(10,76,134,0.06) !important; }
       `}</style>
 
       <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
@@ -726,9 +762,10 @@ const SubmitTicket: React.FC = () => {
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.9rem" }}>
 
-                <div style={{ gridColumn: "span 2" }}>
+                {/* ── Issue Type (pill selector — always has a default, no FieldError needed) ── */}
+                <div style={{ gridColumn: "span 2", marginBottom: "0.5rem" }}>
                   <label style={labelStyle}>Issue Type <span style={{ color: "#dc2626" }}>*</span></label>
                   <div className="ticket-issue-pills">
                     {ISSUE_TYPES.map(type => {
@@ -736,7 +773,7 @@ const SubmitTicket: React.FC = () => {
                       const cls = type === "Hardware" ? "active-hw" : type === "Software" ? "active-sw" : "active-net";
                       return (
                         <button key={type} type="button" className={`ticket-issue-pill${active ? ` ${cls}` : ""}`}
-                          onClick={() => { setForm(f => ({ ...f, issue_type: type })); setFormError(""); }}>
+                          onClick={() => setForm(f => ({ ...f, issue_type: type }))}>
                           {ISSUE_TYPE_CONFIG[type].icon} {type}
                         </button>
                       );
@@ -744,38 +781,66 @@ const SubmitTicket: React.FC = () => {
                   </div>
                 </div>
 
+                {/* ── Problem / Title ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input value={form.title} onChange={e => { setForm(f => ({ ...f, title: e.target.value })); setFormError(""); }}
-                    placeholder="Brief description of the issue" maxLength={150}
-                    style={{ ...inputStyle, borderColor: formError && !form.title.trim() ? "#fca5a5" : "#e2e8f0" }} />
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, textAlign: "right" }}>{form.title.length}/150</div>
+                  <input
+                    value={form.title}
+                    onChange={e => { setForm(f => ({ ...f, title: e.target.value })); clearError("title"); }}
+                    placeholder="Brief description of the issue"
+                    maxLength={150}
+                    style={{ ...inputStyle, borderColor: formErrors.title ? "#fca5a5" : "#e2e8f0" }}
+                  />
+                  {/* Row: error left, char count right — both always reserve space */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <FieldError msg={formErrors.title} />
+                    <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0, paddingTop: 3 }}>
+                      {form.title.length}/150
+                    </span>
+                  </div>
                 </div>
 
+                {/* ── Employee Name ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input value={form.employee_name} onChange={e => { setForm(f => ({ ...f, employee_name: e.target.value })); setFormError(""); }}
-                    placeholder="e.g. Juan Dela Cruz" maxLength={100}
-                    style={{ ...inputStyle, borderColor: formError && !form.employee_name.trim() ? "#fca5a5" : "#e2e8f0" }} />
+                  <input
+                    value={form.employee_name}
+                    onChange={e => { setForm(f => ({ ...f, employee_name: e.target.value })); clearError("employee_name"); }}
+                    placeholder="e.g. Juan Dela Cruz"
+                    maxLength={100}
+                    style={{ ...inputStyle, borderColor: formErrors.employee_name ? "#fca5a5" : "#e2e8f0" }}
+                  />
+                  <FieldError msg={formErrors.employee_name} />
                 </div>
 
+                {/* ── Department ── */}
                 <div>
                   <label style={labelStyle}>Department/Office <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select value={form.department_id} onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); setFormError(""); }}
-                    style={{ ...selectStyle, borderColor: formError && !form.department_id ? "#fca5a5" : "#e2e8f0" }}>
+                  <select
+                    value={form.department_id}
+                    onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
+                    style={{ ...selectStyle, borderColor: formErrors.department_id ? "#fca5a5" : "#e2e8f0" }}
+                  >
                     <option value="">— Select department —</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
+                  <FieldError msg={formErrors.department_id} />
                 </div>
 
+                {/* ── Date Submitted ── */}
                 <div>
                   <label style={labelStyle}>Date Submitted <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input type="date" value={form.date_submitted} max={today}
-                    onChange={e => { setForm(f => ({ ...f, date_submitted: e.target.value })); setFormError(""); }}
-                    style={{ ...inputStyle, borderColor: formError && !form.date_submitted ? "#fca5a5" : "#e2e8f0" }} />
+                  <input
+                    type="date"
+                    value={form.date_submitted}
+                    max={today}
+                    onChange={e => { setForm(f => ({ ...f, date_submitted: e.target.value })); clearError("date_submitted"); }}
+                    style={{ ...inputStyle, borderColor: formErrors.date_submitted ? "#fca5a5" : "#e2e8f0" }}
+                  />
+                  <FieldError msg={formErrors.date_submitted} />
                 </div>
 
-                {/* ── Technician Picker with load-awareness ── */}
+                {/* ── Technician Picker ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color="#475569" /> Assign IT Technician
@@ -804,27 +869,18 @@ const SubmitTicket: React.FC = () => {
                   <TechnicianPicker
                     users={itStaff}
                     selected={form.assigned_to}
-                    onChange={ids => { setForm(f => ({ ...f, assigned_to: ids })); setFormError(""); }}
-                    hasError={!!(formError && form.assigned_to.length === 0)}
+                    onChange={ids => { setForm(f => ({ ...f, assigned_to: ids })); clearError("assigned_to"); }}
+                    hasError={!!formErrors.assigned_to}
                     loadMap={technicianLoadMap}
                     editingTicketId={modalMode === "edit" ? selected?.id ?? null : null}
                   />
-
-                  {/* Helper note */}
-                  <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0" }}>
-                    Technicians with {MAX_ACTIVE_TICKETS} active (Pending or In Progress) tickets are grayed out and cannot be assigned.
-                  </p>
+                  <FieldError msg={formErrors.assigned_to} />
                 </div>
 
               </div>
 
-              {formError && (
-                <div style={{ marginTop: "0.85rem", padding: "0.55rem 0.8rem", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  <AlertTriangle size={13} /> {formError}
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
+              {/* ── Actions (no global error banner) ── */}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.2rem" }}>
                 <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                   Cancel
                 </button>
@@ -854,8 +910,8 @@ const SubmitTicket: React.FC = () => {
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Ticket Information</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
-                  { label: "Name of Employee",  value: selected.employee_name,                icon: <User size={12} /> },
-                  { label: "Department/Office", value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
+                  { label: "Name of Employee",  value: selected.employee_name,                    icon: <User size={12} /> },
+                  { label: "Department/Office", value: getDepartmentName(selected.department_id),  icon: <Building2 size={12} /> },
                   { label: "Submitted",         value: new Date(selected.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }), icon: <Clock size={12} /> },
                   { label: "Assigned To",       value: <TechnicianChips names={(selected.assigned_to ?? []).map(id => userMap[id]?.full_name).filter(Boolean) as string[]} />, icon: <Users size={12} /> },
                 ].map(row => (

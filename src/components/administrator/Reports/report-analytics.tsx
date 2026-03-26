@@ -247,7 +247,6 @@ type FileReportRow = {
   id: string;
   ticket_number: string | null;
   title: string;
-  description: string | null;
   status: string;
   department_id: string;
   issue_type: string | null;
@@ -278,7 +277,7 @@ function fmtTableDate(iso: string): string {
 const statusColors: Record<string, { bg: string; color: string }> = {
   Resolved: { bg: "rgba(22,163,74,0.12)", color: "#15803d" },
   "In Progress": { bg: "rgba(234,179,8,0.12)", color: "#a16207" },
-  Pending: { bg: "rgba(220,38,38,0.12)", color: "#b91c1c" },
+  Pending: { bg: "rgba(59,130,246,0.10)", color: "#475569" },
 };
 
 type DonutSeg = { label: string; value: number; color: string };
@@ -383,7 +382,7 @@ const ReportAnalytics: React.FC = () => {
       supabase
         .from("file_reports")
         .select(
-          "id, ticket_number, title, description, status, department_id, issue_type, date_submitted, created_at"
+          "id, ticket_number, title, status, department_id, issue_type, date_submitted, created_at"
         )
         .gte("date_submitted", startISO)
         .lte("date_submitted", endISO)
@@ -517,7 +516,6 @@ const ReportAnalytics: React.FC = () => {
       id: t.ticket_number?.trim() || `TKT-${t.id.slice(0, 8).toUpperCase()}`,
       title: t.title,
       dept: deptNameById[t.department_id] ?? "—",
-      issue: (t.description ?? "").trim() || "—",
       status: t.status,
       date: fmtTableDate(t.date_submitted),
     }));
@@ -707,7 +705,7 @@ const ReportAnalytics: React.FC = () => {
               <table className="ra-table">
                 <thead>
                   <tr>
-                    {["Ticket ID", "Title", "Department", "Description", "Status", "Date"].map(h => (
+                    {["Ticket ID", "Title", "Department", "Status", "Date"].map(h => (
                       <th key={h}>{h}</th>
                     ))}
                   </tr>
@@ -730,9 +728,6 @@ const ReportAnalytics: React.FC = () => {
                           <td style={{ fontWeight: 600, color: brandBlue }}>{t.id}</td>
                           <td style={{ maxWidth: 160 }}>{t.title}</td>
                           <td style={{ color: "#6b7280" }}>{t.dept}</td>
-                          <td style={{ color: "#4b5563", maxWidth: 220, wordBreak: "break-word" }}>
-                            {t.issue.length > 120 ? `${t.issue.slice(0, 120)}…` : t.issue}
-                          </td>
                           <td>
                             <span className="ra-badge" style={{ background: bg, color }}>
                               {t.status}
