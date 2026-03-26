@@ -573,10 +573,10 @@ const Header: React.FC<HeaderProps> = ({
               You're about to sign out of the IT Helpdesk Ticketing system. Any unsaved changes will be lost.
             </p>
             <div className="hdr-dialog-actions">
-              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)}>Stay</button>
-              <button className="hdr-btn-confirm" onClick={confirmLogout}>
+              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)} style={{fontFamily: "'Poppins', sans-serid=f", fontSize: 13, fontWeight: 600}}>Stay</button>
+              <button className="hdr-btn-confirm" onClick={confirmLogout} style={{fontFamily: "'Poppins', sans-serif", fontWeight: 500, fontSize: 13}}>
                 <LogOut size={13} strokeWidth={2.2} />
-                Sign out
+                SIGN OUT
               </button>
             </div>
           </div>

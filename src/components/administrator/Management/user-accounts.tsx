@@ -482,8 +482,8 @@ export default function UserAccounts() {
             </h2>
           <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>Passwords are stored as bcrypt hashes.</div>
         </div>
-        <button onClick={openAdd} style={{ display: "inline-flex", gap: 8, alignItems: "center", border: "none", background: BRAND, color: "#fff", padding: "0.55rem 0.9rem", borderRadius: 10, cursor: "pointer", fontWeight: 700, boxShadow: "0 4px 12px rgba(10,76,134,0.25)" }}>
-          <Plus size={16} /> Add Account
+        <button onClick={openAdd} style={{ display: "inline-flex", gap: 8, alignItems: "center", border: "none", background: BRAND, color: "#fff", padding: "0.55rem 0.9rem", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "'Poppins', sans-serif", boxShadow: "0 4px 12px rgba(10,76,134,0.25)" }}>
+          <Plus size={16} /> ADD ACCOUNT
         </button>
       </div>
 

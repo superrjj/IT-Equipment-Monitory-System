@@ -517,7 +517,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
           {!readOnly && (
             <button onClick={openAdd} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", borderRadius: 10, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
-              <Plus size={15} /> Log incoming unit
+              <Plus size={15} /> LOG INCOMING UNIT
             </button>
           )}
         </div>

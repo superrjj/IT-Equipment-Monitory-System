@@ -410,7 +410,7 @@ const Departments: React.FC = () => {
               cursor: "pointer", fontFamily: "'Poppins', sans-serif",
             }}
           >
-            <Plus size={15} /> Add Department
+            <Plus size={15} /> ADD DEPARTMENT
           </button>
         </div>
 
