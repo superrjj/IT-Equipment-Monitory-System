@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
-import { LogOut, Menu, Bell, Settings, ChevronDown } from "lucide-react";
+import { LogOut, Menu, Bell, ChevronDown, User } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
 
 const brandBlue = "#0a4c86";
@@ -785,13 +785,13 @@ const Header: React.FC<HeaderProps> = ({
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                <Settings size={15} />
+                <User size={15} />
                 My Profile
               </button>
               <button
                 type="button"
                 onClick={() => { setShowUserMenu(false); setShowConfirm(true); }}
-                style={{
+                style={{  
                   width: "100%", textAlign: "left", border: "none", background: "#fff",
                   borderRadius: 10, padding: "0.65rem 0.7rem", cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 8,
