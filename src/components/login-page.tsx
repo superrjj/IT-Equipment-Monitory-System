@@ -371,10 +371,20 @@ const BRAND = "#0a4c86";
 
 // ── Shared field error component (UA style) ────────────────────────────────
 const UAFieldError = ({ msg }: { msg?: string }) => (
-  <div className={`ua-field-error${msg ? " ua-field-error--visible" : ""}`}>
-    <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} />
-    <span>{msg ?? "placeholder"}</span>
-  </div>
+  <div style={{
+      minHeight: 18,
+      marginTop: 1,
+      fontSize: 11,
+      fontWeight: 500,
+      color: "#dc2626",
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      visibility: msg ? "visible" : "hidden",
+    }}>
+      <AlertTriangle size={10} />
+      {msg ?? "placeholder"}
+    </div>
 );
 
 // ── UA-style InputField wrapper ────────────────────────────────────────────
@@ -415,10 +425,20 @@ function UAInputField({
 
 // ── Login FieldError (original style) ─────────────────────────────────────
 const FieldError = ({ msg }: { msg?: string }) => (
-  <div className={`lp-field-error${msg ? " lp-field-error--visible" : ""}`}>
-    <AlertTriangle size={10} />
-    {msg ?? "placeholder"}
-  </div>
+ <div style={{
+     minHeight: 18,
+     marginTop: 1,
+     fontSize: 11,
+     fontWeight: 500,
+     color: "#dc2626",
+     display: "flex",
+     alignItems: "center",
+     gap: 4,
+     visibility: msg ? "visible" : "hidden",
+   }}>
+     <AlertTriangle size={10} />
+     {msg ?? "placeholder"}
+   </div>
 );
 
 export default function LoginPage() {

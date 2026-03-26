@@ -121,7 +121,7 @@ const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
       minHeight: 18,
       marginTop: 1,
       fontSize: 11,
-      fontWeight: 600,
+      fontWeight: 500,
       color: "#dc2626",
       display: "flex",
       alignItems: "center",
