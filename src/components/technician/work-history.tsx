@@ -224,7 +224,7 @@ const WorkHistory: React.FC = () => {
         {/* Page header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: 8 }}>
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, letterSpacing: 1 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
               <CheckCircle2 size={20} color="#10b981" />
               {isAdmin ? "All Resolved Tickets" : "Work History"}
             </h2>

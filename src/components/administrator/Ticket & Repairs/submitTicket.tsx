@@ -293,10 +293,11 @@ const TechnicianPicker: React.FC<{
               {u.full_name}
             </span>
             <span style={{
-              fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999,
+              fontSize: 12, fontWeight: 500, padding: "1px 7px", borderRadius: 999,
+              fontFamily: "'Poppins', sans-serif",
               background: lc.bg, color: lc.color, whiteSpace: "nowrap", flexShrink: 0,
             }}>
-              {activeCount}/{MAX_ACTIVE_TICKETS}{isFull ? " · Full" : " tickets"}
+              {activeCount}/{MAX_ACTIVE_TICKETS}{isFull ? " · Full" : " Tickets"}
             </span>
           </button>
         );
@@ -608,7 +609,7 @@ const SubmitTicket: React.FC = () => {
         {/* Header */}
         <div className="ticket-header-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif" }}>
               <FileText size={20} color={BRAND} /> Submit Ticket
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
@@ -756,7 +757,7 @@ const SubmitTicket: React.FC = () => {
             <div className="modal-box-ticket" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
                   {modalMode === "add" ? "Submit New Ticket" : "Edit Ticket"}
                 </h2>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>

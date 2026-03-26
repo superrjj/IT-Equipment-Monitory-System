@@ -343,7 +343,7 @@ const Departments: React.FC = () => {
         {/* ── Header row ── */}
         <div className="dept-header-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.2rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif"}}>
               <Building2 size={20} color={brandBlue} /> Departments
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>Manage office departments and view their support tickets.</p>
