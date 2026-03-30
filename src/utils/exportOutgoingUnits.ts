@@ -7,14 +7,13 @@ import {
 import { saveAs } from "file-saver";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export type IncomingUnitRow = {
+export type OutgoingUnitRow = {
   id: string;
-  date_received: string;
+  date_released: string;
   unit_name: string;
-  unit_cable: string | null;
-  reported_by: string;
-  received_by_user_id: string | null;
-  issue_description: string;
+  collected_by: string;
+  released_by_user_id: string | null;
+  release_notes: string;
   department_id: string | null;
   created_at: string;
   updated_at: string;
@@ -57,16 +56,16 @@ const fmtMonthLabel = (ym: string): string => {
 };
 
 /** Filter rows to a given month string "YYYY-MM", or return all if null */
-const filterByMonth = (rows: IncomingUnitRow[], monthFilter: string | null): IncomingUnitRow[] => {
+const filterByMonth = (rows: OutgoingUnitRow[], monthFilter: string | null): OutgoingUnitRow[] => {
   if (!monthFilter) return rows;
-  return rows.filter(r => r.date_received?.slice(0, 7) === monthFilter);
+  return rows.filter(r => r.date_released?.slice(0, 7) === monthFilter);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXCEL EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export function exportIncomingUnitsToExcel(
-  rows: IncomingUnitRow[],
+export function exportOutgoingUnitsToExcel(
+  rows: OutgoingUnitRow[],
   depts: DeptMap,
   userMap: UserMap,
   monthFilter: string | null = null
@@ -99,12 +98,12 @@ export function exportIncomingUnitsToExcel(
     C("", font(false, "1F2937", 10), fi, align("left"), noBorder);
 
   const COLS = [
-    { label: "Date Received",    wch: 18 },
+    { label: "Date Released",    wch: 18 },
     { label: "Unit",             wch: 30 },
     { label: "Name of Employee", wch: 26 },
     { label: "Office",           wch: 30 },
-    { label: "Person In Charge", wch: 26 },
-    { label: "Problem / Issue",  wch: 44 },
+    { label: "Released By", wch: 26 },
+    { label: "Release Notes",  wch: 44 },
   ];
   const NC = COLS.length;
 
@@ -145,12 +144,12 @@ export function exportIncomingUnitsToExcel(
   filtered.forEach((r, i) => {
     const fi = fill(i % 2 === 0 ? WHITE_HEX : LIGHT_HEX);
     aoa.push([
-      C(fmtDate(r.date_received),                             font(false, "475569", 10), fi, align("center"), thin),
+      C(fmtDate(r.date_released),                             font(false, "475569", 10), fi, align("center"), thin),
       C(r.unit_name,                                          font(true,  BRAND_HEX, 10), fi, align("left"),   thin),
-      C(r.reported_by,                                        font(false, "1F2937", 10), fi, align("left"),   thin),
+      C(r.collected_by,                                        font(false, "1F2937", 10), fi, align("left"),   thin),
       C(depts[r.department_id ?? ""] ?? "—",                 font(false, "1F2937", 10), fi, align("left"),   thin),
-      C(userMap[r.received_by_user_id ?? ""] ?? "—",         font(false, "1F2937", 10), fi, align("left"),   thin),
-      C(r.issue_description || "—",                          font(false, "1F2937", 10), fi, align("left"),   thin),
+      C(userMap[r.released_by_user_id ?? ""] ?? "—",         font(false, "1F2937", 10), fi, align("left"),   thin),
+      C(r.release_notes || "—",                          font(false, "1F2937", 10), fi, align("left"),   thin),
     ]);
   });
 
@@ -184,8 +183,8 @@ export function exportIncomingUnitsToExcel(
 // ═══════════════════════════════════════════════════════════════════════════════
 // WORD EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export async function exportIncomingUnitsToWord(
-  rows: IncomingUnitRow[],
+export async function exportOutgoingUnitsToWord(
+  rows: OutgoingUnitRow[],
   depts: DeptMap,
   userMap: UserMap,
   monthFilter: string | null = null
@@ -309,7 +308,7 @@ export async function exportIncomingUnitsToWord(
       spacing: { before: 60, after: 20 },
       children: [
         new TextRun({
-          text: "INCOMING UNITS LOG",
+          text: "OUTGOING UNITS LOG",
           bold: true, size: 26, color: BRAND_HEX, font: "Poppins",
         }),
       ],
@@ -345,7 +344,7 @@ export async function exportIncomingUnitsToWord(
       })
     );
   } else {
-    const chunks: IncomingUnitRow[][] = [];
+    const chunks: OutgoingUnitRow[][] = [];
     for (let i = 0; i < filtered.length; i += MAX_ROWS_PER_PAGE) {
       chunks.push(filtered.slice(i, i + MAX_ROWS_PER_PAGE));
     }
@@ -374,24 +373,24 @@ export async function exportIncomingUnitsToWord(
               tableHeader: true,
               height: { value: 400, rule: "atLeast" },
               children: [
-                hCell("Date Received",    COL_W[0]),
+                hCell("Date Released",    COL_W[0]),
                 hCell("Unit",             COL_W[1]),
                 hCell("Name of Employee", COL_W[2]),
                 hCell("Office",           COL_W[3]),
-                hCell("Person In Charge", COL_W[4]),
-                hCell("Problem / Issue",  COL_W[5]),
+                hCell("Released By", COL_W[4]),
+                hCell("Release Notes",  COL_W[5]),
               ],
             }),
             // ── Data rows ────────────────────────────────────────────────────
             ...chunk.map((r) =>
               new TableRow({
                 children: [
-                  dCell(fmtDate(r.date_received),                         COL_W[0], { center: true }),
+                  dCell(fmtDate(r.date_released),                         COL_W[0], { center: true }),
                   dCell(r.unit_name,                                       COL_W[1], { bold: false, color: BRAND_HEX, center: true }),
-                  dCell(r.reported_by,                                     COL_W[2], { center: true}),
+                  dCell(r.collected_by,                                     COL_W[2], { center: true}),
                   dCell(depts[r.department_id ?? ""]         ?? "—",      COL_W[3], { center: true}),
-                  dCell(userMap[r.received_by_user_id ?? ""] ?? "—",      COL_W[4], {center: true}),
-                  dCell(r.issue_description || "—",                        COL_W[5], {center: true}),
+                  dCell(userMap[r.released_by_user_id ?? ""] ?? "—",      COL_W[4], {center: true}),
+                  dCell(r.release_notes || "—",                        COL_W[5], {center: true}),
                 ],
               })
             ),
@@ -435,6 +434,6 @@ export async function exportIncomingUnitsToWord(
 
   const buffer   = await Packer.toBlob(doc);
   const suffix   = monthFilter ? `_${monthFilter}` : `_${todayLong().replace(/\//g, "-")}`;
-  const filename = `Incoming_Units_Log${suffix}.docx`;
+  const filename = `Outgoing_Units_Log${suffix}.docx`;
   saveAs(buffer, filename);
 }

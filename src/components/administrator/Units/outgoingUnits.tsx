@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
   ChevronLeft, ChevronRight, Package,
   Clock, User, Users, CircleArrowUp, Building2,
+  FileSpreadsheet, FileText, Loader, Calendar,
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
@@ -12,6 +13,11 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
+
+import {
+  exportOutgoingUnitsToExcel,
+  exportOutgoingUnitsToWord,
+} from "../../../utils/exportOutgoingUnits";
 
 type SortField = "date_released" | "unit_name" | "collected_by";
 type SortDir = "asc" | "desc";
@@ -44,6 +50,7 @@ type FormState = {
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 const BRAND = "#0a4c86";
+const GREEN = "#16a34a";
 const PAGE_SIZE = 10;
 
 function sanitize(val: string): string {
@@ -115,22 +122,35 @@ const emptyForm = (): FormState => ({
   department_id: "",
 });
 
-// ── Per-field error — visibility:hidden keeps space, no layout shift ───────────
+const buildMonthOptions = (rows: OutgoingUnitRow[]): string[] => {
+  const set = new Set<string>();
+  rows.forEach(r => { if (r.date_released) set.add(r.date_released.slice(0, 7)); });
+  return Array.from(set).sort((a, b) => b.localeCompare(a));
+};
+
+const fmtMonthLabel = (ym: string): string => {
+  const [year, month] = ym.split("-");
+  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", {
+    year: "numeric", month: "long",
+  });
+};
+
+// ── Per-field error — visibility:hidden keeps space, no layout shift ──────────
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
-   <div style={{
-      minHeight: 18,
-      marginTop: 1,
-      fontSize: 11,
-      fontWeight: 500,
-      color: "#dc2626",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      visibility: msg ? "visible" : "hidden",
-    }}>
-      <AlertTriangle size={10} />
-      {msg ?? "placeholder"}
-    </div>
+  <div style={{
+    minHeight: 18,
+    marginTop: 1,
+    fontSize: 11,
+    fontWeight: 500,
+    color: "#dc2626",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={10} />
+    {msg ?? "placeholder"}
+  </div>
 );
 
 const StaffSinglePicker: React.FC<{
@@ -139,19 +159,17 @@ const StaffSinglePicker: React.FC<{
   onChange: (id: string) => void;
   hasError: boolean;
 }> = ({ users, selectedId, onChange, hasError }) => (
-  <div
-    style={{
-      border: `1px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`,
-      borderRadius: 8,
-      background: hasError ? "#fff8f8" : "#f8fafc",
-      maxHeight: 160,
-      overflowY: "auto",
-      padding: "0.4rem",
-      display: "flex",
-      flexDirection: "column",
-      gap: 2,
-    }}
-  >
+  <div style={{
+    border: `1px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`,
+    borderRadius: 8,
+    background: hasError ? "#fff8f8" : "#f8fafc",
+    maxHeight: 160,
+    overflowY: "auto",
+    padding: "0.4rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  }}>
     {users.length === 0 ? (
       <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT staff found.</div>
     ) : (
@@ -176,19 +194,17 @@ const StaffSinglePicker: React.FC<{
               transition: "background 0.12s",
             }}
           >
-            <span
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                flexShrink: 0,
-                border: `1.5px solid ${active ? BRAND : "#cbd5e1"}`,
-                background: active ? BRAND : "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+            <span style={{
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              flexShrink: 0,
+              border: `1.5px solid ${active ? BRAND : "#cbd5e1"}`,
+              background: active ? BRAND : "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
               {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
             </span>
             <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
@@ -203,27 +219,43 @@ const StaffSinglePicker: React.FC<{
 );
 
 const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
-  const [rows, setRows] = useState<OutgoingUnitRow[]>([]);
-  const [itStaff, setItStaff] = useState<UserOption[]>([]);
+  const [rows, setRows]               = useState<OutgoingUnitRow[]>([]);
+  const [itStaff, setItStaff]         = useState<UserOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState<SortField>("date_released");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [page, setPage] = useState(1);
-  const [modalMode, setModalMode] = useState<ModalMode>(null);
-  const [selected, setSelected] = useState<OutgoingUnitRow | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [sortField, setSortField]     = useState<SortField>("date_released");
+  const [sortDir, setSortDir]         = useState<SortDir>("desc");
+  const [page, setPage]               = useState(1);
+  const [modalMode, setModalMode]     = useState<ModalMode>(null);
+  const [selected, setSelected]       = useState<OutgoingUnitRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OutgoingUnitRow | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm());
+  const [form, setForm]               = useState<FormState>(emptyForm());
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [submitting, setSubmitting]   = useState(false);
+  const [exporting, setExporting]     = useState<"excel" | "word" | null>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportMonth, setExportMonth] = useState<string>("");
+  const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
+  // ── Close export menu on outside click ──────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node))
+        setExportMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ── Derived maps ─────────────────────────────────────────────────────────────
   const userMap = useMemo(() => {
     const m: Record<string, UserOption> = {};
     itStaff.forEach(u => { m[u.id] = u; });
@@ -236,6 +268,22 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return m;
   }, [departments]);
 
+  const deptStrMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    departments.forEach(d => { m[d.id] = d.name; });
+    return m;
+  }, [departments]);
+
+  const userStrMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    itStaff.forEach(u => { m[u.id] = u.full_name; });
+    return m;
+  }, [itStaff]);
+
+  const monthOptions        = useMemo(() => buildMonthOptions(rows), [rows]);
+  const resolvedMonthFilter = exportMonth || null;
+
+  // ── Data fetching ────────────────────────────────────────────────────────────
   const fetchAll = async () => {
     setLoading(true);
     const [{ data: unitData, error: unitError }, { data: staff }, { data: depts }] = await Promise.all([
@@ -262,11 +310,12 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return () => { void supabase.removeChannel(channel); };
   }, [sortField, sortDir]);
 
+  // ── Table data ───────────────────────────────────────────────────────────────
   const rowsEnriched = useMemo(
     () => rows.map(r => ({
       ...r,
-      releaser_name: r.released_by_user_id ? userMap[r.released_by_user_id]?.full_name ?? "—" : "—",
-      department_name: r.department_id ? deptMap[r.department_id]?.name ?? "—" : "—",
+      releaser_name:   r.released_by_user_id ? (userMap[r.released_by_user_id]?.full_name ?? "—") : "—",
+      department_name: r.department_id        ? (deptMap[r.department_id]?.name            ?? "—") : "—",
     })),
     [rows, userMap, deptMap]
   );
@@ -281,7 +330,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   }, [rowsEnriched, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => setPage(1), [search]);
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
@@ -293,11 +342,12 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const SortIcon = ({ field }: { field: SortField }) => (
     <span style={{ display: "inline-flex", flexDirection: "column", marginLeft: 4, verticalAlign: "middle" }}>
-      <ChevronUp size={10} color={sortField === field && sortDir === "asc" ? BRAND : "#cbd5e1"} />
+      <ChevronUp   size={10} color={sortField === field && sortDir === "asc"  ? BRAND : "#cbd5e1"} />
       <ChevronDown size={10} color={sortField === field && sortDir === "desc" ? BRAND : "#cbd5e1"} />
     </span>
   );
 
+  // ── Modal helpers ────────────────────────────────────────────────────────────
   const closeModal = () => {
     setModalMode(null);
     setSelected(null);
@@ -312,12 +362,12 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     closeModal();
     setSelected(r);
     setForm({
-      date_released: r.date_released.slice(0, 10),
-      unit_name: r.unit_name,
-      collected_by: r.collected_by,
+      date_released:       r.date_released.slice(0, 10),
+      unit_name:           r.unit_name,
+      collected_by:        r.collected_by,
       released_by_user_id: r.released_by_user_id ?? "",
-      release_notes: r.release_notes,
-      department_id: r.department_id ?? "",
+      release_notes:       r.release_notes,
+      department_id:       r.department_id ?? "",
     });
     setModalMode("edit");
   };
@@ -329,27 +379,24 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const clearError = (field: keyof FormState) =>
     setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
 
+  // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setSubmitting(true);
 
     const basePayload = {
-      date_released: new Date(form.date_released).toISOString(),
-      unit_name: sanitize(form.unit_name),
-      collected_by: sanitize(form.collected_by),
+      date_released:       new Date(form.date_released).toISOString(),
+      unit_name:           sanitize(form.unit_name),
+      collected_by:        sanitize(form.collected_by),
       released_by_user_id: form.released_by_user_id || null,
-      release_notes: sanitize(form.release_notes),
-      department_id: form.department_id || null,
+      release_notes:       sanitize(form.release_notes),
+      department_id:       form.department_id || null,
     };
 
     if (modalMode === "add") {
       const { data: inserted, error } = await supabase.from("outgoing_units").insert(basePayload).select("id").single();
-      if (error) {
-        setFieldErrors({ unit_name: friendlyError(error.message) });
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFieldErrors({ unit_name: friendlyError(error.message) }); setSubmitting(false); return; }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "outgoing_unit_created",
@@ -362,11 +409,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       const { error } = await supabase.from("outgoing_units")
         .update({ ...basePayload, updated_at: new Date().toISOString() })
         .eq("id", selected.id);
-      if (error) {
-        setFieldErrors({ unit_name: friendlyError(error.message) });
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFieldErrors({ unit_name: friendlyError(error.message) }); setSubmitting(false); return; }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "outgoing_unit_updated",
@@ -382,10 +425,11 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     fetchAll();
   };
 
+  // ── Delete ───────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const removedName = deleteTarget.unit_name;
-    const removedId = deleteTarget.id;
+    const removedId   = deleteTarget.id;
     const { error } = await supabase.from("outgoing_units").delete().eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
     else {
@@ -402,6 +446,46 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     fetchAll();
   };
 
+  // ── Export handlers ──────────────────────────────────────────────────────────
+  const handleExportExcel = () => {
+    setExportMenuOpen(false);
+    if (rows.length === 0) { showToast("No records to export.", "error"); return; }
+    setExporting("excel");
+    try {
+      exportOutgoingUnitsToExcel(rows, deptStrMap, userStrMap, resolvedMonthFilter);
+      showToast(
+        resolvedMonthFilter
+          ? `Excel exported for ${fmtMonthLabel(resolvedMonthFilter)}.`
+          : "Excel file downloaded.",
+        "success"
+      );
+    } catch {
+      showToast("Failed to export Excel.", "error");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleExportWord = async () => {
+    setExportMenuOpen(false);
+    if (rows.length === 0) { showToast("No records to export.", "error"); return; }
+    setExporting("word");
+    try {
+      await exportOutgoingUnitsToWord(rows, deptStrMap, userStrMap, resolvedMonthFilter);
+      showToast(
+        resolvedMonthFilter
+          ? `Word document exported for ${fmtMonthLabel(resolvedMonthFilter)}.`
+          : "Word document downloaded.",
+        "success"
+      );
+    } catch {
+      showToast("Failed to export Word document.", "error");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  // ── Style helpers ────────────────────────────────────────────────────────────
   const inputStyle = (hasErr?: boolean): React.CSSProperties => ({
     width: "100%",
     padding: "0.5rem 0.75rem",
@@ -423,51 +507,167 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     display: "block",
   };
 
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .ou-root, .ou-root * { box-sizing: border-box; }
-        .ou-row:hover { background: #f8fafc !important; }
-        .icon-btn-ou:hover { background: #f1f5f9 !important; }
-        .modal-overlay-ou { animation: ouFadeIn 0.15s ease; }
-        @keyframes ouFadeIn { from { opacity: 0 } to { opacity: 1 } }
-        .modal-box-ou { animation: ouSlideUp 0.18s ease; }
-        @keyframes ouSlideUp { from { transform: translateY(16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
-        .ou-detail-row { display: flex; gap: 8px; font-size: 13px; padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
+        .ou-row:hover          { background: #f8fafc !important; }
+        .icon-btn-ou:hover     { background: #f1f5f9 !important; }
+        .ou-export-item:hover  { background: #f1f5f9 !important; }
+        .modal-overlay-ou      { animation: ouFadeIn 0.15s ease; }
+        @keyframes ouFadeIn    { from { opacity: 0 } to { opacity: 1 } }
+        .modal-box-ou          { animation: ouSlideUp 0.18s ease; }
+        @keyframes ouSlideUp   { from { transform: translateY(16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+        .ou-detail-row         { display: flex; gap: 8px; font-size: 13px; padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
         .ou-detail-row:last-child { border-bottom: none; }
-        .ou-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+        .ou-detail-label       { font-size: 12px; font-weight: 600; color: #64748b; min-width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+        @keyframes spin        { to { transform: rotate(360deg); } }
+        .ou-month-select:focus { outline: 2px solid #16a34a30; border-color: #16a34a !important; }
+        .ou-export-btn:hover:not(:disabled) { background: #15803d !important; border-color: #15803d !important; }
       `}</style>
 
       <div className="ou-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+
+        {/* Toast */}
         {toast && (
-          <div style={{ position: "fixed", top: 20, right: 24, zIndex: 9999, padding: "0.65rem 1.1rem", borderRadius: 10, fontSize: 13, fontWeight: 500, background: toast.type === "success" ? "#dcfce7" : "#fee2e2", color: toast.type === "success" ? "#15803d" : "#b91c1c", border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`, boxShadow: "0 4px 16px rgba(0,0,0,0.10)", maxWidth: 380 }}>
-            {toast.msg}
-          </div>
+          <div style={{
+            position: "fixed", top: 20, right: 24, zIndex: 9999,
+            padding: "0.65rem 1.1rem", borderRadius: 10, fontSize: 13, fontWeight: 500,
+            background: toast.type === "success" ? "#dcfce7" : "#fee2e2",
+            color:      toast.type === "success" ? "#15803d" : "#b91c1c",
+            border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.10)", maxWidth: 380,
+          }}>{toast.msg}</div>
         )}
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        {/* ── Header ──────────────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif" }}>
               <CircleArrowUp size={20} color={BRAND} /> Outgoing Units
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
-              {readOnly ? "View-only list of units released from IT (you cannot add or change records)." : "Log equipment released from the IT office after repair or service."}
+              {readOnly
+                ? "View-only list of units released from IT (you cannot add or change records)."
+                : "Log equipment released from the IT office after repair or service."}
             </p>
           </div>
-          {!readOnly && (
-            <button onClick={openAdd} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", borderRadius: 10, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
-              <Plus size={15} /> LOG OUTGOING UNIT
-            </button>
-          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+
+            {/* ── Export dropdown ──────────────────────────────────────────────── */}
+            <div ref={exportRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="ou-export-btn"
+                onClick={() => setExportMenuOpen(v => !v)}
+                disabled={!!exporting || rows.length === 0}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "0.5rem 1rem", borderRadius: 10,
+                  border: `1.5px solid ${GREEN}`,
+                  background: GREEN, color: "#fff",
+                  fontSize: 13, fontWeight: 600,
+                  cursor: exporting || rows.length === 0 ? "not-allowed" : "pointer",
+                  fontFamily: "'Poppins', sans-serif",
+                  opacity: exporting || rows.length === 0 ? 0.6 : 1,
+                  transition: "background 0.15s, opacity 0.15s",
+                }}
+              >
+                {exporting
+                  ? <Loader size={14} style={{ animation: "spin 1s linear infinite" }} />
+                  : <FileSpreadsheet size={14} />
+                }
+                Export
+                <ChevronDown size={14} />
+              </button>
+
+              {exportMenuOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0,
+                  background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+                  boxShadow: "0 8px 28px rgba(15,23,42,0.13)", zIndex: 200,
+                  minWidth: 248, overflow: "hidden",
+                }}>
+                  <div style={{
+                    padding: "0.5rem 1rem", background: "#f8fafc",
+                    borderBottom: "1px solid #e2e8f0",
+                    fontSize: 11, color: "#64748b", fontWeight: 600,
+                  }}>
+                    {rows.length} record{rows.length !== 1 ? "s" : ""} total
+                  </div>
+
+                  {/* Month filter */}
+                  <div style={{ padding: "0.65rem 1rem", borderBottom: "1px solid #f1f5f9" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <Calendar size={12} color={GREEN} />
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#475569" }}>Filter by month</span>
+                    </div>
+                    <select
+                      className="ou-month-select"
+                      value={exportMonth}
+                      onChange={e => setExportMonth(e.target.value)}
+                      style={{
+                        width: "100%", padding: "0.4rem 0.6rem",
+                        borderRadius: 7, border: "1px solid #e2e8f0",
+                        fontSize: 12, fontFamily: "'Poppins', sans-serif",
+                        color: "#0f172a", background: "#f8fafc",
+                        cursor: "pointer", outline: "none",
+                      }}
+                    >
+                      <option value="">— All records —</option>
+                      {monthOptions.map(ym => (
+                        <option key={ym} value={ym}>
+                          {fmtMonthLabel(ym)} ({rows.filter(r => r.date_released?.slice(0, 7) === ym).length})
+                        </option>
+                      ))}
+                    </select>
+                    {exportMonth && (
+                      <div style={{ marginTop: 5, fontSize: 11, color: GREEN, fontWeight: 500 }}>
+                        {rows.filter(r => r.date_released?.slice(0, 7) === exportMonth).length} record(s) will be exported
+                      </div>
+                    )}
+                  </div>
+
+                  <button type="button" className="ou-export-item" onClick={handleExportExcel}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", textAlign: "left" }}>
+                    <FileSpreadsheet size={16} color={GREEN} />
+                    Export to Excel (.xlsx)
+                  </button>
+
+                  <div style={{ height: 1, background: "#f1f5f9" }} />
+
+                  <button type="button" className="ou-export-item" onClick={handleExportWord}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", textAlign: "left" }}>
+                    <FileText size={16} color="#2563eb" />
+                    Export to Word (.docx)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Log button */}
+            {!readOnly && (
+              <button onClick={openAdd} style={{
+                display: "flex", alignItems: "center", gap: "0.4rem",
+                padding: "0.5rem 1rem", borderRadius: 10, border: "none",
+                background: BRAND, color: "#fff",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+                fontFamily: "'Poppins', sans-serif",
+              }}>
+                <Plus size={15} /> LOG OUTGOING UNIT
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Stats */}
+        {/* ── Stats ───────────────────────────────────────────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
-            { label: "Total logged", value: rows.length, color: BRAND, icon: <Package size={16} /> },
-            { label: "This list (filtered)", value: filtered.length, color: "#475569", icon: <Search size={16} /> },
+            { label: "Total logged",         value: rows.length,     color: BRAND,     icon: <Package size={16} /> },
+            { label: "This list (filtered)", value: filtered.length, color: "#475569", icon: <Search  size={16} /> },
           ].map(c => (
             <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -479,14 +679,20 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           ))}
         </div>
 
-        {/* Table */}
+        {/* ── Table ───────────────────────────────────────────────────────────── */}
         <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
           <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 320 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search unit, employee, office, notes…" style={{ ...inputStyle(), paddingLeft: 32 }} />
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search unit, employee, office, notes…"
+                style={{ ...inputStyle(), paddingLeft: 32 }}
+              />
             </div>
-            <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>Page {page}/{totalPages}</div>
+            <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
+              Page {page}/{totalPages}
+            </div>
           </div>
 
           <div style={{ overflowX: "auto" }}>
@@ -494,13 +700,13 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                   {([
-                    { label: "Date released", field: "date_released" as SortField },
-                    { label: "Unit", field: "unit_name" as SortField },
-                    { label: "Name of Employee", field: "collected_by" as SortField },
-                    { label: "Office", field: null },
-                    { label: "Released by", field: null },
-                    { label: "Solution", field: null },
-                    { label: "Actions", field: null },
+                    { label: "Date released",    field: "date_released" as SortField },
+                    { label: "Unit",             field: "unit_name"     as SortField },
+                    { label: "Name of Employee", field: "collected_by"  as SortField },
+                    { label: "Office",           field: null },
+                    { label: "Released by",      field: null },
+                    { label: "Solution",         field: null },
+                    { label: "Actions",          field: null },
                   ] as { label: string; field: SortField | null }[]).map(col => (
                     <th key={col.label} onClick={() => col.field && toggleSort(col.field)}
                       style={{ padding: "0.7rem 1rem", textAlign: "left", fontWeight: 600, color: "#475569", fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap", cursor: col.field ? "pointer" : "default", userSelect: "none" }}>
@@ -525,11 +731,11 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                     <td style={{ padding: "0.75rem 1rem" }}>
                       <div style={{ display: "flex", gap: 6 }}>
                         {(readOnly
-                          ? [{ icon: <Eye size={14} />, title: "View", fn: () => openView(r), color: BRAND }]
+                          ? [{ icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),          color: BRAND     }]
                           : [
-                              { icon: <Eye size={14} />, title: "View", fn: () => openView(r), color: BRAND },
-                              { icon: <Pencil size={14} />, title: "Edit", fn: () => openEdit(r), color: BRAND },
-                              { icon: <Trash2 size={14} />, title: "Delete", fn: () => setDeleteTarget(r), color: "#dc2626" },
+                              { icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),          color: BRAND     },
+                              { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(r),          color: BRAND     },
+                              { icon: <Trash2 size={14} />, title: "Delete", fn: () => setDeleteTarget(r),   color: "#dc2626" },
                             ]
                         ).map((btn, i) => (
                           <button key={i} title={btn.title} className="icon-btn-ou" onClick={btn.fn}
@@ -569,16 +775,17 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         </div>
 
-        {/* Add / Edit Modal */}
+        {/* ── Add / Edit Modal ─────────────────────────────────────────────────── */}
         {!readOnly && (modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}
-                >{modalMode === "add" ? "Log outgoing unit" : "Edit outgoing unit"}</h2>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
+                  {modalMode === "add" ? "Log outgoing unit" : "Edit outgoing unit"}
+                </h2>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
-            
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.9rem" }}>
 
                 {/* Date */}
@@ -593,16 +800,20 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 {/* Unit */}
                 <div>
                   <label style={labelStyle}>Unit name <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input value={form.unit_name} onChange={e => { setForm(f => ({ ...f, unit_name: e.target.value })); clearError("unit_name"); }}
-                    placeholder="e.g. Dell Latitude 5420 — Asset tag AT-1024" maxLength={200} style={inputStyle(!!fieldErrors.unit_name)} />
+                  <input value={form.unit_name}
+                    onChange={e => { setForm(f => ({ ...f, unit_name: e.target.value })); clearError("unit_name"); }}
+                    placeholder="e.g. Dell Latitude 5420 — Asset tag AT-1024" maxLength={200}
+                    style={inputStyle(!!fieldErrors.unit_name)} />
                   <FieldError msg={fieldErrors.unit_name} />
                 </div>
 
                 {/* Employee */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input value={form.collected_by} onChange={e => { setForm(f => ({ ...f, collected_by: e.target.value })); clearError("collected_by"); }}
-                    placeholder="Employee who picked up the unit" maxLength={100} style={inputStyle(!!fieldErrors.collected_by)} />
+                  <input value={form.collected_by}
+                    onChange={e => { setForm(f => ({ ...f, collected_by: e.target.value })); clearError("collected_by"); }}
+                    placeholder="Employee who picked up the unit" maxLength={100}
+                    style={inputStyle(!!fieldErrors.collected_by)} />
                   <FieldError msg={fieldErrors.collected_by} />
                 </div>
 
@@ -611,7 +822,8 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Building2 size={13} color="#475569" /> Office / Department <span style={{ color: "#dc2626" }}>*</span>
                   </label>
-                  <select value={form.department_id} onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
+                  <select value={form.department_id}
+                    onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
                     style={{ ...inputStyle(!!fieldErrors.department_id), cursor: "pointer" }}>
                     <option value="">— Select department —</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -619,7 +831,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   <FieldError msg={fieldErrors.department_id} />
                 </div>
 
-                {/* IT Staff */}
+                {/* Released by */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color="#475569" /> Released by (IT staff) <span style={{ color: "#dc2626" }}>*</span>
@@ -636,7 +848,8 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 {/* Release Notes */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Solution <span style={{ color: "#dc2626" }}>*</span></label>
-                  <textarea value={form.release_notes} onChange={e => { setForm(f => ({ ...f, release_notes: e.target.value })); clearError("release_notes"); }}
+                  <textarea value={form.release_notes}
+                    onChange={e => { setForm(f => ({ ...f, release_notes: e.target.value })); clearError("release_notes"); }}
                     placeholder="Work performed, condition on release, or other handover details…" rows={4} maxLength={2000}
                     style={{ ...inputStyle(!!fieldErrors.release_notes), resize: "vertical", lineHeight: 1.6 }} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -660,7 +873,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        {/* View Modal */}
+        {/* ── View Modal ───────────────────────────────────────────────────────── */}
         {modalMode === "view" && selected && (
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
@@ -674,12 +887,12 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Release details</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
-                {[
-                  { label: "Date released", value: fmtDate(selected.date_released), icon: <Clock size={12} /> },
-                  { label: "Name of Employee", value: selected.collected_by, icon: <User size={12} /> },
-                  { label: "Office / Department", value: selected.department_id ? deptMap[selected.department_id]?.name ?? "—" : "—", icon: <Building2 size={12} /> },
-                  { label: "Released by", value: selected.released_by_user_id ? userMap[selected.released_by_user_id]?.full_name ?? "—" : "—", icon: <Users size={12} /> },
-                ].map(row => (
+                {([
+                  { label: "Date released",      value: fmtDate(selected.date_released),                                                               icon: <Clock     size={12} /> },
+                  { label: "Name of Employee",    value: selected.collected_by,                                                                         icon: <User      size={12} /> },
+                  { label: "Office / Department", value: selected.department_id ? (deptMap[selected.department_id]?.name ?? "—") : "—",                 icon: <Building2 size={12} /> },
+                  { label: "Released by",         value: selected.released_by_user_id ? (userMap[selected.released_by_user_id]?.full_name ?? "—") : "—", icon: <Users     size={12} /> },
+                ] as { label: string; value: string; icon: React.ReactNode }[]).map(row => (
                   <div key={row.label} className="ou-detail-row">
                     <span className="ou-detail-label">{row.icon} {row.label}</span>
                     <span style={{ color: "#0f172a", flex: 1 }}>{row.value}</span>
@@ -705,7 +918,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        {/* Delete Confirm Modal */}
+        {/* ── Delete Confirm Modal ─────────────────────────────────────────────── */}
         {!readOnly && deleteTarget && (
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>
@@ -723,6 +936,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             </div>
           </div>
         )}
+
       </div>
     </>
   );
