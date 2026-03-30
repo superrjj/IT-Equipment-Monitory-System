@@ -268,7 +268,7 @@ const MyTickets: React.FC = () => {
     await insertActivityLog(supabase, {
       actorUserId: userId, action: "ticket_technician_update",
       entityType: "file_report", entityId: selected.id,
-      meta: { status: form.status, ticket_id: selected.id },
+      meta: { status: form.status, ticket_id: selected.id, ticket_number: selected.ticket_number ?? null, title: selected.title },
     });
     await notifyAdminsTicketStatusChanged(supabase, {
       ticketId: selected.id, ticketTitle: selected.title,

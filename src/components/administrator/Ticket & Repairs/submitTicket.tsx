@@ -536,7 +536,7 @@ const SubmitTicket: React.FC = () => {
         action: "ticket_created",
         entityType: "file_report",
         entityId: row?.id ?? null,
-        meta: { title: form.title },
+        meta: { title: form.title, ticket_number: row?.ticket_number ?? null, employee_name: form.employee_name },
       });
       showToast("Ticket submitted successfully.", "success");
     } else if (modalMode === "edit" && selected) {
@@ -560,7 +560,12 @@ const SubmitTicket: React.FC = () => {
         action: "ticket_updated",
         entityType: "file_report",
         entityId: selected.id,
-        meta: { new_assignees: added.length },
+        meta: {
+          new_assignees: added.length,
+          ticket_number: selected.ticket_number ?? null,
+          employee_name: selected.employee_name,
+          title: form.title,
+        },
       });
       showToast("Ticket updated successfully.", "success");
     }
