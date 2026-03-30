@@ -316,8 +316,8 @@ const SubmitTicket: React.FC = () => {
   const [search, setSearch]           = useState("");
   const [filterIssueType, setFilterIssueType] = useState("All");
   const [filterStatus, setFilterStatus]       = useState("All");
-  const [sortField, setSortField]     = useState<SortField>("date_submitted");
-  const [sortDir, setSortDir]         = useState<SortDir>("desc");
+  const [sortField, setSortField]     = useState<SortField>("status");
+  const [sortDir, setSortDir]         = useState<SortDir>("asc");
   const [page, setPage]               = useState(1);
   const [modalMode, setModalMode]     = useState<ModalMode>(null);
   const [selected, setSelected]       = useState<FileReport | null>(null);
