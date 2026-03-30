@@ -15,6 +15,7 @@ import {
   AtSign,
   X,
 } from "lucide-react";
+import { notifyAdminsSignupRequest } from "../lib/audit-notifications";
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Poppins:wght@400;500;600&display=swap');
@@ -608,6 +609,22 @@ export default function LoginPage() {
         password_hash,
       });
       if (insertError) throw new Error(insertError.message);
+      // Fetch the new request's id so we can link the notification to it
+      const { data: newReq } = await supabase
+      .from("signup_requests")
+      .select("id")
+      .ilike("username", u)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+      if (newReq?.id) {
+      await notifyAdminsSignupRequest(supabase, {
+      requestId: newReq.id,
+      fullName: create.full_name.trim(),
+      username: u,
+      });
+      }
       setCreateSent(true);
     } catch (ex: any) {
       setCreateErrors({ full_name: ex?.message ?? "Unable to submit request." });

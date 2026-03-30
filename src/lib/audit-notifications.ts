@@ -160,3 +160,22 @@ export function diffNewAssignees(prev: string[], next: string[]): string[] {
   const p = new Set(prev);
   return next.filter(id => id && !p.has(id));
 }
+
+/** Notify all active admins that a new signup request needs approval. */
+export async function notifyAdminsSignupRequest(
+supabase: Db,
+ctx: { requestId: string; fullName: string; username: string }
+): Promise<void> {
+const adminIds = await fetchActiveAdminIds(supabase);
+for (const uid of adminIds) {
+await insertNotification(supabase, {
+userId: uid,
+type: "signup_request",
+title: "New account request pending approval",
+body: `${clip(ctx.fullName, 120)} (@${clip(ctx.username, 80)}) has requested an account.`,
+entityType: "signup_request",
+entityId: ctx.requestId,
+});
+}
+dispatchNotificationsChanged();
+}

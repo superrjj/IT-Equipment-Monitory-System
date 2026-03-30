@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 import Sidebar from "../dashboard/sidebar";
 import Header from "../dashboard/header";
-import ProfileModal from "../Management/my-profiles"; // ✅ Import ProfileModal
+import ProfileModal from "../Management/my-profiles"; 
 import Departments from "../Management/department";
 import FileReports from "../Ticket & Repairs/submitTicket";
 import ReportAnalytics from "../Reports/report-analytics";
@@ -660,16 +660,23 @@ const Dashboard: React.FC = () => {
               userRole={userRole}
               avatarUrl={headerAvatarUrl}
               onMenuClick={openSidebar}
-              onNotificationNavigate={
-                isTechnician
-                  ? (entityType: string, entityId: string | null) => {
-                      if (entityType === "file_report") {
-                        if (entityId) localStorage.setItem("focus_ticket_id", entityId);
-                        setActiveLabel("My Tickets");
-                      }
-                    }
-                  : undefined
+              onNotificationNavigate={(entityType: string, entityId: string | null) => {
+              if (isAdmin) {
+              if (entityType === "file_report") {
+              if (entityId) localStorage.setItem("focus_ticket_id", entityId);
+              setActiveLabel("Submit Ticket");
+              } else if (entityType === "repair") {
+              setActiveLabel("Repair History");
+              } else if (entityType === "signup_request") {
+              setActiveLabel("User Accounts");
               }
+              } else if (isTechnician) {
+              if (entityType === "file_report") {
+              if (entityId) localStorage.setItem("focus_ticket_id", entityId);
+              setActiveLabel("My Tickets");
+              }
+              }
+              }}
               onOpenProfile={() => setShowProfileModal(true)} // ✅ Open modal instead of navigate
             />
           </div>
