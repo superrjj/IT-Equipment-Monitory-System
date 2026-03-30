@@ -270,8 +270,14 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       { data: depts },
     ] = await Promise.all([
       supabase.from("incoming_units").select("*").order(sortField, { ascending: sortDir === "asc" }).eq("is_archived", false),
-      supabase.from("user_accounts").select("id, full_name, role").eq("is_active", true).eq("role", "IT Technician").order("full_name"),
-      supabase.from("departments").select("id, name").order("name"),
+      supabase
+        .from("user_accounts")
+        .select("id, full_name, role")
+        .eq("is_active", true)
+        .eq("is_archived", false)
+        .eq("role", "IT Technician")
+        .order("full_name"),
+      supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
     ]);
     setItStaff((staff ?? []) as UserOption[]);
     setDepartments((depts ?? []) as DepartmentOption[]);

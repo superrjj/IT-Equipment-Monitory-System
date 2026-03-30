@@ -672,10 +672,10 @@ const Header: React.FC<HeaderProps> = ({
                   {notifs.filter((n) => !n.read_at).map((n) => (
                     <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
                       style={{ width: "100%", textAlign: "left", border: "none", background: "rgba(10,76,134,0.08)", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{n.type.replace(/_/g, " ")}</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginTop: 4 }}>{n.title}</div>
-                      {n.body && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{n.body}</div>}
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", fontFamily: "'Poppins', sans-serif" }}>{n.type.replace(/_/g, " ")}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.title}</div>
+                      {n.body && <div style={{ fontSize: 12, color: "#374151", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.body}</div>}
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, fontFamily: "'Poppins', sans-serif" }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
                     </button>
                   ))}
                   {notifs.some((n) => !!n.read_at) && (
@@ -684,10 +684,10 @@ const Header: React.FC<HeaderProps> = ({
                   {notifs.filter((n) => !!n.read_at).map((n) => (
                     <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
                       style={{ width: "100%", textAlign: "left", border: "none", background: "#fff", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{n.type.replace(/_/g, " ")}</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginTop: 4 }}>{n.title}</div>
-                      {n.body && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{n.body}</div>}
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", fontFamily: "'Poppins', sans-serif" }}>{n.type.replace(/_/g, " ")}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.title}</div>
+                      {n.body && <div style={{ fontSize: 12, color: "#374151", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.body}</div>}
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, fontFamily: "'Poppins', sans-serif" }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
                     </button>
                   ))}
                 </>

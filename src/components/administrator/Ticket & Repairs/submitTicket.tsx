@@ -246,7 +246,7 @@ const TechnicianPicker: React.FC<{
       padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2,
     }}>
       {users.length === 0 ? (
-        <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Staff found.</div>
+        <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Technician found.</div>
       ) : users.map(u => {
         const isSelected  = selected.includes(u.id);
         const rawCount    = loadMap[u.id] ?? 0;
@@ -361,8 +361,14 @@ const SubmitTicket: React.FC = () => {
       supabase.from("file_reports").select("*")
       .eq("is_archived", false)    
       .order(sortField, { ascending: sortDir === "asc" }),
-      supabase.from("departments").select("id, name").order("name"),
-      supabase.from("user_accounts").select("id, full_name, role").eq("is_active", true).eq("role", "IT Technician").order("full_name"),
+      supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
+      supabase
+        .from("user_accounts")
+        .select("id, full_name, role")
+        .eq("is_active", true)
+        .eq("is_archived", false)
+        .eq("role", "IT Technician")
+        .order("full_name"),
     ]);
     setDepartments((depts ?? []) as Department[]);
     setItStaff((staff ?? []) as UserOption[]);
@@ -631,7 +637,7 @@ const SubmitTicket: React.FC = () => {
               <FileText size={20} color={BRAND} /> Submit Ticket
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
-              Report IT issues and assign them directly to IT Staff.
+              Report IT issues and assign them directly to IT Technician.
             </p>
           </div>
           <button onClick={openAdd} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", borderRadius: 10, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>

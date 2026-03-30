@@ -17,16 +17,14 @@ const supabase = createClient(
 
 const brandBlue = "#0a4c86";
 
-const DEPT_BAR_COLORS = [
-  brandBlue,
-  "#0369a1",
-  "#0891b2",
-  "#16a34a",
-  "#ca8a04",
-  "#9333ea",
-  "#dc2626",
-  "#64748b",
-];
+function hashDeptColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 65%, 48%)`;
+}
 
 const ISSUE_DONUT_COLORS: Record<string, string> = {
   Hardware: brandBlue,
@@ -483,11 +481,11 @@ const ReportAnalytics: React.FC = () => {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-    return rows.map((row, i) => ({
-      name: row.name,
-      count: row.count,
-      color: DEPT_BAR_COLORS[i % DEPT_BAR_COLORS.length],
-    }));
+   return rows.map((row) => ({
+        name: row.name,
+        count: row.count,
+        color: hashDeptColor(row.name),
+      }));
   }, [tickets, deptNameById]);
 
   const maxDept = Math.max(1, ...deptTickets.map(d => d.count));

@@ -262,7 +262,7 @@ const Repairs: React.FC = () => {
         .from("user_accounts")
         .select("id, full_name, role")
         .eq("is_active", true)
-        .in("role", ["IT Staff", "IT Technician"])
+        .eq("role", "IT Technician")
         .order("full_name"),
     ]);
     setTickets((tix ?? []) as TicketOption[]);

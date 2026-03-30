@@ -97,17 +97,20 @@ const KPI: React.FC<{
 };
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
-const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data, color }) => {
-  const max = Math.max(...data, 1);
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data }) => {
+  const days = ["Mon", "Tue", "Wed", "Thu"];
+  const sliced = data.slice(0, 4);
+  const max = Math.max(...sliced, 1);
+  const dayColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b"];
+
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 56 }}>
-      {data.map((v, i) => (
+      {sliced.map((v, i) => (
         <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <div style={{
             width: "100%",
             height: `${Math.max((v / max) * 44, 4)}px`,
-            background: i === data.length - 1 ? color : `${color}50`,
+            background: dayColors[i],
             borderRadius: 4,
           }} />
           <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 500 }}>{days[i]}</span>
@@ -174,6 +177,16 @@ const HorizBar: React.FC<{ label: string; value: number; max: number; color: str
     </div>
   );
 };
+
+
+function hashDeptColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 65%, 48%)`;
+}
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 function buildDashData(tickets: any[], incoming: any[], outgoing: any[], depts: any[]): DashData {
@@ -500,10 +513,10 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
                         <td style={{ padding: "0.6rem 0.5rem" }}>
                           <div style={{ fontWeight: 600, color: "#374151", fontSize: 13 }}>{row.name}</div>
                           <div style={{ height: 3, background: "#f1f5f9", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${pct}%`, background: "#8b5cf6", borderRadius: 2 }} />
+                            <div style={{ height: "100%", width: `${pct}%`, background: hashDeptColor(row.name), borderRadius: 2 }} />
                           </div>
                         </td>
-                        <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontWeight: 800, color: "#8b5cf6", fontSize: 15 }}>{row.tickets}</td>
+                        <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontWeight: 800, color: hashDeptColor(row.name), fontSize: 15 }}>{row.tickets}</td>
                       </tr>
                     );
                   })}
@@ -535,8 +548,17 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const token = localStorage.getItem("session_token");
-    if (!token) navigate("/");
-  }, [navigate]);
+    const role = localStorage.getItem("session_user_role") || "";
+    const roleOk = role === "Administrator" || role === "IT Technician";
+    if (!token || !roleOk) {
+      localStorage.removeItem("session_token");
+      localStorage.removeItem("session_user_id");
+      localStorage.removeItem("session_user_full_name");
+      localStorage.removeItem("session_user_role");
+      localStorage.removeItem("session_expires_at");
+      navigate("/");
+    }
+  }, [navigate, userRole]);
 
   useEffect(() => {
     const loadHeaderAvatar = async () => {
@@ -565,6 +587,16 @@ const Dashboard: React.FC = () => {
   );
 
   const getPage = (label: string): React.ReactNode => {
+    const adminOnlyLabels = new Set([
+      "Submit Ticket",
+      "Repair History",
+      "Resolved Tickets",
+      "Departments",
+      "User Accounts",
+      "Reports & Analytics",
+    ]);
+    if (!isAdmin && adminOnlyLabels.has(label)) return dashHomeNode.current;
+
     switch (label) {
       case "Home":                return dashHomeNode.current;
       case "Submit Ticket":       return <FileReports />;
