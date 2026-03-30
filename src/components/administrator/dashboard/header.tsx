@@ -24,6 +24,22 @@ const headerStyles = `
     to   { opacity: 1; }
   }
 
+  /* ── Notifications panel scrollbar — matches sidebar style ── */
+  .hdr-notif-panel::-webkit-scrollbar {
+    width: 5px;
+    }
+    .hdr-notif-panel::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+    }
+    .hdr-notif-panel::-webkit-scrollbar-thumb {
+    background: #0a4c8655;
+    border-radius: 999px;
+    }
+    .hdr-notif-panel::-webkit-scrollbar-thumb:hover {
+    background: #0a4c86;
+    }
+
   .hdr-dialog {
     background: #ffffff;
     border-radius: 18px;
@@ -650,14 +666,19 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* ── Notifications panel ── */}
           {onNotificationNavigate && showNotifPanel && (
-            <div ref={notifPanelRef} style={{
-              position: "absolute", top: 52, right: 0,
-              width: 360, maxHeight: 520, overflowY: "auto",
-              background: "#fff", border: "1px solid #e2e8f0",
-              borderRadius: 14, boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
-              zIndex: 1200, padding: "0.75rem",
-            }}>
-
+            <div
+              ref={notifPanelRef}
+              className="hdr-notif-panel"
+              style={{
+                position: "absolute", top: 52, right: 0,
+                width: 440, maxHeight: 520, overflowY: "scroll",
+                background: "#fff", border: "1px solid #e2e8f0",
+                borderRadius: 14, boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
+                zIndex: 1200, padding: "0.75rem",
+                scrollbarWidth: "thin",
+                scrollbarColor: "#0a4c8655 #f1f5f9",
+              }}
+            >
               {/* ── Panel header with "Mark all as read" ── */}
               <div style={{
                 display: "flex", alignItems: "center",
