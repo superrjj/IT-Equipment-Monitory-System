@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
@@ -16,6 +16,24 @@ import {
   X,
 } from "lucide-react";
 import { notifyAdminsSignupRequest } from "../lib/audit-notifications";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const COUNTDOWN_KEY      = "signup_countdown_until";
+const PENDING_USER_KEY   = "signup_pending_username";
+const COUNTDOWN_SECS     = 120;
+const BRAND              = "#0a4c86";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const getSecondsLeft = () => {
+  const until = Number(localStorage.getItem(COUNTDOWN_KEY) ?? 0);
+  return Math.max(0, Math.round((until - Date.now()) / 1000));
+};
+
+const fmtTime = (s: number) => {
+  const m   = Math.floor(s / 60).toString().padStart(2, "0");
+  const sec = (s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+};
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Poppins:wght@400;500;600&display=swap');
@@ -85,21 +103,6 @@ const styles = `
   .lp-input:focus  { border-color: #0a4c86 !important; background: #fff; box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important; outline: none; }
   .lp-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
 
-  .lp-field-error {
-    min-height: 18px;
-    margin-top: 3px;
-    font-family: 'Poppins', sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    color: #dc2626;
-    display: flex;
-    align-items: flex-start;
-    gap: 4px;
-    line-height: 1.4;
-    visibility: hidden;
-  }
-  .lp-field-error--visible { visibility: visible; }
-
   .lp-pw-row {
     display: flex; justify-content: space-between; align-items: center;
   }
@@ -155,7 +158,7 @@ const styles = `
     font-size: 0.74rem; margin-top: -0.65rem;
   }
 
-  /* ── UA-style Modal (matches UserAccounts modal exactly) ── */
+  /* ── UA-style Modal ── */
   .ua-modal-overlay {
     position: fixed; inset: 0;
     background: rgba(15, 23, 42, 0.45);
@@ -172,7 +175,6 @@ const styles = `
     animation: slideUp 0.2s ease;
     font-family: 'Poppins', sans-serif;
   }
-  .ua-modal-box--sm { width: min(420px, calc(100vw - 32px)); }
   .ua-modal-header {
     padding: 1.3rem 1.4rem 1rem;
     border-bottom: 1px solid #f1f5f9;
@@ -195,24 +197,16 @@ const styles = `
   .ua-span2 { grid-column: span 2; }
 
   .ua-field-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #64748b;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-bottom: 5px;
-    display: block;
+    font-size: 11px; font-weight: 700; color: #64748b;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 5px; display: block;
   }
   .ua-input {
     width: 100%;
     padding: 0.6rem 0.75rem 0.6rem 2.25rem;
-    border-radius: 10px;
-    border: 1.5px solid #e2e8f0;
-    background: #f8fafc;
-    font-size: 13px;
-    color: #0f172a;
-    outline: none;
-    box-sizing: border-box;
+    border-radius: 10px; border: 1.5px solid #e2e8f0;
+    background: #f8fafc; font-size: 13px; color: #0f172a;
+    outline: none; box-sizing: border-box;
     font-family: 'Poppins', sans-serif;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
@@ -221,30 +215,13 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important;
     outline: none;
   }
-  .ua-input--error {
-    border-color: #fca5a5 !important;
-    background: #fff8f8 !important;
-  }
-  .ua-field-error {
-    min-height: 18px;
-    margin-top: 3px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #dc2626;
-    display: flex;
-    align-items: flex-start;
-    gap: 4px;
-    line-height: 1.4;
-    font-family: 'Poppins', sans-serif;
-    visibility: hidden;
-  }
-  .ua-field-error--visible { visibility: visible; }
+  .ua-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
 
-  .ua-btn-close:hover { background: #f1f5f9 !important; }
+  .ua-btn-close:hover  { background: #f1f5f9 !important; }
   .ua-btn-cancel:hover { background: #f8fafc !important; }
-  .ua-btn-save:hover { opacity: 0.92; }
+  .ua-btn-save:hover   { opacity: 0.92; }
 
-  /* Forgot modal (original style kept) */
+  /* Forgot modal */
   .lp-modal-overlay {
     position: fixed; inset: 0; z-index: 200;
     background: rgba(0,0,0,0.45);
@@ -278,7 +255,7 @@ const styles = `
     flex-shrink: 0; color: #0a4c86;
   }
   .lp-modal-header-text { display: flex; flex-direction: column; gap: 1px; }
-  .lp-modal-title { font-size: 0.88rem; font-weight: 700; color: #1a2e4a; line-height: 1.2; }
+  .lp-modal-title   { font-size: 0.88rem; font-weight: 700; color: #1a2e4a; line-height: 1.2; }
   .lp-modal-subtitle { font-size: 0.7rem; color: #94a3b8; font-weight: 400; }
   .lp-modal-close {
     position: absolute; top: 0.9rem; right: 0.9rem;
@@ -289,20 +266,12 @@ const styles = `
     transition: background 0.2s, color 0.2s;
   }
   .lp-modal-close:hover { background: #e2e6ed; color: #1a2e4a; }
-  .lp-modal-body { padding: 1.15rem 1.3rem; }
+  .lp-modal-body   { padding: 1.15rem 1.3rem; }
   .lp-modal-footer {
     display: flex; align-items: center; justify-content: flex-end;
     gap: 0.55rem; padding: 0.85rem 1.3rem 1.1rem;
     border-top: 1px solid #f0f2f5;
   }
-  .lp-modal-btn-cancel {
-    padding: 0.48rem 1rem; border-radius: 7px;
-    border: 1.5px solid #e2e6ed; background: transparent;
-    color: #64748b; font-family: 'Poppins', sans-serif;
-    font-size: 0.76rem; font-weight: 600; cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .lp-modal-btn-cancel:hover { background: #f7f8fa; border-color: #c8d0db; }
   .lp-modal-btn-submit {
     padding: 0.48rem 1.2rem; border-radius: 7px; border: none;
     background: #0a4c86; color: #fff;
@@ -318,22 +287,13 @@ const styles = `
     background: #f0f6ff; border: 1px solid #bfdbfe;
     border-radius: 9px; padding: 0.9rem 1rem;
   }
-  .lp-admin-notice-icon { flex-shrink: 0; margin-top: 1px; color: #0a4c86; }
-  .lp-admin-notice-text { display: flex; flex-direction: column; gap: 0.2rem; }
+  .lp-admin-notice-icon  { flex-shrink: 0; margin-top: 1px; color: #0a4c86; }
+  .lp-admin-notice-text  { display: flex; flex-direction: column; gap: 0.2rem; }
   .lp-admin-notice-title { font-size: 0.78rem; font-weight: 700; color: #1a2e4a; }
   .lp-admin-notice-desc  { font-size: 0.72rem; color: #4a5568; line-height: 1.55; }
 
-  .lp-success-msg {
-    text-align: center; padding: 0.8rem;
-    background: #f0faf5; border: 1px solid #86efac;
-    border-radius: 8px; color: #166534;
-    font-size: 0.74rem; line-height: 1.6;
-  }
-
   .lp-keep-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 1rem;
+    display: flex; align-items: center; margin-bottom: 1rem;
   }
   .lp-keep-checkbox {
     display: flex; align-items: center; gap: 0.4rem;
@@ -354,53 +314,37 @@ const styles = `
     font-size: 0.72rem; color: #6b7280;
   }
 
-  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
 
   @media (max-width: 680px) {
-    .ua-grid { grid-template-columns: 1fr; }
+    .ua-grid  { grid-template-columns: 1fr; }
     .ua-span2 { grid-column: span 1; }
   }
   @media (max-width: 600px) {
-    .lp-card { margin: 1rem; padding: 2rem 1.5rem 1.75rem; }
+    .lp-card      { margin: 1rem; padding: 2rem 1.5rem 1.75rem; }
     .lp-city-logo { width: 180px; }
     .ua-modal-box { border-radius: 16px; }
   }
 `;
 
-const BRAND = "#0a4c86";
-
-// ── Shared field error component (UA style) ────────────────────────────────
+// ── Field error components ────────────────────────────────────────────────────
 const UAFieldError = ({ msg }: { msg?: string }) => (
   <div style={{
-      minHeight: 18,
-      marginTop: 1,
-      fontSize: 11,
-      fontWeight: 500,
-      color: "#dc2626",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      visibility: msg ? "visible" : "hidden",
-    }}>
-      <AlertTriangle size={10} />
-      {msg ?? "placeholder"}
-    </div>
+    minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
+    color: "#dc2626", display: "flex", alignItems: "center", gap: 4,
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={10} />
+    {msg ?? "placeholder"}
+  </div>
 );
 
-// ── UA-style InputField wrapper ────────────────────────────────────────────
 function UAInputField({
-  label,
-  icon,
-  required,
-  error,
-  children,
+  label, icon, required, error, children,
 }: {
-  label: string;
-  icon?: React.ReactNode;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
+  label: string; icon?: React.ReactNode; required?: boolean;
+  error?: string; children: React.ReactNode;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
@@ -424,48 +368,73 @@ function UAInputField({
   );
 }
 
-// ── Login FieldError (original style) ─────────────────────────────────────
 const FieldError = ({ msg }: { msg?: string }) => (
- <div style={{
-     minHeight: 18,
-     marginTop: 1,
-     fontSize: 11,
-     fontWeight: 500,
-     color: "#dc2626",
-     display: "flex",
-     alignItems: "center",
-     gap: 4,
-     visibility: msg ? "visible" : "hidden",
-   }}>
-     <AlertTriangle size={10} />
-     {msg ?? "placeholder"}
-   </div>
+  <div style={{
+    minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
+    color: "#dc2626", display: "flex", alignItems: "center", gap: 4,
+    visibility: msg ? "visible" : "hidden",
+  }}>
+    <AlertTriangle size={10} />
+    {msg ?? "placeholder"}
+  </div>
 );
 
+// ── Countdown ring ────────────────────────────────────────────────────────────
+const CountdownRing: React.FC<{ seconds: number }> = ({ seconds }) => {
+  const r         = 34;
+  const circ      = 2 * Math.PI * r;
+  const pct       = seconds / COUNTDOWN_SECS;
+  const dashOffset = circ * (1 - pct);
+  const ringColor  = seconds > 30 ? "#0a4c86" : seconds > 10 ? "#f59e0b" : "#ef4444";
+
+  return (
+    <div style={{ position: "relative", width: 80, height: 80, margin: "0 auto 12px" }}>
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
+        <circle
+          cx="40" cy="40" r={r} fill="none"
+          stroke={ringColor} strokeWidth="6" strokeLinecap="round"
+          strokeDasharray={`${circ}`}
+          strokeDashoffset={`${dashOffset}`}
+          transform="rotate(-90 40 40)"
+          style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s" }}
+        />
+      </svg>
+      <div style={{
+        position: "absolute", inset: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 16, fontWeight: 800, color: ringColor,
+        fontFamily: "'Poppins', sans-serif",
+      }}>
+        {fmtTime(seconds)}
+      </div>
+    </div>
+  );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function LoginPage() {
-  const [identifier, setIdentifier]     = useState("");
-  const [password, setPassword]         = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showForgot, setShowForgot]     = useState(false);
-  const [loading, setLoading]           = useState(false);
-  const [showCreate, setShowCreate]     = useState(false);
-  const [creating, setCreating]         = useState(false);
-  const [createSent, setCreateSent]     = useState(false);
-  const [keepSignedIn, setKeepSignedIn] = useState(true);
+  const [identifier,    setIdentifier]    = useState("");
+  const [password,      setPassword]      = useState("");
+  const [showPassword,  setShowPassword]  = useState(false);
+  const [showForgot,    setShowForgot]    = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [creating,      setCreating]      = useState(false);
+  const [createSent,    setCreateSent]    = useState(false);
+  const [keepSignedIn,  setKeepSignedIn]  = useState(true);
+  const [secondsLeft,   setSecondsLeft]   = useState(getSecondsLeft);
+  const [approved,      setApproved]      = useState(false);
+
   const navigate = useNavigate();
 
   const [loginErrors, setLoginErrors] = useState<{
-    identifier?: string;
-    password?: string;
-    general?: string;
+    identifier?: string; password?: string; general?: string;
   }>({});
 
   const [createErrors, setCreateErrors] = useState<{
-    full_name?: string;
-    username?: string;
-    email?: string;
-    password?: string;
-    confirmPassword?: string;
+    full_name?: string; username?: string; email?: string;
+    password?: string; confirmPassword?: string;
   }>({});
 
   const [create, setCreate] = useState({
@@ -477,12 +446,47 @@ export default function LoginPage() {
     import.meta.env.VITE_SUPABASE_ANON_KEY as string
   );
 
-  // ── Login submit ───────────────────────────────────────────────────────────
+  // ── Restore pending state on mount (survives page refresh) ────────────────
+  useEffect(() => {
+    if (getSecondsLeft() > 0) {
+      setCreateSent(true);
+      setShowCreate(true);
+    }
+  }, []);
+
+  // ── Countdown tick + approval polling ────────────────────────────────────
+  useEffect(() => {
+    if (!createSent || approved) return;
+
+    const tick = setInterval(async () => {
+      setSecondsLeft(getSecondsLeft());
+
+      const pending = localStorage.getItem(PENDING_USER_KEY);
+      if (!pending) return;
+
+      const { data } = await supabase
+        .from("signup_requests")
+        .select("status")
+        .ilike("username", pending)
+        .single();
+
+      if (data?.status === "approved") {
+        setApproved(true);
+        localStorage.removeItem(COUNTDOWN_KEY);
+        localStorage.removeItem(PENDING_USER_KEY);
+        clearInterval(tick);
+      }
+    }, 1000);
+
+    return () => clearInterval(tick);
+  }, [createSent, approved]);
+
+  // ── Login ─────────────────────────────────────────────────────────────────
   const performLogin = async () => {
     const errors: typeof loginErrors = {};
     const ident = identifier.trim();
-    if (!ident) errors.identifier = "Email or username is required.";
-    if (!password) errors.password = "Password is required.";
+    if (!ident)    errors.identifier = "Email or username is required.";
+    if (!password) errors.password   = "Password is required.";
     if (Object.keys(errors).length > 0) { setLoginErrors(errors); return; }
 
     setLoginErrors({});
@@ -494,6 +498,7 @@ export default function LoginPage() {
         .or(`username.ilike.${ident},email.ilike.${ident}`)
         .limit(1);
       if (qErr) throw new Error(qErr.message);
+
       const user = (data ?? [])[0] as any | undefined;
       if (!user) {
         setLoginErrors({ identifier: "No account found with that username or email." });
@@ -511,35 +516,41 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      const ttlMs = keepSignedIn ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
+      const ttlMs     = keepSignedIn ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-      localStorage.setItem("session_token", crypto.randomUUID());
-      localStorage.setItem("session_user_id", user.id);
-      localStorage.setItem("session_user_full_name", user.full_name);
-      localStorage.setItem("session_user_role", user.role);
-      localStorage.setItem("session_expires_at", expiresAt);
+      localStorage.setItem("session_token",           crypto.randomUUID());
+      localStorage.setItem("session_user_id",         user.id);
+      localStorage.setItem("session_user_full_name",  user.full_name);
+      localStorage.setItem("session_user_role",       user.role);
+      localStorage.setItem("session_expires_at",      expiresAt);
       setTimeout(() => { navigate("/dashboard", { replace: true }); }, 3000);
     } catch (ex: any) {
-      setLoginErrors({ general: ex?.message ?? "Login failed." });
+      setLoginErrors({ general: "Something went wrong. Please try again." });
       setLoading(false);
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); await performLogin(); };
 
-  // ── Modal helpers ──────────────────────────────────────────────────────────
+  // ── Modal helpers ─────────────────────────────────────────────────────────
   const closeForgot = () => setShowForgot(false);
+
   const closeCreate = () => {
     setShowCreate(false);
     setTimeout(() => {
       setCreating(false);
-      setCreateSent(false);
+      if (approved) {
+        setCreateSent(false);
+        setApproved(false);
+        localStorage.removeItem(COUNTDOWN_KEY);
+        localStorage.removeItem(PENDING_USER_KEY);
+      }
       setCreateErrors({});
       setCreate({ full_name: "", username: "", email: "", password: "", confirmPassword: "" });
     }, 300);
   };
 
-  // ── Create account submit ──────────────────────────────────────────────────
+  // ── Create account ────────────────────────────────────────────────────────
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: typeof createErrors = {};
@@ -547,21 +558,23 @@ export default function LoginPage() {
     if (!create.full_name.trim()) errors.full_name = "Full name is required.";
 
     const u = create.username.trim();
-    if (!u) errors.username = "Username is required.";
-    else if (u.length < 3) errors.username = "Must be at least 3 characters.";
-    else if (u.length > 32) errors.username = "Must be 32 characters or less.";
-    else if (!/^[A-Za-z0-9_]+$/.test(u)) errors.username = "Letters, numbers, and underscore only.";
+    if (!u)                                errors.username = "Username is required.";
+    else if (u.length < 3)                 errors.username = "Must be at least 3 characters.";
+    else if (u.length > 32)                errors.username = "Must be 32 characters or less.";
+    else if (!/^[A-Za-z0-9_]+$/.test(u))  errors.username = "Letters, numbers, and underscore only.";
 
     const email = create.email.trim();
-    if (!email) errors.email = "Email is required.";
+    if (!email)                                          errors.email = "Email is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email address.";
 
-    if (!create.password) errors.password = "Password is required.";
+    if (!create.password)                errors.password = "Password is required.";
     else if (create.password.length < 8) errors.password = "Must be at least 8 characters.";
     else if (create.password.length > 72) errors.password = "Password is too long (max 72 chars).";
 
-    if (!create.confirmPassword) errors.confirmPassword = "Please confirm your password.";
-    else if (create.password !== create.confirmPassword) errors.confirmPassword = "Passwords do not match.";
+    if (!create.confirmPassword)
+      errors.confirmPassword = "Please confirm your password.";
+    else if (create.password !== create.confirmPassword)
+      errors.confirmPassword = "Passwords do not match.";
 
     if (Object.keys(errors).length > 0) { setCreateErrors(errors); return; }
 
@@ -571,7 +584,7 @@ export default function LoginPage() {
     const { data: uData } = await supabase
       .from("user_accounts").select("id").ilike("username", u).limit(1);
     if (uData && uData.length > 0) {
-      setCreateErrors({ username: "Username is already taken." });
+      setCreateErrors({ username: "That username is already taken." });
       setCreating(false);
       return;
     }
@@ -609,30 +622,46 @@ export default function LoginPage() {
         password_hash,
       });
       if (insertError) throw new Error(insertError.message);
-      // Fetch the new request's id so we can link the notification to it
+
+      // Fetch the new request id to link the notification
       const { data: newReq } = await supabase
-      .from("signup_requests")
-      .select("id")
-      .ilike("username", u)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+        .from("signup_requests")
+        .select("id")
+        .ilike("username", u)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
       if (newReq?.id) {
-      await notifyAdminsSignupRequest(supabase, {
-      requestId: newReq.id,
-      fullName: create.full_name.trim(),
-      username: u,
-      });
+        await notifyAdminsSignupRequest(supabase, {
+          requestId: newReq.id,
+          fullName:  create.full_name.trim(),
+          username:  u,
+        });
       }
+
+      // Persist countdown across page refreshes
+      localStorage.setItem(COUNTDOWN_KEY,    String(Date.now() + COUNTDOWN_SECS * 1000));
+      localStorage.setItem(PENDING_USER_KEY, u);
+      setSecondsLeft(COUNTDOWN_SECS);
       setCreateSent(true);
+
     } catch (ex: any) {
-      setCreateErrors({ full_name: ex?.message ?? "Unable to submit request." });
+      const msg = (ex?.message ?? "").toLowerCase();
+      if (msg.includes("duplicate") || msg.includes("unique")) {
+        setCreateErrors({ username: "That username or email is already in use." });
+      } else if (msg.includes("network") || msg.includes("fetch")) {
+        setCreateErrors({ full_name: "Network error. Please check your connection and try again." });
+      } else {
+        setCreateErrors({ full_name: "Something went wrong. Please try again in a moment." });
+      }
     } finally {
       setCreating(false);
     }
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{styles}</style>
@@ -744,7 +773,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* ══ Forgot Password Modal (original style) ══ */}
+        {/* ══ Forgot Password Modal ══ */}
         {showForgot && (
           <div className="lp-modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeForgot(); }}>
             <div className="lp-modal" role="dialog" aria-modal="true">
@@ -778,7 +807,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* ══ Create Account Modal — UA style ══ */}
+        {/* ══ Create Account Modal ══ */}
         {showCreate && (
           <div className="ua-modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeCreate(); }}>
             <div className="ua-modal-box" role="dialog" aria-modal="true">
@@ -812,78 +841,62 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {!createSent ? (
+              {/* ── State: form ── */}
+              {!createSent && (
                 <>
-                  {/* Body */}
                   <div className="ua-modal-body">
                     <div className="ua-grid">
-
-                      {/* Full Name — spans both columns */}
                       <div className="ua-span2">
                         <UAInputField label="Full Name" icon={<User size={13} />} required error={createErrors.full_name}>
                           <input
                             className={`ua-input${createErrors.full_name ? " ua-input--error" : ""}`}
-                            type="text"
-                            placeholder="e.g. Juan Dela Cruz"
+                            type="text" placeholder="e.g. Juan Dela Cruz"
                             value={create.full_name}
                             onChange={e => { setCreate(c => ({ ...c, full_name: e.target.value })); setCreateErrors(p => ({ ...p, full_name: undefined })); }}
                           />
                         </UAInputField>
                       </div>
 
-                      {/* Username */}
                       <UAInputField label="Username" icon={<AtSign size={13} />} required error={createErrors.username}>
                         <input
                           className={`ua-input${createErrors.username ? " ua-input--error" : ""}`}
-                          type="text"
-                          placeholder="e.g. juan_dc"
+                          type="text" placeholder="e.g. juan_dc"
                           value={create.username}
                           onChange={e => { setCreate(c => ({ ...c, username: e.target.value })); setCreateErrors(p => ({ ...p, username: undefined })); }}
                         />
                       </UAInputField>
 
-                      {/* Email */}
                       <UAInputField label="Email Address" icon={<Mail size={13} />} required error={createErrors.email}>
                         <input
                           className={`ua-input${createErrors.email ? " ua-input--error" : ""}`}
-                          type="email"
-                          placeholder="you@example.com"
+                          type="email" placeholder="you@example.com"
                           value={create.email}
                           onChange={e => { setCreate(c => ({ ...c, email: e.target.value })); setCreateErrors(p => ({ ...p, email: undefined })); }}
                         />
                       </UAInputField>
 
-                      {/* Password */}
                       <UAInputField label="Password" icon={<Lock size={13} />} required error={createErrors.password}>
                         <input
                           className={`ua-input${createErrors.password ? " ua-input--error" : ""}`}
-                          type="password"
-                          placeholder="Min. 8 characters"
+                          type="password" placeholder="Min. 8 characters"
                           value={create.password}
                           onChange={e => { setCreate(c => ({ ...c, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })); }}
                         />
                       </UAInputField>
 
-                      {/* Confirm Password */}
                       <UAInputField label="Confirm Password" icon={<Lock size={13} />} required error={createErrors.confirmPassword}>
                         <input
                           className={`ua-input${createErrors.confirmPassword ? " ua-input--error" : ""}`}
-                          type="password"
-                          placeholder="Repeat password"
+                          type="password" placeholder="Repeat password"
                           value={create.confirmPassword}
                           onChange={e => { setCreate(c => ({ ...c, confirmPassword: e.target.value })); setCreateErrors(p => ({ ...p, confirmPassword: undefined })); }}
                         />
                       </UAInputField>
-
                     </div>
                   </div>
-
-                  {/* Footer */}
                   <div className="ua-modal-footer">
                     <button
-                      className="ua-btn-cancel"
-                      type="button"
-                      onClick={closeCreate}
+                      className="ua-btn-cancel" type="button" onClick={closeCreate}
                       style={{
                         border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10,
                         padding: "0.55rem 1rem", cursor: "pointer", fontWeight: 700,
@@ -894,58 +907,107 @@ export default function LoginPage() {
                       Cancel
                     </button>
                     <button
-                      className="ua-btn-save"
-                      type="button"
-                      disabled={creating}
+                      className="ua-btn-save" type="button" disabled={creating}
                       onClick={handleCreateAccount as any}
                       style={{
-                        border: "none",
-                        background: creating ? "#94a3b8" : BRAND,
-                        color: "#fff", borderRadius: 10,
-                        padding: "0.55rem 1.2rem",
+                        border: "none", background: creating ? "#94a3b8" : BRAND,
+                        color: "#fff", borderRadius: 10, padding: "0.55rem 1.2rem",
                         cursor: creating ? "not-allowed" : "pointer",
-                        fontWeight: 800, fontSize: 13,
-                        fontFamily: "'Poppins', sans-serif",
+                        fontWeight: 800, fontSize: 13, fontFamily: "'Poppins', sans-serif",
                         boxShadow: creating ? "none" : "0 4px 14px rgba(10,76,134,0.28)",
-                        transition: "all 0.15s",
-                        display: "flex", alignItems: "center", gap: 6,
+                        transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6,
                       }}
                     >
                       {creating ? "Checking…" : "Submit Request"}
                     </button>
                   </div>
                 </>
-              ) : (
+              )}
+
+              {/* ── State: approved ── */}
+              {createSent && approved && (
                 <>
                   <div className="ua-modal-body">
                     <div style={{
-                      textAlign: "center", padding: "1rem",
+                      textAlign: "center", padding: "1.5rem 1rem",
                       background: "#f0fdf4", border: "1px solid #86efac",
-                      borderRadius: 12, color: "#166534",
-                      fontSize: 13, lineHeight: 1.7,
-                      fontFamily: "'Poppins', sans-serif",
+                      borderRadius: 12, fontFamily: "'Poppins', sans-serif",
                     }}>
-                      Your request has been submitted successfully.<br />
-                      You can sign in once an admin approves your account.
+                      <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#166534", marginBottom: 6 }}>
+                        Account approved!
+                      </div>
+                      <div style={{ fontSize: 12, color: "#4ade80" }}>
+                        You can now sign in with your credentials.
+                      </div>
                     </div>
                   </div>
                   <div className="ua-modal-footer">
                     <button
-                      type="button"
-                      onClick={closeCreate}
+                      type="button" onClick={closeCreate}
                       style={{
                         border: "none", background: BRAND, color: "#fff",
-                        borderRadius: 10, padding: "0.55rem 1.2rem",
-                        cursor: "pointer", fontWeight: 800, fontSize: 13,
-                        fontFamily: "'Poppins', sans-serif",
+                        borderRadius: 10, padding: "0.55rem 1.2rem", cursor: "pointer",
+                        fontWeight: 800, fontSize: 13, fontFamily: "'Poppins', sans-serif",
                         boxShadow: "0 4px 14px rgba(10,76,134,0.28)",
                       }}
                     >
-                      Back to sign in
+                      Sign in now
                     </button>
                   </div>
                 </>
               )}
+
+              {/* ── State: waiting (countdown) ── */}
+              {createSent && !approved && (
+                <>
+                  <div className="ua-modal-body">
+                    <div style={{
+                      textAlign: "center", padding: "1.5rem 1rem",
+                      background: "#f8faff", border: "1px solid #bfdbfe",
+                      borderRadius: 12, fontFamily: "'Poppins', sans-serif",
+                    }}>
+                      <div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>
+                        Request submitted!
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+                        Waiting for admin approval…
+                      </div>
+
+                      <CountdownRing seconds={secondsLeft} />
+
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+                        {secondsLeft > 0
+                          ? "Estimated wait time"
+                          : "Still waiting… the admin will approve shortly."}
+                      </div>
+                      <div style={{
+                        marginTop: 14, padding: "0.6rem 0.8rem",
+                        background: "#eff6ff", borderRadius: 8,
+                        fontSize: 11, color: "#3b82f6", lineHeight: 1.6,
+                      }}>
+                        You can close this window — your request is saved.<br />
+                        This page will update automatically when approved.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="ua-modal-footer" style={{ justifyContent: "center" }}>
+                    <button
+                      type="button" onClick={closeCreate}
+                      style={{
+                        border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10,
+                        padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 600,
+                        fontSize: 13, color: "#475569", fontFamily: "'Poppins', sans-serif",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      Close for now
+                    </button>
+                  </div>
+                </>
+              )}
+
             </div>
           </div>
         )}

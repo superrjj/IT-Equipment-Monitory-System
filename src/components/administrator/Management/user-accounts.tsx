@@ -607,7 +607,7 @@ export default function UserAccounts() {
                       />
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>{u.full_name}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{u.email}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1}}>{u.email}</div>
                       </div>
                     </div>
                   </td>
