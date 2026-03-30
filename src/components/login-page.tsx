@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   AtSign,
   X,
+  CheckCircle2,
+  Clock,  
 } from "lucide-react";
 import { notifyAdminsSignupRequest } from "../lib/audit-notifications";
 
@@ -933,7 +935,7 @@ export default function LoginPage() {
                       background: "#f0fdf4", border: "1px solid #86efac",
                       borderRadius: 12, fontFamily: "'Poppins', sans-serif",
                     }}>
-                      <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+                      <CheckCircle2 size={40} color="#16a34a" style={{ marginBottom: 10 }} />
                       <div style={{ fontSize: 15, fontWeight: 700, color: "#166534", marginBottom: 6 }}>
                         Account approved!
                       </div>
@@ -967,7 +969,7 @@ export default function LoginPage() {
                       background: "#f8faff", border: "1px solid #bfdbfe",
                       borderRadius: 12, fontFamily: "'Poppins', sans-serif",
                     }}>
-                      <div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div>
+                      <Clock size={36} color="#3b82f6" style={{ marginBottom: 10 }} />
                       <div style={{ fontSize: 15, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>
                         Request submitted!
                       </div>
