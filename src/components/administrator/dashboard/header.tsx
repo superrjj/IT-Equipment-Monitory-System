@@ -284,72 +284,6 @@ type ActorInfo = {
   avatar_url: string | null;
 };
 
-const NotifActor: React.FC<{ actor?: ActorInfo }> = ({ actor }) => {
-  if (!actor) return null;
-
-  const initials = actor.full_name
-    .split(" ")
-    .map((p) => p[0]?.toUpperCase())
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2);
-
-  return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 7,
-      marginBottom: 7,
-      marginTop: 10,
-    }}>
-      {/* Avatar */}
-      <div style={{
-        width: 26,
-        height: 26,
-        borderRadius: "50%",
-        background: "#dbeafe",
-        border: "1.5px solid #bfdbfe",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        flexShrink: 0,
-      }}>
-        {actor.avatar_url ? (
-          <img
-            src={actor.avatar_url}
-            alt={actor.full_name}
-            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
-          />
-        ) : (
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: brandBlue,
-            fontFamily: "'Poppins', sans-serif",
-            lineHeight: 1,
-          }}>
-            {initials}
-          </span>
-        )}
-      </div>
-      {/* Name */}
-      <span style={{
-        fontSize: 11,
-        fontWeight: 600,
-        color: "#374151",
-        fontFamily: "'Poppins', sans-serif",
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        maxWidth: 180,
-      }}>
-        {actor.full_name}
-      </span>
-    </div>
-  );
-};
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 type HeaderProps = {
   currentUserName: string;
@@ -731,7 +665,8 @@ const Header: React.FC<HeaderProps> = ({
           display: "flex",
           alignItems: "center",
           gap: 12,
-          padding: "8px 12px",
+          padding: "6px 10px",
+          marginBottom: 4,
           borderRadius: 10,
           border: "none",
           background: isUnread ? "#e7f0fd" : "transparent",
@@ -750,7 +685,6 @@ const Header: React.FC<HeaderProps> = ({
             width: 56, height: 56, borderRadius: "50%",
             background: "#d0e4ff",
             border: "1px solid #c8d8f0",
-            marginTop: 10,
             overflow: "hidden",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, fontWeight: 700, color: "#1877f2",
@@ -975,7 +909,7 @@ const Header: React.FC<HeaderProps> = ({
                   {notifs.some((n) => !n.read_at) && (
                     <div style={{
                       fontSize: 11, fontWeight: 700, color: "#64748b",
-                      margin: "0.5rem 0.25rem 0.4rem",
+                      margin: "0.25rem 0.25rem 0.3rem",
                       fontFamily: "'Poppins', sans-serif",
                       textTransform: "uppercase", letterSpacing: "0.07em",
                     }}>
