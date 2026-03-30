@@ -473,7 +473,6 @@ const SubmitTicket: React.FC = () => {
   };
   const openView = (r: FileReport) => { setSelected(r); setModalMode("view"); };
 
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
   // Clear a single field's error as the user types/changes it
   const clearError = (field: keyof FormErrors) =>
@@ -493,8 +492,10 @@ const SubmitTicket: React.FC = () => {
       department_id:  form.department_id,
       issue_type:     form.issue_type,
       title:          sanitize(form.title),
-      date_submitted: new Date(form.date_submitted).toISOString(),
-      assigned_to:    form.assigned_to,
+      date_submitted: modalMode === "add"
+    ? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
+    : selected!.date_submitted,
+     assigned_to:    form.assigned_to,
     };
 
     if (modalMode === "add") {
@@ -860,9 +861,9 @@ const SubmitTicket: React.FC = () => {
                   <input
                     type="date"
                     value={form.date_submitted}
-                    max={today}
+                    readOnly
                     onChange={e => { setForm(f => ({ ...f, date_submitted: e.target.value })); clearError("date_submitted"); }}
-                    style={{ ...inputStyle, borderColor: formErrors.date_submitted ? "#fca5a5" : "#e2e8f0" }}
+                    style={{ ...inputStyle, background: "#f1f5f9", color: "#94a3b8",  cursor: "not-allowed",  pointerEvents: "none", border: "1px solid #e2e8f0" }}
                   />
                   <FieldError msg={formErrors.date_submitted} />
                 </div>

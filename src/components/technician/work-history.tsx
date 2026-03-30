@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
-  Eye, Search, X, Clock, Loader,
+  Eye, Search, X, Clock, Loader, Calendar,
   BadgeAlert, User, CheckCircle2, FileSpreadsheet, FileText, ChevronDown,
 } from "lucide-react";
 import { getSessionUserId } from "../../lib/audit-notifications";
@@ -11,7 +11,6 @@ import {
   fmtDate,
   getMonthYear,
   monthSortKey,
-  buildPeriodLabel,
   type TicketRow,
   type DeptMap,
 } from "../../utils/exportWorkHistory";
@@ -22,40 +21,35 @@ const supabase = createClient(
 );
 
 const BRAND = "#0a4c86";
+const GREEN = "#16a34a";
 
-// ─── WorkHistory Component ────────────────────────────────────────────────────
 const WorkHistory: React.FC = () => {
   const userId   = getSessionUserId();
   const userRole = localStorage.getItem("session_user_role") || "";
   const isAdmin  = userRole === "Administrator";
 
-  const [rows, setRows]                           = useState<TicketRow[]>([]);
-  const [depts, setDepts]                         = useState<DeptMap>({});
-  const [loading, setLoading]                     = useState(true);
-  const [search, setSearch]                       = useState("");
-  const [selected, setSelected]                   = useState<TicketRow | null>(null);
-  const [selectedMonth, setSelectedMonth]         = useState("All");
-  const [exportMenuOpen, setExportMenuOpen]       = useState(false);
-  const [exporting, setExporting]                 = useState<"excel" | "word" | null>(null);
-  const [toast, setToast]                         = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [checkedMonths, setCheckedMonths]         = useState<Set<string>>(new Set());
-  const [monthPickerOpen, setMonthPickerOpen]     = useState(false);
+  const [rows, setRows]               = useState<TicketRow[]>([]);
+  const [depts, setDepts]             = useState<DeptMap>({});
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [selected, setSelected]       = useState<TicketRow | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState("All");
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting]     = useState<"excel" | "word" | null>(null);
+  const [exportMonth, setExportMonth] = useState<string>("");
+  const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
-  const exportRef      = useRef<HTMLDivElement>(null);
-  const monthPickerRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node))
         setExportMenuOpen(false);
-      if (monthPickerRef.current && !monthPickerRef.current.contains(e.target as Node))
-        setMonthPickerOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -106,14 +100,15 @@ const WorkHistory: React.FC = () => {
   // ── Derived data ────────────────────────────────────────────────────────────
   const availableMonths = useMemo(() => {
     const set = new Set<string>();
-    rows.forEach((r) => set.add(getMonthYear(r.completed_at)));
+    rows.forEach(r => set.add(getMonthYear(r.completed_at)));
     return Array.from(set).sort((a, b) => monthSortKey(b) - monthSortKey(a));
   }, [rows]);
 
-  // Table view filter
+  const resolvedMonthFilter = exportMonth || null;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
+    return rows.filter(r => {
       const matchSearch = !q || [r.title, r.employee_name, r.ticket_number ?? "", r.issue_type]
         .join(" ").toLowerCase().includes(q);
       const matchMonth = selectedMonth === "All" || getMonthYear(r.completed_at) === selectedMonth;
@@ -121,51 +116,19 @@ const WorkHistory: React.FC = () => {
     });
   }, [rows, search, selectedMonth]);
 
-  // Export rows: filter by checked months (empty = all)
-  const exportRows = useMemo(() =>
-    checkedMonths.size === 0
-      ? rows
-      : rows.filter((r) => checkedMonths.has(getMonthYear(r.completed_at))),
-    [rows, checkedMonths]
-  );
-
-  // Sorted checked months array passed to export functions
-  const checkedMonthsArray = useMemo(() =>
-    Array.from(checkedMonths).sort((a, b) => monthSortKey(a) - monthSortKey(b)),
-    [checkedMonths]
-  );
-
-  // Label shown in the export scope banner
-  const exportScopeLabel = useMemo(() =>
-    checkedMonths.size === 0
-      ? "All months"
-      : buildPeriodLabel(checkedMonthsArray),
-    [checkedMonths, checkedMonthsArray]
-  );
-
-  const toggleMonth = (month: string) => {
-    setCheckedMonths((prev) => {
-      const next = new Set(prev);
-      next.has(month) ? next.delete(month) : next.add(month);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    setCheckedMonths(
-      checkedMonths.size === availableMonths.length
-        ? new Set()
-        : new Set(availableMonths)
-    );
-  };
-
   // ── Export handlers ─────────────────────────────────────────────────────────
   const handleExcelExport = () => {
     setExportMenuOpen(false);
+    if (rows.length === 0) { showToast("No records to export.", "error"); return; }
     setExporting("excel");
     try {
-      exportToExcel(exportRows, depts, checkedMonthsArray);
-      showToast("Excel file downloaded!", "success");
+      exportToExcel(rows, depts, resolvedMonthFilter ? [resolvedMonthFilter] : []);
+      showToast(
+        resolvedMonthFilter
+          ? `Excel exported for ${resolvedMonthFilter}.`
+          : "Excel file downloaded!",
+        "success"
+      );
     } catch {
       showToast("Failed to export Excel.", "error");
     } finally {
@@ -175,10 +138,16 @@ const WorkHistory: React.FC = () => {
 
   const handleWordExport = async () => {
     setExportMenuOpen(false);
+    if (rows.length === 0) { showToast("No records to export.", "error"); return; }
     setExporting("word");
     try {
-      await exportToWord(exportRows, depts, checkedMonthsArray);
-      showToast("Word document downloaded!", "success");
+      await exportToWord(rows, depts, resolvedMonthFilter ? [resolvedMonthFilter] : []);
+      showToast(
+        resolvedMonthFilter
+          ? `Word exported for ${resolvedMonthFilter}.`
+          : "Word document downloaded!",
+        "success"
+      );
     } catch {
       showToast("Failed to export Word document.", "error");
     } finally {
@@ -203,7 +172,8 @@ const WorkHistory: React.FC = () => {
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .wh-row:hover          { background: #f0f7ff !important; }
         .wh-export-item:hover  { background: #f1f5f9 !important; }
-        .wh-month-item:hover   { background: #f0f7ff !important; }
+        .wh-month-select:focus { outline: 2px solid #16a34a30; border-color: #16a34a !important; }
+        .wh-export-btn:hover:not(:disabled) { background: #15803d !important; border-color: #15803d !important; }
         @keyframes spin        { to { transform: rotate(360deg); } }
       `}</style>
 
@@ -221,10 +191,10 @@ const WorkHistory: React.FC = () => {
           }}>{toast.msg}</div>
         )}
 
-        {/* Page header */}
+        {/* ── Page header ─────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: 8 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
               <CheckCircle2 size={20} color="#10b981" />
               {isAdmin ? "All Resolved Tickets" : "Work History"}
             </h2>
@@ -235,181 +205,107 @@ const WorkHistory: React.FC = () => {
             </p>
           </div>
 
-          {/* Export controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* ── Export dropdown ─────────────────────────────────────────────── */}
+          <div ref={exportRef} style={{ position: "relative" }}>
+            <button
+              type="button"
+              className="wh-export-btn"
+              onClick={() => setExportMenuOpen(v => !v)}
+              disabled={!!exporting || rows.length === 0}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0.5rem 1rem", borderRadius: 10,
+                border: `1.5px solid ${GREEN}`,
+                background: GREEN, color: "#fff",
+                fontSize: 13, fontWeight: 600,
+                cursor: exporting || rows.length === 0 ? "not-allowed" : "pointer",
+                fontFamily: "'Poppins', sans-serif",
+                opacity: exporting || rows.length === 0 ? 0.6 : 1,
+                transition: "background 0.15s, opacity 0.15s",
+              }}
+            >
+              {exporting
+                ? <Loader size={14} style={{ animation: "spin 1s linear infinite" }} />
+                : <FileSpreadsheet size={14} />
+              }
+              Export
+              <ChevronDown size={14} />
+            </button>
 
-            {/* Month multi-select picker */}
-            <div ref={monthPickerRef} style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={() => setMonthPickerOpen((v) => !v)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "0.5rem 0.9rem", borderRadius: 10,
-                  border: "1px solid #e2e8f0",
-                  background: checkedMonths.size > 0 ? "#eff6ff" : "#f8fafc",
-                  color: checkedMonths.size > 0 ? BRAND : "#475569",
-                  fontSize: 13, fontWeight: 500, cursor: "pointer",
-                  fontFamily: "'Poppins', sans-serif",
-                  transition: "all 0.15s",
-                }}
-              >
-                <span>
-                  {checkedMonths.size === 0
-                    ? "Select months to export"
-                    : checkedMonths.size === availableMonths.length
-                    ? "All months"
-                    : `${checkedMonths.size} month${checkedMonths.size !== 1 ? "s" : ""} selected`}
-                </span>
-                <ChevronDown size={13} />
-              </button>
+            {exportMenuOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", right: 0,
+                background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+                boxShadow: "0 8px 28px rgba(15,23,42,0.13)", zIndex: 200,
+                minWidth: 248, overflow: "hidden",
+              }}>
 
-              {monthPickerOpen && (
+                {/* Record count header */}
                 <div style={{
-                  position: "absolute", top: "calc(100% + 6px)", right: 0,
-                  background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
-                  boxShadow: "0 8px 28px rgba(15,23,42,0.13)", zIndex: 300,
-                  minWidth: 230, overflow: "hidden",
+                  padding: "0.5rem 1rem", background: "#f8fafc",
+                  borderBottom: "1px solid #e2e8f0",
+                  fontSize: 11, color: "#64748b", fontWeight: 600,
                 }}>
-                  {/* Header */}
-                  <div style={{
-                    padding: "0.5rem 1rem", background: "#f8fafc",
-                    borderBottom: "1px solid #f1f5f9",
-                    fontSize: 11, color: "#64748b", fontWeight: 600,
-                  }}>
-                    EXPORT SCOPE
-                  </div>
+                  {rows.length} record{rows.length !== 1 ? "s" : ""} total
+                </div>
 
-                  {/* Select all */}
-                  <div
-                    className="wh-month-item"
-                    onClick={toggleAll}
+                {/* Month filter */}
+                <div style={{ padding: "0.65rem 1rem", borderBottom: "1px solid #f1f5f9" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                    <Calendar size={12} color={GREEN} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#475569" }}>Filter by month</span>
+                  </div>
+                  <select
+                    className="wh-month-select"
+                    value={exportMonth}
+                    onChange={e => setExportMonth(e.target.value)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "0.6rem 1rem", cursor: "pointer",
-                      borderBottom: "1px solid #f1f5f9",
-                      fontSize: 13, fontWeight: 600, color: BRAND,
+                      width: "100%", padding: "0.4rem 0.6rem",
+                      borderRadius: 7, border: "1px solid #e2e8f0",
+                      fontSize: 12, fontFamily: "'Poppins', sans-serif",
+                      color: "#0f172a", background: "#f8fafc",
+                      cursor: "pointer", outline: "none",
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      readOnly
-                      checked={checkedMonths.size === availableMonths.length && availableMonths.length > 0}
-                      style={{ accentColor: BRAND, cursor: "pointer" }}
-                    />
-                    All months
-                  </div>
-
-                  {/* Individual months */}
-                  <div style={{ maxHeight: 240, overflowY: "auto" }}>
-                    {availableMonths.map((m) => (
-                      <div
-                        key={m}
-                        className="wh-month-item"
-                        onClick={() => toggleMonth(m)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 10,
-                          padding: "0.55rem 1rem", cursor: "pointer",
-                          fontSize: 13, color: "#0f172a",
-                          background: checkedMonths.has(m) ? "#eff6ff" : "transparent",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          readOnly
-                          checked={checkedMonths.has(m)}
-                          style={{ accentColor: BRAND, cursor: "pointer" }}
-                        />
-                        {m}
-                      </div>
+                    <option value="">— All records —</option>
+                    {availableMonths.map(m => (
+                      <option key={m} value={m}>
+                        {m} ({rows.filter(r => getMonthYear(r.completed_at) === m).length})
+                      </option>
                     ))}
-                  </div>
-
-                  {/* Clear */}
-                  {checkedMonths.size > 0 && (
-                    <div style={{ borderTop: "1px solid #f1f5f9", padding: "0.5rem 1rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setCheckedMonths(new Set())}
-                        style={{
-                          fontSize: 12, color: "#ef4444", background: "none",
-                          border: "none", cursor: "pointer",
-                          fontFamily: "'Poppins', sans-serif", padding: 0, fontWeight: 500,
-                        }}
-                      >
-                        Clear selection
-                      </button>
+                  </select>
+                  {exportMonth && (
+                    <div style={{ marginTop: 5, fontSize: 11, color: GREEN, fontWeight: 500 }}>
+                      {rows.filter(r => getMonthYear(r.completed_at) === exportMonth).length} record(s) will be exported
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Export dropdown */}
-            <div ref={exportRef} style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={() => setExportMenuOpen((v) => !v)}
-                disabled={!!exporting}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "0.5rem 1rem", borderRadius: 10,
-                  border: `1px solid ${BRAND}`, background: BRAND,
-                  color: "#fff", fontSize: 13, fontWeight: 600,
-                  cursor: exporting ? "not-allowed" : "pointer",
-                  fontFamily: "'Poppins', sans-serif",
-                  opacity: exporting ? 0.7 : 1,
-                  transition: "opacity 0.15s",
-                }}
-              >
-                {exporting && (
-                  <Loader size={14} style={{ animation: "spin 1s linear infinite" }} />
-                )}
-                Export
-                <ChevronDown size={14} />
-              </button>
+                <button type="button" className="wh-export-item" onClick={handleExcelExport}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", textAlign: "left" }}>
+                  <FileSpreadsheet size={16} color={GREEN} />
+                  Export to Excel (.xlsx)
+                </button>
 
-              {exportMenuOpen && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 6px)", right: 0,
-                  background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
-                  boxShadow: "0 8px 28px rgba(15,23,42,0.13)", zIndex: 200,
-                  minWidth: 218, overflow: "hidden",
-                }}>
-                  <div style={{
-                    padding: "0.5rem 1rem", background: "#f8fafc",
-                    borderBottom: "1px solid #e2e8f0", fontSize: 11,
-                    color: "#64748b", fontWeight: 600,
-                  }}>
-                    Scope: {exportScopeLabel}
-                  </div>
+                <div style={{ height: 1, background: "#f1f5f9" }} />
 
-                  <button type="button" className="wh-export-item" onClick={handleExcelExport}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", textAlign: "left" }}>
-                    <FileSpreadsheet size={16} color="#16a34a" />
-                    Export to Excel (.xlsx)
-                  </button>
-
-                  <div style={{ height: 1, background: "#f1f5f9" }} />
-
-                  <button type="button" className="wh-export-item" onClick={handleWordExport}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", textAlign: "left" }}>
-                    <FileText size={16} color="#2563eb" />
-                    Export to Word (.docx)
-                  </button>
-                </div>
-              )}
-            </div>
+                <button type="button" className="wh-export-item" onClick={handleWordExport}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", textAlign: "left" }}>
+                  <FileText size={16} color="#2563eb" />
+                  Export to Word (.docx)
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Filters */}
+        {/* ── Filters ─────────────────────────────────────────────────────────── */}
         <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", padding: "0.9rem 1rem", marginBottom: "1rem", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 360 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               placeholder="Search resolved tickets…"
               style={{ ...inputStyle, paddingLeft: 32 }}
             />
@@ -419,11 +315,11 @@ const WorkHistory: React.FC = () => {
             <span style={{ fontSize: 12, color: "#64748b", fontWeight: 500, whiteSpace: "nowrap" }}>Month:</span>
             <select
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={e => setSelectedMonth(e.target.value)}
               style={{ ...inputStyle, width: "auto", paddingRight: "1.5rem", cursor: "pointer" }}
             >
               <option value="All">All</option>
-              {availableMonths.map((m) => <option key={m} value={m}>{m}</option>)}
+              {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
 
@@ -432,12 +328,12 @@ const WorkHistory: React.FC = () => {
           </span>
         </div>
 
-        {/* Table */}
+        {/* ── Table ───────────────────────────────────────────────────────────── */}
         <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                {["ID", "Title", "Requester", "Office", "Issue Type", "Resolved On", "Actions"].map((h) => (
+                {["ID", "Title", "Requester", "Office", "Issue Type", "Resolved On", "Actions"].map(h => (
                   <th key={h} style={{ padding: "0.65rem 1rem", textAlign: "left", fontSize: 11, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>
                     {h}
                   </th>
@@ -459,7 +355,7 @@ const WorkHistory: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
+                filtered.map(r => (
                   <tr key={r.id} className="wh-row" style={{ borderBottom: "1px solid #f1f5f9", background: "#fff" }}>
                     <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: BRAND, whiteSpace: "nowrap" }}>
                       {r.ticket_number?.trim() || `TKT-${r.id.slice(0, 8).toUpperCase()}`}
@@ -484,7 +380,7 @@ const WorkHistory: React.FC = () => {
           </table>
         </div>
 
-        {/* View modal */}
+        {/* ── View modal ───────────────────────────────────────────────────────── */}
         {selected && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div style={{ background: "#fff", borderRadius: 18, padding: "1.5rem", maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
@@ -530,6 +426,7 @@ const WorkHistory: React.FC = () => {
             </div>
           </div>
         )}
+
       </div>
     </>
   );
