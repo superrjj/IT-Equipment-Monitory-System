@@ -300,7 +300,7 @@ const NotifActor: React.FC<{ actor?: ActorInfo }> = ({ actor }) => {
       alignItems: "center",
       gap: 7,
       marginBottom: 7,
-      marginTop: 5,
+      marginTop: 10,
     }}>
       {/* Avatar */}
       <div style={{
@@ -691,76 +691,150 @@ const Header: React.FC<HeaderProps> = ({
   // ── Notification item renderer ───────────────────────────────────────────
   const renderNotifItem = (n: NotificationRow) => {
     const isUnread = !n.read_at;
-    const actor = n.actor_user_id ? actorMap[n.actor_user_id] : undefined;
+    const actor = n.actor_user_id ? actorMap[String(n.actor_user_id)] : undefined;
+
+    const initials = actor?.full_name
+      .split(" ")
+      .map((p) => p[0]?.toUpperCase())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("") ?? "?";
+
+    const timeAgo = (() => {
+      const diff = Date.now() - new Date(n.created_at).getTime();
+      const m = Math.floor(diff / 60000);
+      const h = Math.floor(m / 60);
+      const d = Math.floor(h / 24);
+      if (d > 0) return `${d}d ago`;
+      if (h > 0) return `${h}h ago`;
+      if (m > 0) return `${m}m ago`;
+      return "Just now";
+    })();
+
+    // Map notification type to an icon background color + emoji-like SVG badge
+    const typeColor: Record<string, string> = {
+      ticket_assigned: "#1877f2",
+      repair_assigned: "#1877f2",
+      ticket_status_changed_admin: "#e67e22",
+      repair_status_changed_admin: "#e67e22",
+      signup_request: "#42b883",
+    };
+    const badgeBg = typeColor[n.type] ?? "#1877f2";
 
     return (
       <button
         key={n.id}
         type="button"
-        className="hdr-notif-item"
         onClick={() => { void openNotification(n); }}
         style={{
-          background: isUnread ? "rgba(10,76,134,0.07)" : "#fff",
-          border: isUnread ? "1px solid rgba(10,76,134,0.12)" : "1px solid transparent",
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "8px 12px",
+          borderRadius: 10,
+          border: "none",
+          background: isUnread ? "#e7f0fd" : "transparent",
+          cursor: "pointer",
+          textAlign: "left",
+          transition: "background 0.15s",
+          position: "relative",
+          fontFamily: "'Poppins', sans-serif",
         }}
+        onMouseEnter={e => (e.currentTarget.style.background = isUnread ? "#dce8fc" : "#f2f2f2")}
+        onMouseLeave={e => (e.currentTarget.style.background = isUnread ? "#e7f0fd" : "transparent")}
       >
-        {/* ── Type badge ── */}
-        <div style={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: "#94a3b8",
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          fontFamily: "'Poppins', sans-serif",
-          marginBottom: 2,
-        }}>
-          {n.type.replace(/_/g, " ")}
-        </div>
-
-        {/* ── Actor row (avatar + name) ── */}
-        <NotifActor actor={actor} />
-
-        {/* ── Title ── */}
-        <div style={{
-          fontSize: 13,
-          fontWeight: isUnread ? 600 : 500,
-          color: "#0f172a",
-          fontFamily: "'Poppins', sans-serif",
-          lineHeight: 1.4,
-        }}>
-          {n.title}
-        </div>
-
-        {/* ── Body ── */}
-        {n.body && (
+        {/* Avatar with badge */}
+        <div style={{ position: "relative", flexShrink: 0 }}>
           <div style={{
-            fontSize: 12,
-            color: "#374151",
-            marginTop: 4,
+            width: 56, height: 56, borderRadius: "50%",
+            background: "#d0e4ff",
+            border: "1px solid #c8d8f0",
+            marginTop: 10,
+            overflow: "hidden",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, fontWeight: 700, color: "#1877f2",
             fontFamily: "'Poppins', sans-serif",
-            lineHeight: 1.5,
+          }}>
+            {actor?.avatar_url ? (
+              <img src={actor.avatar_url} alt={actor.full_name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : initials}
+          </div>
+          {/* Type badge icon */}
+          <div style={{
+            position: "absolute", bottom: -2, right: -2,
+            width: 22, height: 22, borderRadius: "50%",
+            background: badgeBg,
+            border: "2px solid #fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              {n.type.includes("signup") ? (
+                <path d="M8 2a3 3 0 100 6 3 3 0 000-6zM3 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
+              ) : n.type.includes("status") ? (
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              ) : (
+                <path d="M2 4h12v8a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm0 0l6 5 6-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              )}
+            </svg>
+          </div>
+        </div>
+
+        {/* Text content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 13.5,
+            fontWeight: isUnread ? 700 : 500,
+            color: "#050505",
+            lineHeight: 1.35,
+            marginBottom: 3,
+            fontFamily: "'Poppins', sans-serif",
+            overflow: "hidden",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
-            overflow: "hidden",
           }}>
-            {n.body}
+            {actor?.full_name && (
+              <span style={{ fontWeight: 700 }}>{actor.full_name} </span>
+            )}
+            <span style={{ fontWeight: isUnread ? 600 : 400 }}>{n.title}</span>
           </div>
-        )}
-
-        {/* ── Timestamp ── */}
-        <div style={{
-          fontSize: 11,
-          color: "#94a3b8",
-          marginTop: 6,
-          fontFamily: "'Poppins', sans-serif",
-        }}>
-          {new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
+          {n.body && (
+            <div style={{
+              fontSize: 12,
+              color: "#65676b",
+              lineHeight: 1.4,
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitLineClamp: 1,
+              WebkitBoxOrient: "vertical",
+              fontFamily: "'Poppins', sans-serif",
+            }}>
+              {n.body}
+            </div>
+          )}
+          <div style={{
+            fontSize: 12,
+            fontWeight: isUnread ? 700 : 400,
+            color: isUnread ? "#1877f2" : "#65676b",
+            marginTop: 4,
+            fontFamily: "'Poppins', sans-serif",
+          }}>
+            {timeAgo}
+          </div>
         </div>
+
+        {/* Unread blue dot */}
+        {isUnread && (
+          <div style={{
+            width: 10, height: 10, borderRadius: "50%",
+            background: "#1877f2", flexShrink: 0,
+          }} />
+        )}
       </button>
     );
   };
-
   return (
     <>
       <style>{headerStyles}</style>
