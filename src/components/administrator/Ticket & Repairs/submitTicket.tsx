@@ -108,7 +108,7 @@ function validateForm(form: FormState): FormErrors {
   const errors: FormErrors = {};
   const title = form.title.trim();
   if (!title)                   errors.title = "Issue is required.";
-  else if (title.length < 10)    errors.title = "Must be at least 6 characters.";
+  else if (title.length < 6)    errors.title = "Must be at least 6 characters.";
   else if (title.length > 150)  errors.title = "Must be 150 characters or less.";
 
   if (!form.employee_name.trim())
@@ -432,15 +432,25 @@ const SubmitTicket: React.FC = () => {
     })),
   [reports, userMap]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return reportsWithNames.filter(r => {
-      const matchSearch    = !q || [r.title, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
-      const matchIssueType = filterIssueType === "All" || r.issue_type === filterIssueType;
-      const matchStatus    = filterStatus    === "All" || r.status      === filterStatus;
-      return matchSearch && matchIssueType && matchStatus;
-    });
-  }, [reportsWithNames, search, filterIssueType, filterStatus]);
+ const filtered = useMemo(() => {
+  const q = search.trim().toLowerCase();
+  return reportsWithNames
+        .filter(r => {
+          const matchSearch    = !q || [r.title, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
+          const matchIssueType = filterIssueType === "All" || r.issue_type === filterIssueType;
+          const matchStatus    = filterStatus    === "All" || r.status      === filterStatus;
+          return matchSearch && matchIssueType && matchStatus;
+        })
+        .sort((a, b) => {
+          // If user is sorting by status, use custom order
+          if (sortField === "status") {
+            const diff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+            return sortDir === "asc" ? diff : -diff;
+          }
+          // Otherwise keep existing sort from Supabase
+          return 0;
+        });
+    }, [reportsWithNames, search, filterIssueType, filterStatus, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -597,6 +607,12 @@ const SubmitTicket: React.FC = () => {
   const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
 
   const getDepartmentName = (id: string) => departments.find(d => d.id === id)?.name ?? id;
+
+  const STATUS_ORDER: Record<Status, number> = {
+  "Pending":     0,
+  "In Progress": 1,
+  "Resolved":    2,
+};
 
   return (
     <>

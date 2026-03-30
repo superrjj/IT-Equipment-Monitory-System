@@ -217,6 +217,22 @@ const headerStyles = `
     animation: hdrAvatarPop 0.35s cubic-bezier(0.16,1,0.3,1) both;
   }
 
+  .hdr-mark-all-btn {
+    border: none;
+    background: none;
+    color: ${brandBlue};
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    padding: 2px 6px;
+    border-radius: 6px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: opacity 0.15s;
+  }
+  .hdr-mark-all-btn:hover { opacity: 0.7; }
+
   @media (max-width: 1024px) {
     .hdr-menu-btn { display: flex; }
     .hdr-user-meta { display: none; }
@@ -277,33 +293,32 @@ const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
 }) => {
   const navigate = useNavigate();
-  const [now, setNow]               = useState(new Date());
+  const [now, setNow]                 = useState(new Date());
   const [showConfirm, setShowConfirm] = useState(false);
   const [loggingOut, setLoggingOut]   = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
-  const [notifLoading, setNotifLoading] = useState(false);
-  const [notifs, setNotifs] = useState<NotificationRow[]>([]);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const notifPanelRef = useRef<HTMLDivElement | null>(null);
-  const notifBtnRef = useRef<HTMLButtonElement | null>(null);
-  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [notifLoading, setNotifLoading]     = useState(false);
+  const [markingAll, setMarkingAll]         = useState(false);
+  const [notifs, setNotifs]                 = useState<NotificationRow[]>([]);
+  const [showUserMenu, setShowUserMenu]     = useState(false);
+  const notifPanelRef  = useRef<HTMLDivElement | null>(null);
+  const notifBtnRef    = useRef<HTMLButtonElement | null>(null);
+  const userMenuRef    = useRef<HTMLDivElement | null>(null);
   const userTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const prevUnreadRef = useRef<number>(0);
-  const avatarRef = useRef<HTMLDivElement | null>(null);
+  const prevUnreadRef  = useRef<number>(0);
+  const avatarRef      = useRef<HTMLDivElement | null>(null);
 
-  // ── Live profile state (seeded from props, kept in sync via realtime) ──────
+  // ── Live profile state ───────────────────────────────────────────────────
   const [profile, setProfile] = useState<ProfileState>({
     name: currentUserName,
     role: userRole,
     avatarUrl: avatarUrl,
   });
 
-  // Always-current ref so realtime callbacks never read stale closure values
   const profileRef = useRef<ProfileState>(profile);
   useEffect(() => { profileRef.current = profile; }, [profile]);
 
-  // Keep in sync when parent re-renders with fresh props (e.g. initial load)
   useEffect(() => {
     setProfile((prev) => ({
       name: currentUserName || prev.name,
@@ -327,93 +342,67 @@ const Header: React.FC<HeaderProps> = ({
       role: (data as any)[FIELD_ROLE] ?? userRole,
       avatarUrl: (data as any)[FIELD_AVATAR_URL] ?? avatarUrl,
     });
-  }, []); // intentionally empty — run once on mount
+  }, []);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
-  // ── FIX 2a: Listen for the "avatar-updated" custom event dispatched by
-  //    ProfileModal after a successful upload. This gives the Header an
-  //    immediate cache-busted URL so it shows the new image right away —
-  //    without waiting for the Supabase realtime payload (which carries only
-  //    the bare DB URL and would cause the browser to serve the cached image).
+  // ── Avatar updated event ─────────────────────────────────────────────────
   useEffect(() => {
     const handleAvatarUpdated = (e: Event) => {
       const freshUrl = (e as CustomEvent<{ url: string }>).detail?.url;
       if (!freshUrl) return;
-
       setProfile((p) => ({ ...p, avatarUrl: freshUrl }));
-
-      // Trigger the pop animation on the avatar element
       if (avatarRef.current) {
         avatarRef.current.classList.remove("hdr-avatar-updated");
-        void avatarRef.current.offsetWidth; // force reflow to re-trigger animation
+        void avatarRef.current.offsetWidth;
         avatarRef.current.classList.add("hdr-avatar-updated");
       }
     };
-
     window.addEventListener("avatar-updated", handleAvatarUpdated);
     return () => window.removeEventListener("avatar-updated", handleAvatarUpdated);
-  }, []); // mount once — stable handler, no deps needed
+  }, []);
 
-  // ── Realtime subscription: profile row changes ───────────────────────────
+  // ── Realtime: profile row changes ────────────────────────────────────────
   useEffect(() => {
     const uid = localStorage.getItem("session_user_id");
     if (!uid) return;
-
     const channel = supabase
       .channel("header-profile-sync")
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: PROFILE_TABLE,
-          filter: `id=eq.${uid}`,
-        },
+        { event: "UPDATE", schema: "public", table: PROFILE_TABLE, filter: `id=eq.${uid}` },
         (payload) => {
           const row = payload.new as any;
-          const current  = profileRef.current;
+          const current = profileRef.current;
           const nextName = row[FIELD_FULL_NAME] ?? current.name;
           const nextRole = row[FIELD_ROLE]       ?? current.role;
-
-        
           const rawAvatarUrl = row[FIELD_AVATAR_URL];
           let nextAvatarUrl = current.avatarUrl;
           if (rawAvatarUrl && rawAvatarUrl !== current.avatarUrl.split("?")[0]) {
-            // Avatar actually changed — apply a fresh cache-busting timestamp
             nextAvatarUrl = `${rawAvatarUrl}?t=${Date.now()}`;
-
-            // Trigger avatar pop animation
             if (avatarRef.current) {
               avatarRef.current.classList.remove("hdr-avatar-updated");
               void avatarRef.current.offsetWidth;
               avatarRef.current.classList.add("hdr-avatar-updated");
             }
           }
-
           setProfile({ name: nextName, role: nextRole, avatarUrl: nextAvatarUrl });
-
-          // Keep localStorage in sync
           if (nextName) localStorage.setItem("session_user_full_name", nextName);
           if (nextRole) localStorage.setItem("session_user_role", nextRole);
         }
       )
       .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []); // intentionally empty — subscribe once; payload carries fresh values
-
-  // ── Derived initials from live profile ──────────────────────────────────
+  // ── Derived initials ─────────────────────────────────────────────────────
   const initials = profile.name
     .split(" ")
     .map((part) => part[0]?.toUpperCase())
     .join("")
     .slice(0, 2);
 
+  // ── Notification sound ───────────────────────────────────────────────────
   const playNotificationSound = useCallback(() => {
     if (typeof window === "undefined") return;
     const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as
@@ -424,28 +413,22 @@ const Header: React.FC<HeaderProps> = ({
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.type = "sine";
       osc.frequency.value = 880;
       gain.gain.value = 0.0001;
-
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       const t = ctx.currentTime;
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-
       osc.start(t);
       osc.stop(t + 0.2);
-
-      setTimeout(() => {
-        try { ctx.close(); } catch { /* ignore */ }
-      }, 300);
-    } catch { /* ignore sound errors */ }
+      setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 300);
+    } catch { /* ignore */ }
   }, []);
 
+  // ── Unread count ─────────────────────────────────────────────────────────
   const refreshUnread = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
     if (!uid) { setUnreadNotifications(0); return; }
@@ -475,6 +458,7 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, [refreshUnread]);
 
+  // ── Fetch notifications list ─────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
     if (!uid) { setNotifs([]); return; }
@@ -494,6 +478,22 @@ const Header: React.FC<HeaderProps> = ({
     fetchNotifications();
   }, [showNotifPanel, fetchNotifications]);
 
+  // ── Mark ALL as read ─────────────────────────────────────────────────────
+  const markAllAsRead = useCallback(async () => {
+    const uid = localStorage.getItem("session_user_id");
+    if (!uid) return;
+    setMarkingAll(true);
+    await supabase
+      .from("app_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("user_id", uid)
+      .is("read_at", null);
+    await fetchNotifications();
+    refreshUnread();
+    setMarkingAll(false);
+  }, [fetchNotifications, refreshUnread]);
+
+  // ── Close panels on outside click ────────────────────────────────────────
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const t = e.target as Node;
@@ -524,6 +524,7 @@ const Header: React.FC<HeaderProps> = ({
     prevUnreadRef.current = unreadNotifications;
   }, [onNotificationNavigate, unreadNotifications, playNotificationSound]);
 
+  // ── Mark single as read ──────────────────────────────────────────────────
   const markNotifRead = useCallback(async (id: string) => {
     await supabase.from("app_notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
     refreshUnread();
@@ -535,6 +536,7 @@ const Header: React.FC<HeaderProps> = ({
     onNotificationNavigate?.(row.entity_type ?? "", row.entity_id ?? null);
   }, [markNotifRead, onNotificationNavigate]);
 
+  // ── Clock ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -543,6 +545,7 @@ const Header: React.FC<HeaderProps> = ({
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
+  // ── Logout ───────────────────────────────────────────────────────────────
   const confirmLogout = () => {
     setShowConfirm(false);
     setLoggingOut(true);
@@ -556,11 +559,13 @@ const Header: React.FC<HeaderProps> = ({
     }, 3000);
   };
 
+  const hasUnread = notifs.some((n) => !n.read_at);
+
   return (
     <>
       <style>{headerStyles}</style>
 
-      {/* ── Confirm dialog ── */}
+      {/* ── Confirm logout dialog ── */}
       {showConfirm && !loggingOut && (
         <div className="hdr-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false); }}>
           <div className="hdr-dialog" role="dialog" aria-modal="true" aria-labelledby="logout-title">
@@ -570,10 +575,9 @@ const Header: React.FC<HeaderProps> = ({
               You're about to sign out of the IT Helpdesk Ticketing system. Any unsaved changes will be lost.
             </p>
             <div className="hdr-dialog-actions">
-              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)} style={{fontFamily: "'Poppins', sans-serid=f", fontSize: 13, fontWeight: 600}}>Stay</button>
-              <button className="hdr-btn-confirm" onClick={confirmLogout} style={{fontFamily: "'Poppins', sans-serif", fontWeight: 500, fontSize: 13}}>
-                <LogOut size={13} strokeWidth={2.2} />
-                SIGN OUT
+              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)} style={{ fontFamily: "'Poppins', sans-serif", fontSize: 13, fontWeight: 600 }}>Stay</button>
+              <button className="hdr-btn-confirm" onClick={confirmLogout} style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500, fontSize: 13 }}>
+                <LogOut size={13} strokeWidth={2.2} /> SIGN OUT
               </button>
             </div>
           </div>
@@ -612,9 +616,10 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right side */}
+        {/* ── Right side ── */}
         <div className="hdr-user-block" style={{ display: "flex", alignItems: "center", gap: "0.5rem", position: "relative" }}>
-          {/* Bell */}
+
+          {/* ── Bell button ── */}
           {onNotificationNavigate && (
             <button
               ref={notifBtnRef}
@@ -622,17 +627,10 @@ const Header: React.FC<HeaderProps> = ({
               onClick={() => setShowNotifPanel((v) => !v)}
               title="Notifications"
               style={{
-                position: "relative",
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                border: "none",
-                background: "transparent",
-                color: brandBlue,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                position: "relative", width: 40, height: 40,
+                borderRadius: 12, border: "none", background: "transparent",
+                color: brandBlue, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
               }}
             >
               <Bell size={20} strokeWidth={2.2} />
@@ -650,7 +648,7 @@ const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Notifications panel */}
+          {/* ── Notifications panel ── */}
           {onNotificationNavigate && showNotifPanel && (
             <div ref={notifPanelRef} style={{
               position: "absolute", top: 52, right: 0,
@@ -659,15 +657,40 @@ const Header: React.FC<HeaderProps> = ({
               borderRadius: 14, boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
               zIndex: 1200, padding: "0.75rem",
             }}>
-              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Notifications</div>
+
+              {/* ── Panel header with "Mark all as read" ── */}
+              <div style={{
+                display: "flex", alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 10,
+                paddingBottom: 8,
+                borderBottom: "1px solid #f1f5f9",
+              }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", fontFamily: "'Poppins', sans-serif" }}>
+                  Notifications
+                </div>
+                {hasUnread && (
+                  <button
+                    type="button"
+                    className="hdr-mark-all-btn"
+                    disabled={markingAll}
+                    onClick={() => { void markAllAsRead(); }}
+                    style={{ opacity: markingAll ? 0.5 : 1, cursor: markingAll ? "not-allowed" : "pointer" }}
+                  >
+                    {markingAll ? "Marking…" : "Mark all as read"}
+                  </button>
+                )}
+              </div>
+
               {notifLoading ? (
-                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem" }}>Loading...</div>
+                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>Loading...</div>
               ) : notifs.length === 0 ? (
-                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem" }}>No notifications.</div>
+                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>No notifications.</div>
               ) : (
                 <>
+                  {/* Unread */}
                   {notifs.some((n) => !n.read_at) && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem" }}>New</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem", fontFamily: "'Poppins', sans-serif" }}>New</div>
                   )}
                   {notifs.filter((n) => !n.read_at).map((n) => (
                     <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
@@ -678,8 +701,10 @@ const Header: React.FC<HeaderProps> = ({
                       <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, fontFamily: "'Poppins', sans-serif" }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
                     </button>
                   ))}
+
+                  {/* Read / Earlier */}
                   {notifs.some((n) => !!n.read_at) && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem" }}>Earlier</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem", fontFamily: "'Poppins', sans-serif" }}>Earlier</div>
                   )}
                   {notifs.filter((n) => !!n.read_at).map((n) => (
                     <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
@@ -695,7 +720,7 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* ── User trigger: avatar + name (clickable) ── */}
+          {/* ── User trigger: avatar + name ── */}
           <button
             ref={userTriggerRef}
             type="button"
@@ -703,38 +728,23 @@ const Header: React.FC<HeaderProps> = ({
             aria-label="Open user menu"
             onClick={() => setShowUserMenu((v) => !v)}
           >
-            {/* Avatar — uses live profile state */}
             <div
               ref={avatarRef}
               className="hdr-avatar"
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: "999px",
-                background: "#ffffff",
-                border: "1.5px solid #e2e8f0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: brandBlue,
-                fontSize: 16,
-                fontWeight: 600,
-                flexShrink: 0,
-                overflow: "hidden",
+                width: 40, height: 40, borderRadius: "999px",
+                background: "#ffffff", border: "1.5px solid #e2e8f0",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: brandBlue, fontSize: 16, fontWeight: 600,
+                flexShrink: 0, overflow: "hidden",
               }}
             >
               {profile.avatarUrl ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt="Profile"
-                  style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }}
-                />
+                <img src={profile.avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }} />
               ) : (
                 initials
               )}
             </div>
-
-            {/* Name + role — uses live profile state; hidden on mobile */}
             <div className="hdr-user-meta">
               <span className="hdr-user-name-text">{profile.name}</span>
               <span className="hdr-user-role-text">{profile.role}</span>
@@ -747,30 +757,23 @@ const Header: React.FC<HeaderProps> = ({
             />
           </button>
 
-          {/* Dropdown menu */}
+          {/* ── User dropdown menu ── */}
           {showUserMenu && (
             <div
               ref={userMenuRef}
               style={{
-                position: "absolute",
-                top: 52,
-                right: 0,
-                width: 220,
-                background: "#fff",
-                border: "1px solid #e2e8f0",
-                borderRadius: 14,
+                position: "absolute", top: 52, right: 0,
+                width: 220, background: "#fff",
+                border: "1px solid #e2e8f0", borderRadius: 14,
                 boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
-                zIndex: 1200,
-                padding: "0.5rem",
+                zIndex: 1200, padding: "0.5rem",
                 animation: "hdrMenuDrop 0.18s ease both",
               }}
             >
-              {/* User info header in dropdown */}
               <div style={{ padding: "0.5rem 0.7rem 0.65rem", borderBottom: "1px solid #f1f5f9", marginBottom: "0.35rem" }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{profile.name}</div>
                 <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{profile.role}</div>
               </div>
-
               <button
                 type="button"
                 onClick={() => { setShowUserMenu(false); if (onOpenProfile) onOpenProfile(); }}
@@ -782,13 +785,12 @@ const Header: React.FC<HeaderProps> = ({
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                <User size={15} />
-                My Profile
+                <User size={15} /> My Profile
               </button>
               <button
                 type="button"
                 onClick={() => { setShowUserMenu(false); setShowConfirm(true); }}
-                style={{  
+                style={{
                   width: "100%", textAlign: "left", border: "none", background: "#fff",
                   borderRadius: 10, padding: "0.65rem 0.7rem", cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 8,
@@ -796,8 +798,7 @@ const Header: React.FC<HeaderProps> = ({
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                <LogOut size={15} />
-                Logout
+                <LogOut size={15} /> Logout
               </button>
             </div>
           )}
