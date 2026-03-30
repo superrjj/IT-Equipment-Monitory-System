@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
-import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon } from "lucide-react";
+import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon, Archive } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
 const supabase = createClient(
@@ -19,6 +19,7 @@ type UserAccount = {
   email: string;
   role: Role;
   is_active: boolean;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
   avatar_url: string | null;
@@ -232,7 +233,8 @@ export default function UserAccounts() {
     const { data, error } = await supabase
       .from("user_accounts")
       .select("id, username, full_name, email, role, is_active, created_at, updated_at, avatar_url")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .eq("is_archived", false);
     if (error) { showToast(error.message, "error"); setRows([]); setUsersError(error.message); }
     else { setRows((data ?? []) as UserAccount[]); setUsersError(null); }
     setLoading(false);
@@ -249,16 +251,30 @@ export default function UserAccounts() {
     setPendingLoading(false);
   };
 
-  useEffect(() => { fetchUsers(); fetchPending(); }, []);
+  useEffect(() => { fetchUsers(); fetchPending(); }, []); 
 
   useEffect(() => {
-    const channel = supabase
-      .channel("user_accounts_sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void fetchUsers(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "signup_requests" }, () => { void fetchPending(); })
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, []);
+  const channel = supabase
+    .channel("user_accounts_sync")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_accounts" }, (payload) => {
+      const newRow = payload.new as UserAccount;
+      if (newRow.is_archived) return;
+      setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_accounts" }, (payload) => {
+      const updated = payload.new as UserAccount;
+      if (updated.is_archived) {
+        setRows(prev => prev.filter(r => r.id !== updated.id));
+        setSelected(prev => prev?.id === updated.id ? null : prev);
+        return;
+      }
+      setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
+      setSelected(prev => prev?.id === updated.id ? updated : prev);
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "signup_requests" }, () => { void fetchPending(); })
+    .subscribe();
+  return () => { void supabase.removeChannel(channel); };
+}, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -356,7 +372,7 @@ export default function UserAccounts() {
         });
         showToast("User updated.", "success");
       }
-      closeModal(); fetchUsers();
+      closeModal()
     } catch (e: any) {
       setFormErrors({ username: e?.message ?? "Something went wrong." });
     } finally { setSubmitting(false); }
@@ -372,24 +388,23 @@ export default function UserAccounts() {
         meta: { username: u.username, full_name: u.full_name, is_active: !u.is_active },
       });
       showToast(u.is_active ? "Deactivated." : "Activated.", "success");
-      fetchUsers();
     }
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const removed = deleteTarget;
-    const { error } = await supabase.from("user_accounts").delete().eq("id", deleteTarget.id);
+    const { error } = await supabase.from("user_accounts").update({ is_archived: true }).eq("id", deleteTarget.id);
     if (error) showToast(error.message, "error");
     else {
       await insertActivityLog(supabase, {
-        actorUserId: getSessionUserId(), action: "user_account_deleted",
+        actorUserId: getSessionUserId(), action: "user_account_archived",
         entityType: "user_account", entityId: removed.id,
         meta: { username: removed.username, full_name: removed.full_name },
-      });
-      showToast("Deleted.", "success");
-    }
-    closeModal(); fetchUsers();
+    });
+      showToast("User archived.", "success");
+  }
+    closeModal();
   };
 
   const approveRequest = async (r: SignupRequest) => {
@@ -537,7 +552,7 @@ export default function UserAccounts() {
                       <span style={{ fontWeight: 700 }}>{r.full_name}</span>
                     </div>
                   </td>
-                  <td style={{ padding: "0.75rem 1rem" }}>{r.username}</td>
+                  <td style={{ padding: "0.75rem 1rem", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>{r.username}</td>
                   <td style={{ padding: "0.75rem 1rem" }}>{r.email}</td>
                   <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
                     {new Date(r.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
@@ -597,14 +612,14 @@ export default function UserAccounts() {
                     </div>
                   </td>
 
-                  <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "#475569" }}>
+                  <td style={{ padding: "0.75rem 1rem", fontWeight: 500, color: "#475569", fontFamily: "'Poppins', sans-serif" }}>
                     @{u.username}
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem" }}>
                     <span style={{
                       display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 999,
-                      fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
+                      fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
                       background: u.role === "Administrator" ? "rgba(10,76,134,0.10)" : "rgba(124,58,237,0.09)",
                       color: u.role === "Administrator" ? "#0a4c86" : "#6d28d9",
                     }}>{u.role}</span>
@@ -797,10 +812,10 @@ export default function UserAccounts() {
             <div className="ua-modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "#fef2f2", border: "1.5px solid #fecaca", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Trash2 size={17} color="#dc2626" />
+                  <Archive size={17} color="#dc2626" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: 15, color: "#0f172a" }}>Delete User</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", fontFamily: "'Poppins', sans-serif" }}>Archive User</div>
                   <div style={{ fontSize: 11, color: "#94a3b8" }}>This action cannot be undone</div>
                 </div>
               </div>
@@ -822,17 +837,17 @@ export default function UserAccounts() {
                 </div>
               </div>
               <div style={{ padding: "0.9rem 1rem", borderRadius: 12, background: "#fef2f2", border: "1.5px solid #fecaca", fontSize: 13, color: "#7f1d1d", lineHeight: 1.6 }}>
-                Permanently deleting this account will remove all associated data and cannot be recovered.
+                Archiving this account will permanently remove it from the list and cannot be recovered.
               </div>
             </div>
             <div className="ua-modal-footer">
               <button className="ua-btn-cancel" onClick={closeModal}
-                style={{ border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10, padding: "0.55rem 1rem", cursor: "pointer", fontWeight: 700, fontSize: 13, color: "#475569", fontFamily: "inherit", transition: "background 0.15s" }}>
+                style={{padding: "0.5rem 1.1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif"  }}>
                 Cancel
               </button>
               <button onClick={confirmDelete}
-                style={{ border: "none", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: 13, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(220,38,38,0.28)", display: "flex", alignItems: "center", gap: 6 }}>
-                <Trash2 size={14} /> Delete User
+                style={{padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", letterSpacing: 0.50}}>
+               Archive User
               </button>
             </div>
           </div>

@@ -12,7 +12,7 @@ import {
   ChevronLeft, ChevronRight, FileText,
   Monitor, Cpu, Wifi, Building2,
   Clock, CheckCircle, AlertCircle, Loader, User, Users,
-  Ticket, Lock,
+  Ticket, Lock, Archive,
 } from "lucide-react";
 
 const supabase = createClient(
@@ -43,6 +43,7 @@ type FileReport = {
   created_at:     string;
   updated_at:     string;
   technician_names?: string[];
+  is_archived: boolean;
 };
 
 type Department = { id: string; name: string };
@@ -357,7 +358,9 @@ const SubmitTicket: React.FC = () => {
       { data: depts },
       { data: staff },
     ] = await Promise.all([
-      supabase.from("file_reports").select("*").order(sortField, { ascending: sortDir === "asc" }),
+      supabase.from("file_reports").select("*")
+      .eq("is_archived", false)    
+      .order(sortField, { ascending: sortDir === "asc" }),
       supabase.from("departments").select("id, name").order("name"),
       supabase.from("user_accounts").select("id, full_name, role").eq("is_active", true).eq("role", "IT Technician").order("full_name"),
     ]);
@@ -380,24 +383,30 @@ const SubmitTicket: React.FC = () => {
           return [{ ...newRow, assigned_to: Array.isArray(newRow.assigned_to) ? newRow.assigned_to : [] }, ...prev];
         });
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
-        const updated = payload.new as FileReport;
-        setReports(prev => prev.map(r =>
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
+      const updated = payload.new as FileReport;
+
+      // If the updated row is now archived, remove it from state immediately
+      if (updated.is_archived) {
+        setReports(prev => prev.filter(r => r.id !== updated.id));
+        setSelected(prev => (prev?.id === updated.id ? null : prev));
+        return;
+      }
+
+      // Otherwise apply the normal update
+      setReports(prev =>
+        prev.map(r =>
           r.id === updated.id
             ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
             : r
-        ));
-        setSelected(prev =>
-          prev && prev.id === updated.id
-            ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
-            : prev
-        );
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "file_reports" }, (payload) => {
-        const deletedId = (payload.old as { id: string }).id;
-        setReports(prev => prev.filter(r => r.id !== deletedId));
-        setSelected(prev => (prev?.id === deletedId ? null : prev));
-      })
+        )
+      );
+      setSelected(prev =>
+        prev && prev.id === updated.id
+          ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
+          : prev
+      );
+    })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -555,13 +564,16 @@ const SubmitTicket: React.FC = () => {
     fetchAll();
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    const { error } = await supabase.from("file_reports").delete().eq("id", deleteTarget.id);
-    if (error) showToast(friendlyError(error.message), "error");
-    else showToast(`Ticket "${deleteTarget.title}" deleted.`, "success");
-    setDeleteTarget(null);
-  };
+ const confirmDelete = async () => {
+  if (!deleteTarget) return;
+  const { error } = await supabase
+    .from("file_reports")
+    .update({ is_archived: true }) 
+    .eq("id", deleteTarget.id);
+  if (error) showToast(friendlyError(error.message), "error");
+  else showToast(`Ticket "${deleteTarget.title}" archived.`, "success");
+  setDeleteTarget(null);
+};
 
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "0.5rem 0.75rem", borderRadius: 8,
@@ -1002,11 +1014,11 @@ const SubmitTicket: React.FC = () => {
           <div className="modal-overlay-ticket" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box-ticket" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>
               <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
-                <AlertTriangle size={22} color="#dc2626" />
+                <Archive size={22} color="#dc2626" />
               </div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Ticket?</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, fontFamily: "'Poppins', sans-serif" }}>Archive Ticket?</h2>
               <p style={{ fontSize: 13, color: "#475569", marginBottom: "1.4rem" }}>
-                Permanently delete <strong>"{deleteTarget.title}"</strong>? This cannot be undone.
+               Archive <strong>"{deleteTarget.title}"</strong>? This ticket will be permanently removed from the list and cannot be undone.
               </p>
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                 <button onClick={() => setDeleteTarget(null)}
@@ -1015,7 +1027,7 @@ const SubmitTicket: React.FC = () => {
                 </button>
                 <button onClick={confirmDelete}
                   style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
-                  Delete
+                  Archive
                 </button>
               </div>
             </div>

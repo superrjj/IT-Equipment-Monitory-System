@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   Plus, Pencil, Trash2, Eye, Search, ChevronUp, ChevronDown,
   X, AlertTriangle, ChevronLeft, ChevronRight, Building2,
-  Ticket, Clock, CheckCircle2, CircleDot, Hash,
+  Ticket, Clock, CheckCircle2, CircleDot, Hash, Archive
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
@@ -21,6 +21,7 @@ type Department = {
   location: string;
   created_at: string;
   ticket_count?: number;
+  is_archived: boolean;
 };
 
 type TicketRow = {
@@ -143,6 +144,7 @@ const Departments: React.FC = () => {
     const { data, error } = await supabase
       .from("departments")
       .select(`id, name, description, location, created_at, file_reports(count)`)
+      .eq("is_archived", false)  
       .order(sortField, { ascending: sortDir === "asc" });
 
     if (error) { showToast(friendlyError(error.message), "error"); setLoading(false); return; }
@@ -160,7 +162,16 @@ const Departments: React.FC = () => {
   useEffect(() => {
     const channel = supabase
       .channel(`departments_sync_${sortField}_${sortDir}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchDepartments(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, (payload) => {
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as Department;
+            if (updated.is_archived) {
+              setDepartments(prev => prev.filter(d => d.id !== updated.id));
+              return;
+            }
+          }
+          void fetchDepartments();
+        })
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchDepartments(); })
       .subscribe();
     return () => {
@@ -292,13 +303,6 @@ const Departments: React.FC = () => {
 
   // ── Delete ───────────────────────────────────────────────────────────────────
   const handleDelete = async (d: Department) => {
-    if ((d.ticket_count ?? 0) > 0) {
-      showToast(
-        "Cannot delete this department because it has tickets linked to it. Reassign or remove the tickets first.",
-        "error"
-      );
-      return;
-    }
     setDeleteTarget(d);
   };
 
@@ -306,18 +310,18 @@ const Departments: React.FC = () => {
     if (!deleteTarget) return;
     const removedName = deleteTarget.name;
     const removedId = deleteTarget.id;
-    const { error } = await supabase.from("departments").delete().eq("id", deleteTarget.id);
+    const { error } = await supabase.from("departments").update({ is_archived: true }).eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
     else {
-      await insertActivityLog(supabase, {
-        actorUserId: getSessionUserId(),
-        action: "department_deleted",
-        entityType: "department",
-        entityId: removedId,
-        meta: { department_name: removedName },
-      });
-      showToast(`Department "${removedName}" deleted.`, "success");
-    }
+       await insertActivityLog(supabase, {
+          actorUserId: getSessionUserId(),
+          action: "department_archived",
+          entityType: "department",
+          entityId: removedId,
+          meta: { department_name: removedName },
+        });
+        showToast(`Department "${removedName}" archived.`, "success");
+        }
     setDeleteTarget(null);
     fetchDepartments();
   };
@@ -689,11 +693,11 @@ const Departments: React.FC = () => {
           <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>
               <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
-                <AlertTriangle size={22} color="#dc2626" />
+                <Archive size={22} color="#dc2626" />
               </div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Department?</h2>
+             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, fontFamily: "'Poppins', sans-serif" }}>Archive Department?</h2>
               <p style={{ fontSize: 13, color: "#475569", marginBottom: "1.4rem" }}>
-                This will permanently delete <strong>{deleteTarget.name}</strong>. This action cannot be undone.
+                Archive <strong>{deleteTarget.name}</strong>? This department will be permanently removed from the list and cannot be undone.
               </p>
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                 <button onClick={() => setDeleteTarget(null)}
@@ -702,7 +706,7 @@ const Departments: React.FC = () => {
                 </button>
                 <button onClick={confirmDelete}
                   style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
-                  Delete
+                  Archive
                 </button>
               </div>
             </div>

@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Package,
   Clock, User, Users, CircleArrowUp, Building2,
   FileSpreadsheet, FileText, Loader, Calendar,
+  Archive,
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 
@@ -33,6 +34,7 @@ type OutgoingUnitRow = {
   department_id: string | null;
   created_at: string;
   updated_at: string;
+  is_archived: boolean;
 };
 
 type UserOption = { id: string; full_name: string; role: string };
@@ -287,7 +289,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const fetchAll = async () => {
     setLoading(true);
     const [{ data: unitData, error: unitError }, { data: staff }, { data: depts }] = await Promise.all([
-      supabase.from("outgoing_units").select("*").order(sortField, { ascending: sortDir === "asc" }),
+      supabase.from("outgoing_units").select("*").order(sortField, { ascending: sortDir === "asc" }).eq("is_archived", false),
       supabase.from("user_accounts").select("id, full_name, role").eq("is_active", true).eq("role", "IT Technician").order("full_name"),
       supabase.from("departments").select("id, name").order("name"),
     ]);
@@ -300,15 +302,27 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
-  useEffect(() => {
-    const channel = supabase
-      .channel(`outgoing_units_sync_${sortField}_${sortDir}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "outgoing_units" }, () => { void fetchAll(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void fetchAll(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [sortField, sortDir]);
+ useEffect(() => {
+  const channel = supabase
+    .channel("outgoing_units_realtime")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
+      const newRow = payload.new as OutgoingUnitRow;
+      if (newRow.is_archived) return;
+      setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "outgoing_units" }, (payload) => {
+      const updated = payload.new as OutgoingUnitRow;
+      if (updated.is_archived) {                        // ← archive = remove immediately
+        setRows(prev => prev.filter(r => r.id !== updated.id));
+        setSelected(prev => prev?.id === updated.id ? null : prev);
+        return;
+      }
+      setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
+      setSelected(prev => prev?.id === updated.id ? updated : prev);
+    })
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}, []);
 
   // ── Table data ───────────────────────────────────────────────────────────────
   const rowsEnriched = useMemo(
@@ -430,17 +444,17 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     if (!deleteTarget) return;
     const removedName = deleteTarget.unit_name;
     const removedId   = deleteTarget.id;
-    const { error } = await supabase.from("outgoing_units").delete().eq("id", deleteTarget.id);
+    const { error } = await supabase.from("outgoing_units").update({ is_archived: true }).eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
     else {
-      await insertActivityLog(supabase, {
+       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
-        action: "outgoing_unit_deleted",
+        action: "outgoing_unit_archived",
         entityType: "outgoing_unit",
         entityId: removedId,
         meta: { unit_name: removedName },
-      });
-      showToast(`Removed "${removedName}" from outgoing units.`, "success");
+    });
+        showToast(`"${removedName}" has been archived.`, "success");
     }
     setDeleteTarget(null);
     fetchAll();
@@ -923,15 +937,15 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>
               <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
-                <AlertTriangle size={22} color="#dc2626" />
+                <Archive size={22} color="#dc2626" />
               </div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete record?</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, fontFamily: "'Poppins', sans-serif" }}>Archive record?</h2>
               <p style={{ fontSize: 13, color: "#475569", marginBottom: "1.4rem" }}>
-                Permanently remove <strong>&quot;{deleteTarget.unit_name}&quot;</strong>? This cannot be undone.
+                Archive <strong>&quot;{deleteTarget.unit_name}&quot;</strong>? This record will be permanently removed from the list and cannot be undone.
               </p>
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                 <button onClick={() => setDeleteTarget(null)} style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Cancel</button>
-                <button onClick={confirmDelete} style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Delete</button>
+                <button onClick={confirmDelete} style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Archive</button>
               </div>
             </div>
           </div>
