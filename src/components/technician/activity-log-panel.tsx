@@ -107,9 +107,6 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
             return (
               <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                 Added the ticket <BrandValue value={ticketNum} />
-                {typeof meta.employee_name === "string" && meta.employee_name.trim() ? (
-                  <span style={{ color: "#475569" }}>· {meta.employee_name}</span>
-                ) : null}
               </span>
             );
           }
