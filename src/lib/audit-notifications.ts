@@ -60,6 +60,7 @@ export async function insertNotification(
     body?: string;
     entityType?: string | null;
     entityId?: string | null;
+    actorUserId?: string | null; // ← NEW: who triggered this notification
   }
 ): Promise<void> {
   const title = clip(row.title, 200);
@@ -73,6 +74,7 @@ export async function insertNotification(
     body,
     entity_type: row.entityType ? clip(row.entityType, 80) : null,
     entity_id: row.entityId ?? null,
+    actor_user_id: row.actorUserId ?? null, // ← NEW
   });
 }
 
@@ -80,7 +82,12 @@ export async function insertNotification(
 export async function notifyTicketAssignees(
   supabase: Db,
   assigneeIds: string[],
-  ctx: { ticketId: string; ticketTitle: string; ticketNumber?: string | null }
+  ctx: {
+    ticketId: string;
+    ticketTitle: string;
+    ticketNumber?: string | null;
+    actorUserId?: string | null; // ← NEW
+  }
 ): Promise<void> {
   const label = ctx.ticketNumber?.trim() || "Ticket";
   const uniqueAssignees = Array.from(new Set(assigneeIds.filter(Boolean)));
@@ -93,6 +100,7 @@ export async function notifyTicketAssignees(
       body: `${label}: ${clip(ctx.ticketTitle, 180)}`,
       entityType: "file_report",
       entityId: ctx.ticketId,
+      actorUserId: ctx.actorUserId ?? null, // ← NEW
     });
   }
   dispatchNotificationsChanged();
@@ -102,7 +110,11 @@ export async function notifyTicketAssignees(
 export async function notifyRepairAssignees(
   supabase: Db,
   assigneeIds: string[],
-  ctx: { repairId: string; summary: string }
+  ctx: {
+    repairId: string;
+    summary: string;
+    actorUserId?: string | null; // ← NEW
+  }
 ): Promise<void> {
   const uniqueAssignees = Array.from(new Set(assigneeIds.filter(Boolean)));
   for (const uid of uniqueAssignees) {
@@ -114,6 +126,7 @@ export async function notifyRepairAssignees(
       body: clip(ctx.summary, 2000),
       entityType: "repair",
       entityId: ctx.repairId,
+      actorUserId: ctx.actorUserId ?? null, // ← NEW
     });
   }
   dispatchNotificationsChanged();
@@ -121,7 +134,13 @@ export async function notifyRepairAssignees(
 
 export async function notifyAdminsTicketStatusChanged(
   supabase: Db,
-  ctx: { ticketId: string; ticketTitle: string; ticketNumber?: string | null; status: string }
+  ctx: {
+    ticketId: string;
+    ticketTitle: string;
+    ticketNumber?: string | null;
+    status: string;
+    actorUserId?: string | null; // ← NEW
+  }
 ): Promise<void> {
   const label = ctx.ticketNumber?.trim() || "Ticket";
   const adminIds = await fetchActiveAdminIds(supabase);
@@ -133,6 +152,7 @@ export async function notifyAdminsTicketStatusChanged(
       body: `${label}: ${clip(ctx.ticketTitle, 180)} → ${clip(ctx.status, 80)}`,
       entityType: "file_report",
       entityId: ctx.ticketId,
+      actorUserId: ctx.actorUserId ?? null, // ← NEW
     });
   }
   dispatchNotificationsChanged();
@@ -140,7 +160,12 @@ export async function notifyAdminsTicketStatusChanged(
 
 export async function notifyAdminsRepairStatusChanged(
   supabase: Db,
-  ctx: { repairId: string; summary: string; status: string }
+  ctx: {
+    repairId: string;
+    summary: string;
+    status: string;
+    actorUserId?: string | null; // ← NEW
+  }
 ): Promise<void> {
   const adminIds = await fetchActiveAdminIds(supabase);
   for (const uid of adminIds) {
@@ -151,6 +176,7 @@ export async function notifyAdminsRepairStatusChanged(
       body: `${clip(ctx.summary, 2000)} → ${clip(ctx.status, 80)}`,
       entityType: "repair",
       entityId: ctx.repairId,
+      actorUserId: ctx.actorUserId ?? null, // ← NEW
     });
   }
   dispatchNotificationsChanged();
@@ -163,19 +189,25 @@ export function diffNewAssignees(prev: string[], next: string[]): string[] {
 
 /** Notify all active admins that a new signup request needs approval. */
 export async function notifyAdminsSignupRequest(
-supabase: Db,
-ctx: { requestId: string; fullName: string; username: string }
+  supabase: Db,
+  ctx: {
+    requestId: string;
+    fullName: string;
+    username: string;
+    actorUserId?: string | null; // ← NEW
+  }
 ): Promise<void> {
-const adminIds = await fetchActiveAdminIds(supabase);
-for (const uid of adminIds) {
-await insertNotification(supabase, {
-userId: uid,
-type: "signup_request",
-title: "New account request pending approval",
-body: `${clip(ctx.fullName, 120)} (@${clip(ctx.username, 80)}) has requested an account.`,
-entityType: "signup_request",
-entityId: ctx.requestId,
-});
-}
-dispatchNotificationsChanged();
+  const adminIds = await fetchActiveAdminIds(supabase);
+  for (const uid of adminIds) {
+    await insertNotification(supabase, {
+      userId: uid,
+      type: "signup_request",
+      title: "New account request pending approval",
+      body: `${clip(ctx.fullName, 120)} (@${clip(ctx.username, 80)}) has requested an account.`,
+      entityType: "signup_request",
+      entityId: ctx.requestId,
+      actorUserId: ctx.actorUserId ?? null, // ← NEW
+    });
+  }
+  dispatchNotificationsChanged();
 }

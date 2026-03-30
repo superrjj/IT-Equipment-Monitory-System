@@ -677,7 +677,7 @@ const Dashboard: React.FC = () => {
               }
               }
               }}
-              onOpenProfile={() => setShowProfileModal(true)} // ✅ Open modal instead of navigate
+              onOpenProfile={() => setShowProfileModal(true)} // Open modal instead of navigate
             />
           </div>
           <div className="adm-scroll-area" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "0.5rem" }}>

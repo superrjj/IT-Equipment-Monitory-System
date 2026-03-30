@@ -539,6 +539,7 @@ const SubmitTicket: React.FC = () => {
           ticketId: row.id,
           ticketTitle: form.title,
           ticketNumber: row.ticket_number ?? null,
+          actorUserId: localStorage.getItem("session_user_id"),
         });
       }
       await insertActivityLog(supabase, {

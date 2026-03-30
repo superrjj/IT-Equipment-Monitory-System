@@ -640,6 +640,7 @@ export default function LoginPage() {
           requestId: newReq.id,
           fullName:  create.full_name.trim(),
           username:  u,
+          actorUserId: null,
         });
       }
 

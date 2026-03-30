@@ -27,18 +27,18 @@ const headerStyles = `
   /* ── Notifications panel scrollbar — matches sidebar style ── */
   .hdr-notif-panel::-webkit-scrollbar {
     width: 5px;
-    }
-    .hdr-notif-panel::-webkit-scrollbar-track {
+  }
+  .hdr-notif-panel::-webkit-scrollbar-track {
     background: #f1f5f9;
     border-radius: 999px;
-    }
-    .hdr-notif-panel::-webkit-scrollbar-thumb {
+  }
+  .hdr-notif-panel::-webkit-scrollbar-thumb {
     background: #0a4c8655;
     border-radius: 999px;
-    }
-    .hdr-notif-panel::-webkit-scrollbar-thumb:hover {
+  }
+  .hdr-notif-panel::-webkit-scrollbar-thumb:hover {
     background: #0a4c86;
-    }
+  }
 
   .hdr-dialog {
     background: #ffffff;
@@ -249,6 +249,19 @@ const headerStyles = `
   }
   .hdr-mark-all-btn:hover { opacity: 0.7; }
 
+  /* ── Notification item hover ── */
+  .hdr-notif-item {
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+  .hdr-notif-item:hover { filter: brightness(0.96); }
+
   @media (max-width: 1024px) {
     .hdr-menu-btn { display: flex; }
     .hdr-user-meta { display: none; }
@@ -264,6 +277,80 @@ const headerStyles = `
   }
 `;
 
+// ── Actor info component ───────────────────────────────────────────────────────
+type ActorInfo = {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+};
+
+const NotifActor: React.FC<{ actor?: ActorInfo }> = ({ actor }) => {
+  if (!actor) return null;
+
+  const initials = actor.full_name
+    .split(" ")
+    .map((p) => p[0]?.toUpperCase())
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2);
+
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      marginBottom: 7,
+      marginTop: 5,
+    }}>
+      {/* Avatar */}
+      <div style={{
+        width: 26,
+        height: 26,
+        borderRadius: "50%",
+        background: "#dbeafe",
+        border: "1.5px solid #bfdbfe",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        flexShrink: 0,
+      }}>
+        {actor.avatar_url ? (
+          <img
+            src={actor.avatar_url}
+            alt={actor.full_name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+          />
+        ) : (
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: brandBlue,
+            fontFamily: "'Poppins', sans-serif",
+            lineHeight: 1,
+          }}>
+            {initials}
+          </span>
+        )}
+      </div>
+      {/* Name */}
+      <span style={{
+        fontSize: 11,
+        fontWeight: 600,
+        color: "#374151",
+        fontFamily: "'Poppins', sans-serif",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        maxWidth: 180,
+      }}>
+        {actor.full_name}
+      </span>
+    </div>
+  );
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 type HeaderProps = {
   currentUserName: string;
   userRole: string;
@@ -272,11 +359,6 @@ type HeaderProps = {
   onNotificationNavigate?: (entityType: string, entityId: string | null) => void;
   onOpenProfile?: () => void;
 };
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
 
 type NotificationRow = {
   id: string;
@@ -287,6 +369,7 @@ type NotificationRow = {
   entity_id: string | null;
   read_at: string | null;
   created_at: string;
+  actor_user_id: string | null; // ← NEW
 };
 
 const PROFILE_TABLE   = "user_accounts";
@@ -300,6 +383,12 @@ type ProfileState = {
   avatarUrl: string;
 };
 
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL as string,
+  import.meta.env.VITE_SUPABASE_ANON_KEY as string
+);
+
+// ── Main component ────────────────────────────────────────────────────────────
 const Header: React.FC<HeaderProps> = ({
   currentUserName,
   userRole,
@@ -317,6 +406,7 @@ const Header: React.FC<HeaderProps> = ({
   const [notifLoading, setNotifLoading]     = useState(false);
   const [markingAll, setMarkingAll]         = useState(false);
   const [notifs, setNotifs]                 = useState<NotificationRow[]>([]);
+  const [actorMap, setActorMap]             = useState<Record<string, ActorInfo>>({}); // ← NEW
   const [showUserMenu, setShowUserMenu]     = useState(false);
   const notifPanelRef  = useRef<HTMLDivElement | null>(null);
   const notifBtnRef    = useRef<HTMLButtonElement | null>(null);
@@ -474,18 +564,39 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, [refreshUnread]);
 
-  // ── Fetch notifications list ─────────────────────────────────────────────
+  // ── Fetch notifications list + actor info ─────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
     if (!uid) { setNotifs([]); return; }
     setNotifLoading(true);
+
     const { data } = await supabase
       .from("app_notifications")
-      .select("id, type, title, body, entity_type, entity_id, read_at, created_at")
+      .select("id, type, title, body, entity_type, entity_id, read_at, created_at, actor_user_id")
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(40);
-    setNotifs((data ?? []) as NotificationRow[]);
+
+    const rows = (data ?? []) as NotificationRow[];
+    setNotifs(rows);
+
+    // ── Fetch unique actor profiles ──────────────────────────────────────
+    const actorIds = [
+      ...new Set(rows.map((r) => r.actor_user_id).filter(Boolean)),
+    ] as string[];
+
+    if (actorIds.length > 0) {
+      const { data: actors } = await supabase
+        .from("user_accounts")
+        .select("id, full_name, avatar_url")
+        .in("id", actorIds);
+      const map: Record<string, ActorInfo> = {};
+      for (const a of (actors ?? []) as ActorInfo[]) map[a.id] = a;
+      setActorMap(map);
+    } else {
+      setActorMap({});
+    }
+
     setNotifLoading(false);
   }, []);
 
@@ -576,6 +687,79 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const hasUnread = notifs.some((n) => !n.read_at);
+
+  // ── Notification item renderer ───────────────────────────────────────────
+  const renderNotifItem = (n: NotificationRow) => {
+    const isUnread = !n.read_at;
+    const actor = n.actor_user_id ? actorMap[n.actor_user_id] : undefined;
+
+    return (
+      <button
+        key={n.id}
+        type="button"
+        className="hdr-notif-item"
+        onClick={() => { void openNotification(n); }}
+        style={{
+          background: isUnread ? "rgba(10,76,134,0.07)" : "#fff",
+          border: isUnread ? "1px solid rgba(10,76,134,0.12)" : "1px solid transparent",
+        }}
+      >
+        {/* ── Type badge ── */}
+        <div style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: "#94a3b8",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          fontFamily: "'Poppins', sans-serif",
+          marginBottom: 2,
+        }}>
+          {n.type.replace(/_/g, " ")}
+        </div>
+
+        {/* ── Actor row (avatar + name) ── */}
+        <NotifActor actor={actor} />
+
+        {/* ── Title ── */}
+        <div style={{
+          fontSize: 13,
+          fontWeight: isUnread ? 600 : 500,
+          color: "#0f172a",
+          fontFamily: "'Poppins', sans-serif",
+          lineHeight: 1.4,
+        }}>
+          {n.title}
+        </div>
+
+        {/* ── Body ── */}
+        {n.body && (
+          <div style={{
+            fontSize: 12,
+            color: "#374151",
+            marginTop: 4,
+            fontFamily: "'Poppins', sans-serif",
+            lineHeight: 1.5,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}>
+            {n.body}
+          </div>
+        )}
+
+        {/* ── Timestamp ── */}
+        <div style={{
+          fontSize: 11,
+          color: "#94a3b8",
+          marginTop: 6,
+          fontFamily: "'Poppins', sans-serif",
+        }}>
+          {new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
+        </div>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -679,7 +863,7 @@ const Header: React.FC<HeaderProps> = ({
                 scrollbarColor: "#0a4c8655 #f1f5f9",
               }}
             >
-              {/* ── Panel header with "Mark all as read" ── */}
+              {/* ── Panel header ── */}
               <div style={{
                 display: "flex", alignItems: "center",
                 justifyContent: "space-between",
@@ -704,38 +888,40 @@ const Header: React.FC<HeaderProps> = ({
               </div>
 
               {notifLoading ? (
-                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>Loading...</div>
+                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>
+                  Loading...
+                </div>
               ) : notifs.length === 0 ? (
-                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>No notifications.</div>
+                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>
+                  No notifications.
+                </div>
               ) : (
                 <>
-                  {/* Unread */}
+                  {/* ── Unread ── */}
                   {notifs.some((n) => !n.read_at) && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem", fontFamily: "'Poppins', sans-serif" }}>New</div>
+                    <div style={{
+                      fontSize: 11, fontWeight: 700, color: "#64748b",
+                      margin: "0.5rem 0.25rem 0.4rem",
+                      fontFamily: "'Poppins', sans-serif",
+                      textTransform: "uppercase", letterSpacing: "0.07em",
+                    }}>
+                      New
+                    </div>
                   )}
-                  {notifs.filter((n) => !n.read_at).map((n) => (
-                    <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
-                      style={{ width: "100%", textAlign: "left", border: "none", background: "rgba(10,76,134,0.08)", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", fontFamily: "'Poppins', sans-serif" }}>{n.type.replace(/_/g, " ")}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.title}</div>
-                      {n.body && <div style={{ fontSize: 12, color: "#374151", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.body}</div>}
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, fontFamily: "'Poppins', sans-serif" }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
-                    </button>
-                  ))}
+                  {notifs.filter((n) => !n.read_at).map(renderNotifItem)}
 
-                  {/* Read / Earlier */}
+                  {/* ── Read / Earlier ── */}
                   {notifs.some((n) => !!n.read_at) && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem", fontFamily: "'Poppins', sans-serif" }}>Earlier</div>
+                    <div style={{
+                      fontSize: 11, fontWeight: 700, color: "#64748b",
+                      margin: "0.75rem 0.25rem 0.4rem",
+                      fontFamily: "'Poppins', sans-serif",
+                      textTransform: "uppercase", letterSpacing: "0.07em",
+                    }}>
+                      Earlier
+                    </div>
                   )}
-                  {notifs.filter((n) => !!n.read_at).map((n) => (
-                    <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
-                      style={{ width: "100%", textAlign: "left", border: "none", background: "#fff", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", fontFamily: "'Poppins', sans-serif" }}>{n.type.replace(/_/g, " ")}</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.title}</div>
-                      {n.body && <div style={{ fontSize: 12, color: "#374151", marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{n.body}</div>}
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, fontFamily: "'Poppins', sans-serif" }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
-                    </button>
-                  ))}
+                  {notifs.filter((n) => !!n.read_at).map(renderNotifItem)}
                 </>
               )}
             </div>

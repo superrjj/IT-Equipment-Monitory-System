@@ -272,7 +272,7 @@ const MyTickets: React.FC = () => {
     });
     await notifyAdminsTicketStatusChanged(supabase, {
       ticketId: selected.id, ticketTitle: selected.title,
-      ticketNumber: selected.ticket_number ?? null, status: form.status,
+      ticketNumber: selected.ticket_number ?? null, status: form.status, actorUserId: localStorage.getItem("session_user_id"),
     });
     showToast("Ticket updated successfully.", "success");
     setSaving(false);
