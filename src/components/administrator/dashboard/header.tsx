@@ -647,11 +647,11 @@ const Header: React.FC<HeaderProps> = ({
 
     // Map notification type to an icon background color + emoji-like SVG badge
     const typeColor: Record<string, string> = {
-      ticket_assigned: "#1877f2",
+      ticket_assigned: "#22c55e",
       repair_assigned: "#1877f2",
-      ticket_status_changed_admin: "#e67e22",
+      ticket_status_changed_admin: "#22c55e",
       repair_status_changed_admin: "#e67e22",
-      signup_request: "#42b883",
+      signup_request: "#0a4c86",
     };
     const badgeBg = typeColor[n.type] ?? "#1877f2";
 
@@ -705,11 +705,21 @@ const Header: React.FC<HeaderProps> = ({
           }}>
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               {n.type.includes("signup") ? (
-                <path d="M8 2a3 3 0 100 6 3 3 0 000-6zM3 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
+                /* Person / user icon — for account approval requests */
+                <>
+                  <circle cx="8" cy="5" r="2.8" stroke="#fff" strokeWidth="1.7"/>
+                  <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
+                </>
               ) : n.type.includes("status") ? (
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                /* Ticket icon — for status changes */
+                <>
+                  <path d="M2 5a1 1 0 011-1h10a1 1 0 011 1v1.5a1.5 1.5 0 000 3V11a1 1 0 01-1 1H3a1 1 0 01-1-1V9.5a1.5 1.5 0 000-3V5z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round"/>
+                </>
               ) : (
-                <path d="M2 4h12v8a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm0 0l6 5 6-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                /* Ticket icon — for assigned tickets/repairs */
+                <>
+                  <path d="M2 5a1 1 0 011-1h10a1 1 0 011 1v1.5a1.5 1.5 0 000 3V11a1 1 0 01-1 1H3a1 1 0 01-1-1V9.5a1.5 1.5 0 000-3V5z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round"/>
+                </>
               )}
             </svg>
           </div>
