@@ -184,7 +184,7 @@ const StaffSinglePicker: React.FC<{
             <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
               {u.full_name}
             </span>
-            <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{u.role}</span>
+            <span style={{ fontSize: 11, color: "#0a4c86", marginLeft: "auto", fontFamily: "'Poppins', sans-serif", letterSpacing: 0.50, fontWeight: 500 }}>{u.role}</span>
           </button>
         );
       })
