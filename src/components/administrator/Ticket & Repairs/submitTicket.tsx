@@ -71,7 +71,7 @@ type FormErrors = {
 
 const BRAND     = "#0a4c86";
 const PAGE_SIZE = 10;
-const MAX_ACTIVE_TICKETS = 3;
+const MAX_ACTIVE_TICKETS = 1;
 
 const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
@@ -227,15 +227,8 @@ const TechnicianPicker: React.FC<{
   editingTicketId?: string | null;
 }> = ({ users, selected, onChange, hasError, loadMap, editingTicketId }) => {
 
-  const toggle = (id: string, blocked: boolean) => {
-    if (blocked) return;
+  const toggle = (id: string) => {
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
-  };
-
-  const loadColor = (count: number, isFull: boolean) => {
-    if (isFull)     return { bg: "rgba(220,38,38,0.10)",  color: "#dc2626" };
-    if (count >= 2) return { bg: "rgba(234,179,8,0.13)",  color: "#a16207" };
-    return            { bg: "rgba(22,163,74,0.10)",        color: "#15803d" };
   };
 
   return (
@@ -246,66 +239,75 @@ const TechnicianPicker: React.FC<{
       padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2,
     }}>
       {users.length === 0 ? (
-        <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Technician found.</div>
+        <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>
+          No active IT Technician found.
+        </div>
       ) : users.map(u => {
         const isSelected  = selected.includes(u.id);
         const rawCount    = loadMap[u.id] ?? 0;
         const activeCount = (editingTicketId && isSelected)
           ? Math.max(0, rawCount - 1)
           : rawCount;
-        const isFull    = activeCount >= MAX_ACTIVE_TICKETS && !isSelected;
-        const isBlocked = isFull;
-        const lc        = loadColor(activeCount, isFull);
+        const isOverloaded = !isSelected && activeCount >= MAX_ACTIVE_TICKETS;
 
         return (
           <button
             key={u.id}
             type="button"
-            onClick={() => toggle(u.id, isBlocked)}
-            disabled={isBlocked}
-            title={isBlocked ? `${u.full_name} has reached the maximum of ${MAX_ACTIVE_TICKETS} active tickets.` : undefined}
+            disabled={isOverloaded}
+            title={isOverloaded ? `${u.full_name} has reached the max of ${MAX_ACTIVE_TICKETS} active tickets` : undefined}
+            onClick={() => !isOverloaded && toggle(u.id)}
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
-              background: isSelected ? `${BRAND}10` : "transparent",
-              cursor: isBlocked ? "not-allowed" : "pointer",
+              background: isSelected
+                ? `${BRAND}10`
+                : isOverloaded ? "#fafafa" : "transparent",
+              cursor: isOverloaded ? "not-allowed" : "pointer",
               textAlign: "left", width: "100%", transition: "background 0.12s",
-              opacity: isBlocked ? 0.52 : 1,
+              opacity: isOverloaded ? 0.45 : 1,
             }}
           >
             <span style={{
               width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-              border: `1.5px solid ${isSelected ? BRAND : "#cbd5e1"}`,
+              border: `1.5px solid ${isSelected ? BRAND : isOverloaded ? "#e2e8f0" : "#cbd5e1"}`,
               background: isSelected ? BRAND : "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
               pointerEvents: "none",
             }}>
               {isSelected && (
                 <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                  <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5"
+                    strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </span>
             <span style={{
               fontSize: 13, fontWeight: isSelected ? 600 : 400,
-              color: isBlocked ? "#94a3b8" : isSelected ? BRAND : "#374151",
+              color: isSelected ? BRAND : isOverloaded ? "#94a3b8" : "#374151",
               fontFamily: "'Poppins', sans-serif", flex: 1,
             }}>
               {u.full_name}
             </span>
-            <span style={{
-              fontSize: 12, fontWeight: 500, padding: "1px 7px", borderRadius: 999,
-              fontFamily: "'Poppins', sans-serif",
-              background: lc.bg, color: lc.color, whiteSpace: "nowrap", flexShrink: 0,
-            }}>
-              {activeCount}/{MAX_ACTIVE_TICKETS}{isFull ? " · Full" : " Tickets"}
-            </span>
+            {isOverloaded && (
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                padding: "1px 7px", borderRadius: 999,
+                background: "#fee2e2", color: "#dc2626",
+                whiteSpace: "nowrap", flexShrink: 0,
+                fontFamily: "'Poppins', sans-serif",
+                letterSpacing: 1
+              }}>
+                Unavailable
+              </span>
+            )}
           </button>
         );
       })}
     </div>
   );
 };
+
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 const SubmitTicket: React.FC = () => {
@@ -919,20 +921,6 @@ const SubmitTicket: React.FC = () => {
                       </span>
                     )}
                   </label>
-
-                  {/* Legend */}
-                  <div style={{ display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-                    {[
-                      { dot: "#15803d", label: "Available (0–1)" },
-                      { dot: "#a16207", label: "Busy (2 tickets)" },
-                      { dot: "#dc2626", label: `Full (${MAX_ACTIVE_TICKETS} tickets)` },
-                    ].map(l => (
-                      <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: "#64748b", fontWeight: 500 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: l.dot, display: "inline-block" }} />
-                        {l.label}
-                      </span>
-                    ))}
-                  </div>
 
                   <TechnicianPicker
                     users={itStaff}
