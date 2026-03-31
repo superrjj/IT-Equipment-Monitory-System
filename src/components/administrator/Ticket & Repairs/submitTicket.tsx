@@ -312,8 +312,8 @@ const SubmitTicket: React.FC = () => {
   const [search, setSearch]           = useState("");
   const [filterIssueType, setFilterIssueType] = useState("All");
   const [filterStatus, setFilterStatus]       = useState("All");
-  const [sortField, setSortField]     = useState<SortField>("status");   // ← default sort by status
-  const [sortDir, setSortDir]         = useState<SortDir>("asc");        // ← asc = Pending first
+  const [sortField, setSortField]     = useState<SortField>("status");
+  const [sortDir, setSortDir]         = useState<SortDir>("asc");
   const [page, setPage]               = useState(1);
   const [modalMode, setModalMode]     = useState<ModalMode>(null);
   const [selected, setSelected]       = useState<FileReport | null>(null);
@@ -355,7 +355,7 @@ const SubmitTicket: React.FC = () => {
     ] = await Promise.all([
       supabase.from("file_reports").select("*")
         .eq("is_archived", false)
-        .order("created_at", { ascending: false }), // fetch order; display order handled client-side
+        .order("created_at", { ascending: false }),
       supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
       supabase
         .from("user_accounts")
@@ -434,16 +434,13 @@ const SubmitTicket: React.FC = () => {
       })
       .sort((a, b) => {
         if (sortField === "status") {
-          // Always use STATUS_ORDER for status column — direction flips the order
           const diff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
           return sortDir === "asc" ? diff : -diff;
         }
-        // For other columns, do a standard string/date compare
         const aVal = String((a as any)[sortField] ?? "").toLowerCase();
         const bVal = String((b as any)[sortField] ?? "").toLowerCase();
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
         if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
-        // Secondary sort: always keep Pending → In Progress → Resolved within tied values
         return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
       });
   }, [reportsWithNames, search, filterIssueType, filterStatus, sortField, sortDir]);
@@ -536,16 +533,19 @@ const SubmitTicket: React.FC = () => {
         meta: { title: form.title, ticket_number: row?.ticket_number ?? null, employee_name: form.employee_name },
       });
       showToast("Ticket submitted successfully.", "success");
+
     } else if (modalMode === "edit" && selected) {
       const prevAssigned = Array.isArray(selected.assigned_to) ? selected.assigned_to : [];
       const { error } = await supabase.from("file_reports").update(payload).eq("id", selected.id);
       if (error) { setFormErrors({ title: friendlyError(error.message) }); setSubmitting(false); return; }
+
       const added = diffNewAssignees(prevAssigned, form.assigned_to);
       if (added.length > 0) {
         await notifyTicketAssignees(supabase, added, {
           ticketId: selected.id,
           ticketTitle: form.title,
           ticketNumber: selected.ticket_number ?? null,
+          actorUserId: localStorage.getItem("session_user_id"), // ← FIXED: was missing
         });
       }
       await insertActivityLog(supabase, {

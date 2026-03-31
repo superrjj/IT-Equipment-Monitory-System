@@ -200,6 +200,7 @@ const MyTickets: React.FC = () => {
     return () => { void supabase.removeChannel(channel); };
   }, [userId]);
 
+  // ── Notification focus: highlight row only, no modal ─────────────────────
   useEffect(() => {
     const targetId = localStorage.getItem("focus_ticket_id");
     if (!targetId || rows.length === 0) return;
@@ -207,8 +208,7 @@ const MyTickets: React.FC = () => {
     localStorage.removeItem("focus_ticket_id");
     if (!target) return;
     setFocusedTicketId(targetId);
-    setSelected(target);
-    setModal("view");
+    setTimeout(() => setFocusedTicketId(null), 3000);
   }, [rows]);
 
   // ── Filtered rows ────────────────────────────────────────────────────────
@@ -347,6 +347,12 @@ const MyTickets: React.FC = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .mt-row:hover { background: #f8fafc !important; }
+        .mt-row-focused { animation: mt-highlight-fade 3s ease forwards; }
+        @keyframes mt-highlight-fade {
+          0%   { background: rgba(10,76,134,0.10); }
+          60%  { background: rgba(10,76,134,0.06); }
+          100% { background: transparent; }
+        }
         .mt-input:focus { border-color: ${BRAND} !important; box-shadow: 0 0 0 3px ${BRAND}18; }
         .mt-input-err:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
         .mt-btn-cancel:hover { background: #f1f5f9 !important; }
@@ -454,12 +460,16 @@ const MyTickets: React.FC = () => {
               ) : (
                 filtered.map(r => {
                   const st = statusStyle[r.status] ?? statusStyle["In Progress"];
+                  const isFocused = focusedTicketId === r.id;
                   return (
-                    <tr key={r.id} className="mt-row" style={{
-                      borderBottom: "1px solid #f1f5f9",
-                      background: focusedTicketId === r.id ? "rgba(10,76,134,0.06)" : "#fff",
-                      transition: "background 0.15s",
-                    }}>
+                    <tr
+                      key={r.id}
+                      className={`mt-row${isFocused ? " mt-row-focused" : ""}`}
+                      style={{
+                        borderBottom: "1px solid #f1f5f9",
+                        transition: "background 1.2s ease",
+                      }}
+                    >
 
                       {/* ID */}
                       <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: BRAND }}>
