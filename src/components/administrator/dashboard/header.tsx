@@ -646,14 +646,20 @@ const Header: React.FC<HeaderProps> = ({
     })();
 
     // Map notification type to an icon background color + emoji-like SVG badge
-    const typeColor: Record<string, string> = {
-      ticket_assigned: "#22c55e",
-      repair_assigned: "#1877f2",
-      ticket_status_changed_admin: "#22c55e",
-      repair_status_changed_admin: "#e67e22",
-      signup_request: "#0a4c86",
+   const typeColor: Record<string, string> = {
+      ticket_assigned:             "#22c55e", // green — assigned
+      repair_assigned:             "#22c55e", // green — assigned
+      signup_request:              "#0a4c86", // brand blue — account approval
     };
-    const badgeBg = typeColor[n.type] ?? "#1877f2";
+
+    const statusBadgeColor =
+      n.body?.toLowerCase().includes("resolved")    ? "#22c55e" : // green
+      n.body?.toLowerCase().includes("in progress") ? "#eab308" : // yellow
+                                                      "#3b82f6";  // blue — Pending
+
+    const badgeBg = n.type.includes("status")
+      ? statusBadgeColor
+      : (typeColor[n.type] ?? "#22c55e");
 
     return (
       <button
@@ -704,24 +710,29 @@ const Header: React.FC<HeaderProps> = ({
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              {n.type.includes("signup") ? (
-                /* Person / user icon — for account approval requests */
+            {n.type.includes("signup") ? (
+              <>
+                <circle cx="8" cy="5" r="2.8" stroke="#fff" strokeWidth="1.7"/>
+                <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
+              </>
+            ) : n.type.includes("status") ? (
+              n.body?.toLowerCase().includes("resolved") ? (
+                <path d="M3 8l3.5 3.5L13 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              ) : n.body?.toLowerCase().includes("in progress") ? (
                 <>
-                  <circle cx="8" cy="5" r="2.8" stroke="#fff" strokeWidth="1.7"/>
-                  <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
-                </>
-              ) : n.type.includes("status") ? (
-                /* Ticket icon — for status changes */
-                <>
-                  <path d="M2 5a1 1 0 011-1h10a1 1 0 011 1v1.5a1.5 1.5 0 000 3V11a1 1 0 01-1 1H3a1 1 0 01-1-1V9.5a1.5 1.5 0 000-3V5z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round"/>
+                  <circle cx="8" cy="8" r="5.5" stroke="#fff" strokeWidth="1.7"/>
+                  <path d="M8 5v3.5l2 2" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
                 </>
               ) : (
-                /* Ticket icon — for assigned tickets/repairs */
                 <>
-                  <path d="M2 5a1 1 0 011-1h10a1 1 0 011 1v1.5a1.5 1.5 0 000 3V11a1 1 0 01-1 1H3a1 1 0 01-1-1V9.5a1.5 1.5 0 000-3V5z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round"/>
+                  <path d="M4 2h8M4 14h8" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
+                  <path d="M5 2c0 3 3 4 3 6s-3 3-3 6M11 2c0 3-3 4-3 6s3 3 3 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
                 </>
-              )}
-            </svg>
+              )
+            ) : (
+              <path d="M2 5a1 1 0 011-1h10a1 1 0 011 1v1.5a1.5 1.5 0 000 3V11a1 1 0 01-1 1H3a1 1 0 01-1-1V9.5a1.5 1.5 0 000-3V5z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round"/>
+            )}
+          </svg>
           </div>
         </div>
 
