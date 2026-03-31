@@ -250,7 +250,7 @@ const Departments: React.FC = () => {
     if (modalMode === "edit" && selected) dupQuery.neq("id", selected.id);
     const { data: dup } = await dupQuery;
     if (dup && dup.length > 0) {
-      setFormErrors({ name: "A department with that name already exists. Please use a different name." });
+      setFormErrors({ name: "Please use a different department name." });
       return;
     }
 

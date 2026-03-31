@@ -69,10 +69,9 @@ function validateForm(form: FormState): FieldErrors {
   if (!form.date_released) {
     errors.date_released = "Date released is required.";
   } else {
-    const releasedDay = new Date(`${form.date_released}T12:00:00`);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    if (releasedDay > endOfToday) errors.date_released = "Date released cannot be in the future.";
+    const today = new Date().toISOString().slice(0, 10);
+    if (form.date_released !== today)
+      errors.date_released = "Date released must be today's date.";
   }
 
   const unit = form.unit_name.trim();
@@ -137,7 +136,6 @@ const fmtMonthLabel = (ym: string): string => {
   });
 };
 
-// ── Per-field error — visibility:hidden keeps space, no layout shift ──────────
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   <div style={{
     minHeight: 18,
@@ -242,12 +240,13 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const exportRef = useRef<HTMLDivElement>(null);
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  // ── Close export menu on outside click ──────────────────────────────────────
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node))
@@ -257,7 +256,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Derived maps ─────────────────────────────────────────────────────────────
   const userMap = useMemo(() => {
     const m: Record<string, UserOption> = {};
     itStaff.forEach(u => { m[u.id] = u; });
@@ -285,7 +283,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const monthOptions        = useMemo(() => buildMonthOptions(rows), [rows]);
   const resolvedMonthFilter = exportMonth || null;
 
-  // ── Data fetching ────────────────────────────────────────────────────────────
   const fetchAll = async () => {
     setLoading(true);
     const [{ data: unitData, error: unitError }, { data: staff }, { data: depts }] = await Promise.all([
@@ -308,29 +305,28 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
- useEffect(() => {
-  const channel = supabase
-    .channel("outgoing_units_realtime")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
-      const newRow = payload.new as OutgoingUnitRow;
-      if (newRow.is_archived) return;
-      setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
-    })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "outgoing_units" }, (payload) => {
-      const updated = payload.new as OutgoingUnitRow;
-      if (updated.is_archived) {                        // ← archive = remove immediately
-        setRows(prev => prev.filter(r => r.id !== updated.id));
-        setSelected(prev => prev?.id === updated.id ? null : prev);
-        return;
-      }
-      setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
-      setSelected(prev => prev?.id === updated.id ? updated : prev);
-    })
-    .subscribe();
-  return () => { supabase.removeChannel(channel); };
-}, []);
+  useEffect(() => {
+    const channel = supabase
+      .channel("outgoing_units_realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
+        const newRow = payload.new as OutgoingUnitRow;
+        if (newRow.is_archived) return;
+        setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "outgoing_units" }, (payload) => {
+        const updated = payload.new as OutgoingUnitRow;
+        if (updated.is_archived) {
+          setRows(prev => prev.filter(r => r.id !== updated.id));
+          setSelected(prev => prev?.id === updated.id ? null : prev);
+          return;
+        }
+        setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
+        setSelected(prev => prev?.id === updated.id ? updated : prev);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
-  // ── Table data ───────────────────────────────────────────────────────────────
   const rowsEnriched = useMemo(
     () => rows.map(r => ({
       ...r,
@@ -367,7 +363,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     </span>
   );
 
-  // ── Modal helpers ────────────────────────────────────────────────────────────
   const closeModal = () => {
     setModalMode(null);
     setSelected(null);
@@ -394,12 +389,9 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const openView = (r: OutgoingUnitRow) => { setSelected(r); setModalMode("view"); };
 
-  const today = new Date().toISOString().slice(0, 10);
-
   const clearError = (field: keyof FormState) =>
     setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
 
-  // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
@@ -445,7 +437,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     fetchAll();
   };
 
-  // ── Delete ───────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const removedName = deleteTarget.unit_name;
@@ -453,20 +444,19 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     const { error } = await supabase.from("outgoing_units").update({ is_archived: true }).eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
     else {
-       await insertActivityLog(supabase, {
+      await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
         action: "outgoing_unit_archived",
         entityType: "outgoing_unit",
         entityId: removedId,
         meta: { unit_name: removedName },
-    });
-        showToast(`"${removedName}" has been archived.`, "success");
+      });
+      showToast(`"${removedName}" has been archived.`, "success");
     }
     setDeleteTarget(null);
     fetchAll();
   };
 
-  // ── Export handlers ──────────────────────────────────────────────────────────
   const handleExportExcel = () => {
     setExportMenuOpen(false);
     if (rows.length === 0) { showToast("No records to export.", "error"); return; }
@@ -505,7 +495,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     }
   };
 
-  // ── Style helpers ────────────────────────────────────────────────────────────
   const inputStyle = (hasErr?: boolean): React.CSSProperties => ({
     width: "100%",
     padding: "0.5rem 0.75rem",
@@ -527,7 +516,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     display: "block",
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
@@ -550,7 +538,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
       <div className="ou-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
-        {/* Toast */}
         {toast && (
           <div style={{
             position: "fixed", top: 20, right: 24, zIndex: 9999,
@@ -562,7 +549,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           }}>{toast.msg}</div>
         )}
 
-        {/* ── Header ──────────────────────────────────────────────────────────── */}
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif" }}>
@@ -577,7 +564,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 
-            {/* ── Export dropdown ──────────────────────────────────────────────── */}
+            {/* Export dropdown */}
             <div ref={exportRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -619,7 +606,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                     {rows.length} record{rows.length !== 1 ? "s" : ""} total
                   </div>
 
-                  {/* Month filter */}
                   <div style={{ padding: "0.65rem 1rem", borderBottom: "1px solid #f1f5f9" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                       <Calendar size={12} color={GREEN} />
@@ -668,7 +654,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               )}
             </div>
 
-            {/* Log button */}
             {!readOnly && (
               <button onClick={openAdd} style={{
                 display: "flex", alignItems: "center", gap: "0.4rem",
@@ -683,7 +668,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         </div>
 
-        {/* ── Stats ───────────────────────────────────────────────────────────── */}
+        {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
             { label: "Total logged",         value: rows.length,     color: BRAND,     icon: <Package size={16} /> },
@@ -699,7 +684,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           ))}
         </div>
 
-        {/* ── Table ───────────────────────────────────────────────────────────── */}
+        {/* Table */}
         <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
           <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 320 }}>
@@ -795,7 +780,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         </div>
 
-        {/* ── Add / Edit Modal ─────────────────────────────────────────────────── */}
+        {/* Add / Edit Modal */}
         {!readOnly && (modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
@@ -811,9 +796,15 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 {/* Date */}
                 <div>
                   <label style={labelStyle}>Date released <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input type="date" value={form.date_released} max={today}
+                  <input
+                    type="date"
+                    value={form.date_released}
+                    min={today}
+                    max={today}
+                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={e => { setForm(f => ({ ...f, date_released: e.target.value })); clearError("date_released"); }}
-                    style={inputStyle(!!fieldErrors.date_released)} />
+                    style={{ ...inputStyle(!!fieldErrors.date_released), cursor: "pointer" }}
+                  />
                   <FieldError msg={fieldErrors.date_released} />
                 </div>
 
@@ -854,7 +845,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 {/* Released by */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Users size={13} color="#475569" /> Released by (IT staff) <span style={{ color: "#dc2626" }}>*</span>
+                    <Users size={13} color="#475569" /> Released by (IT Technician) <span style={{ color: "#dc2626" }}>*</span>
                   </label>
                   <StaffSinglePicker
                     users={itStaff}
@@ -893,7 +884,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        {/* ── View Modal ───────────────────────────────────────────────────────── */}
+        {/* View Modal */}
         {modalMode === "view" && selected && (
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
@@ -938,7 +929,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        {/* ── Delete Confirm Modal ─────────────────────────────────────────────── */}
+        {/* Delete Confirm Modal */}
         {!readOnly && deleteTarget && (
           <div className="modal-overlay-ou" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>

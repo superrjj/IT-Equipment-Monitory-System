@@ -36,7 +36,6 @@ type IncomingUnitRow = {
   is_archived: boolean;
 };
 
-// Enriched row adds derived display-only fields for the table
 type EnrichedRow = IncomingUnitRow & {
   receiver_name: string;
   department_name: string;
@@ -57,7 +56,7 @@ type FormState = {
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 const BRAND     = "#0a4c86";
-const GREEN     = "#16a34a";   // export button colour
+const GREEN     = "#16a34a";
 const PAGE_SIZE = 10;
 
 function sanitize(val: string): string {
@@ -74,11 +73,9 @@ function validateForm(form: FormState): FieldErrors {
   if (!form.date_received) {
     errors.date_received = "Date received is required.";
   } else {
-    const receivedDay = new Date(`${form.date_received}T12:00:00`);
-    const endOfToday  = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    if (receivedDay > endOfToday)
-      errors.date_received = "Date received cannot be in the future.";
+    const today = new Date().toISOString().slice(0, 10);
+    if (form.date_received !== today)
+      errors.date_received = "Date received must be today's date.";
   }
 
   const unit = form.unit_name.trim();
@@ -141,7 +138,6 @@ const fmtMonthLabel = (ym: string): string => {
   });
 };
 
-// ── Per-field error ────────────────────────────────────────────────────────────
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   <div style={{
     minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
@@ -196,7 +192,6 @@ const StaffSinglePicker: React.FC<{
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
 const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
   const [rows, setRows]               = useState<IncomingUnitRow[]>([]);
   const [itStaff, setItStaff]         = useState<UserOption[]>([]);
@@ -207,7 +202,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const [sortDir, setSortDir]         = useState<SortDir>("desc");
   const [page, setPage]               = useState(1);
   const [modalMode, setModalMode]     = useState<ModalMode>(null);
-  // `selected` always holds a plain base IncomingUnitRow (no enriched fields)
   const [selected, setSelected]       = useState<IncomingUnitRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<IncomingUnitRow | null>(null);
   const [form, setForm]               = useState<FormState>(emptyForm());
@@ -219,6 +213,8 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const exportRef = useRef<HTMLDivElement>(null);
+
+  const today = new Date().toISOString().slice(0, 10);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -234,7 +230,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Derived maps ────────────────────────────────────────────────────────────
   const userMap = useMemo(() => {
     const m: Record<string, UserOption> = {};
     itStaff.forEach(u => { m[u.id] = u; });
@@ -261,7 +256,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const monthOptions = useMemo(() => buildMonthOptions(rows), [rows]);
 
-  // ── Data fetching ───────────────────────────────────────────────────────────
   const fetchAll = async () => {
     setLoading(true);
     const [
@@ -293,35 +287,31 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       .channel("incoming_units_realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "incoming_units" }, (payload) => {
         const newRow = payload.new as IncomingUnitRow;
-        if (newRow.is_archived) return;                    // ← don't add archived rows
+        if (newRow.is_archived) return;
         setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "incoming_units" }, (payload) => {
         const updated = payload.new as IncomingUnitRow;
-
-        if (updated.is_archived) {                         // ← archive = remove from list
+        if (updated.is_archived) {
           setRows(prev => prev.filter(r => r.id !== updated.id));
           setSelected(prev => prev?.id === updated.id ? null : prev);
           return;
         }
-
         setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
         setSelected(prev => prev?.id === updated.id ? updated : prev);
       })
-      // ← DELETE listener removed — no hard deletes anymore
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-    useEffect(() => {
-      if (!selected && (modalMode === "view" || modalMode === "edit")) {
-        setModalMode(null);
-        setForm(emptyForm());
-        setFieldErrors({});
-      }
+  useEffect(() => {
+    if (!selected && (modalMode === "view" || modalMode === "edit")) {
+      setModalMode(null);
+      setForm(emptyForm());
+      setFieldErrors({});
+    }
   }, [selected]);
 
-  // ── Table data ──────────────────────────────────────────────────────────────
   const rowsEnriched = useMemo((): EnrichedRow[] =>
     rows.map(r => ({
       ...r,
@@ -368,7 +358,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     </span>
   );
 
-  // ── Modal helpers ───────────────────────────────────────────────────────────
   const closeModal = () => {
     setModalMode(null);
     setSelected(null);
@@ -379,7 +368,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const openAdd = () => { closeModal(); setModalMode("add"); };
 
-  // Look up the base row from `rows` to avoid storing enriched fields in `selected`
   const openEdit = (enriched: EnrichedRow) => {
     const base = rows.find(r => r.id === enriched.id) ?? enriched;
     closeModal();
@@ -401,12 +389,9 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setModalMode("view");
   };
 
-  const today = new Date().toISOString().slice(0, 10);
-
   const clearError = (field: keyof FormState) =>
     setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
@@ -453,7 +438,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     closeModal();
   };
 
-  // ── Delete ──────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const removedName = deleteTarget.unit_name;
@@ -462,18 +446,17 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     if (error) showToast(friendlyError(error.message), "error");
     else {
       await insertActivityLog(supabase, {
-          actorUserId: getSessionUserId(),
-          action: "incoming_unit_archived",
-          entityType: "incoming_unit",
-          entityId: removedId,
-          meta: { unit_name: removedName },
-        });
-     showToast(`"${removedName}" has been archived.`, "success");
+        actorUserId: getSessionUserId(),
+        action: "incoming_unit_archived",
+        entityType: "incoming_unit",
+        entityId: removedId,
+        meta: { unit_name: removedName },
+      });
+      showToast(`"${removedName}" has been archived.`, "success");
     }
     setDeleteTarget(null);
   };
 
-  // ── Export handlers ──────────────────────────────────────────────────────────
   const resolvedMonthFilter = exportMonth || null;
 
   const handleExportExcel = () => {
@@ -514,7 +497,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     }
   };
 
-  // ── Style helpers ────────────────────────────────────────────────────────────
   const inputStyle = (hasErr?: boolean): React.CSSProperties => ({
     width: "100%", padding: "0.5rem 0.75rem", borderRadius: 8,
     border: `1px solid ${hasErr ? "#fca5a5" : "#e2e8f0"}`,
@@ -528,7 +510,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4, display: "block",
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
@@ -551,7 +532,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
       <div className="iu-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
-        {/* Toast */}
         {toast && (
           <div style={{
             position: "fixed", top: 20, right: 24, zIndex: 9999,
@@ -563,7 +543,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           }}>{toast.msg}</div>
         )}
 
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif" }}>
@@ -578,7 +558,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 
-            {/* ── Export dropdown ─────────────────────────────────────────────── */}
+            {/* Export dropdown */}
             <div ref={exportRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -620,7 +600,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                     {rows.length} record{rows.length !== 1 ? "s" : ""} total
                   </div>
 
-                  {/* Month filter */}
                   <div style={{ padding: "0.65rem 1rem", borderBottom: "1px solid #f1f5f9" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                       <Calendar size={12} color={GREEN} />
@@ -669,7 +648,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               )}
             </div>
 
-            {/* Log button */}
             {!readOnly && (
               <button onClick={openAdd} style={{
                 display: "flex", alignItems: "center", gap: "0.4rem",
@@ -684,7 +662,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         </div>
 
-        {/* ── Stats ──────────────────────────────────────────────────────────── */}
+        {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
             { label: "Total logged",         value: rows.length,     color: BRAND,     icon: <Package size={16} /> },
@@ -700,7 +678,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           ))}
         </div>
 
-        {/* ── Table ──────────────────────────────────────────────────────────── */}
+        {/* Table */}
         <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
           <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 320 }}>
@@ -752,10 +730,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                     <td style={{ padding: "0.75rem 1rem" }}>
                       <div style={{ display: "flex", gap: 6 }}>
                         {(readOnly
-                          ? [{ icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),                                       color: BRAND }]
+                          ? [{ icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),                                        color: BRAND }]
                           : [
-                              { icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),                                       color: BRAND },
-                              { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(r),                                       color: BRAND },
+                              { icon: <Eye size={14} />,    title: "View",   fn: () => openView(r),                                        color: BRAND },
+                              { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(r),                                        color: BRAND },
                               { icon: <Trash2 size={14} />, title: "Delete", fn: () => setDeleteTarget(rows.find(b => b.id === r.id) ?? r), color: "#dc2626" },
                             ]
                         ).map((btn, i) => (
@@ -796,7 +774,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         </div>
 
-        {/* ── Add / Edit Modal ───────────────────────────────────────────────── */}
+        {/* Add / Edit Modal */}
         {!readOnly && (modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-iu" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-iu" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 580, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
@@ -811,9 +789,15 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 {/* Date */}
                 <div>
                   <label style={labelStyle}>Date <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input type="date" value={form.date_received} max={today}
+                  <input
+                    type="date"
+                    value={form.date_received}
+                    min={today}
+                    max={today}
+                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={e => { setForm(f => ({ ...f, date_received: e.target.value })); clearError("date_received"); }}
-                    style={inputStyle(!!fieldErrors.date_received)} />
+                    style={{ ...inputStyle(!!fieldErrors.date_received), cursor: "pointer" }}
+                  />
                   <FieldError msg={fieldErrors.date_received} />
                 </div>
 
@@ -892,7 +876,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        {/* ── View Modal ─────────────────────────────────────────────────────── */}
+        {/* View Modal */}
         {modalMode === "view" && selected && (
           <div className="modal-overlay-iu" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-iu" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 520, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
@@ -907,10 +891,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Receipt details</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {([
-                  { label: "Date received",      value: fmtDate(selected.date_received),                                                          icon: <Clock     size={12} /> },
-                  { label: "Name of Employee",    value: selected.reported_by,                                                                     icon: <User      size={12} /> },
-                  { label: "Office / Department", value: selected.department_id ? (deptMap[selected.department_id]?.name ?? "—") : "—",            icon: <Building2 size={12} /> },
-                  { label: "Received by",         value: selected.received_by_user_id ? (userMap[selected.received_by_user_id]?.full_name ?? "—") : "—", icon: <Users size={12} /> },
+                  { label: "Date received",      value: fmtDate(selected.date_received),                                                               icon: <Clock     size={12} /> },
+                  { label: "Name of Employee",    value: selected.reported_by,                                                                          icon: <User      size={12} /> },
+                  { label: "Office / Department", value: selected.department_id ? (deptMap[selected.department_id]?.name ?? "—") : "—",                 icon: <Building2 size={12} /> },
+                  { label: "Received by",         value: selected.received_by_user_id ? (userMap[selected.received_by_user_id]?.full_name ?? "—") : "—", icon: <Users     size={12} /> },
                 ] as { label: string; value: string; icon: React.ReactNode }[]).map(row => (
                   <div key={row.label} className="iu-detail-row">
                     <span className="iu-detail-label">{row.icon} {row.label}</span>
@@ -942,7 +926,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           </div>
         )}
 
-        {/* ── Delete Confirm Modal ───────────────────────────────────────────── */}
+        {/* Delete Confirm Modal */}
         {!readOnly && deleteTarget && (
           <div className="modal-overlay-iu" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box-iu" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>
