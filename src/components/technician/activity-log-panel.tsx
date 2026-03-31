@@ -9,6 +9,77 @@ const supabase = createClient(
 );
 
 const BRAND = "#0a4c86";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const BUCKET = "profile-avatar";
+
+/** Build the public avatar URL from the stored avatar_url path */
+const getAvatarUrl = (avatarUrl: string | null | undefined): string | null => {
+  if (!avatarUrl) return null;
+  // If it's already a full URL, return as-is
+  if (avatarUrl.startsWith("http")) return avatarUrl;
+  // Otherwise build the public URL from storage
+  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${avatarUrl}`;
+};
+
+/** Fallback color per name for when image is missing */
+const avatarColor = (fullName: string | null | undefined): string => {
+  if (!fullName?.trim()) return BRAND;
+  const colors = [
+    "#0a4c86", "#1d6fa8", "#2e7d32", "#6a1b9a",
+    "#ad1457", "#00838f", "#e65100", "#4527a0",
+  ];
+  let hash = 0;
+  for (let i = 0; i < fullName.length; i++) hash += fullName.charCodeAt(i);
+  return colors[hash % colors.length];
+};
+
+const getInitials = (fullName: string | null | undefined): string => {
+  if (!fullName?.trim()) return "SY";
+  return fullName.trim().split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
+};
+
+/** Avatar component — shows photo from Supabase Storage, falls back to initials */
+const UserAvatar: React.FC<{
+  fullName: string | null | undefined;
+  avatarUrl: string | null | undefined;
+}> = ({ fullName, avatarUrl }) => {
+  const [imgError, setImgError] = useState(false);
+  const url = getAvatarUrl(avatarUrl);
+  const showImage = !!url && !imgError;
+
+  return (
+    <div
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: "50%",
+        overflow: "hidden",
+        flexShrink: 0,
+        background: showImage ? "transparent" : avatarColor(fullName),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 11,
+        fontWeight: 700,
+        color: "#fff",
+        letterSpacing: 0.5,
+        userSelect: "none",
+        border: "1.5px solid #e2e8f0",
+      }}
+    >
+      {showImage ? (
+        <img
+          src={url}
+          alt={fullName ?? "avatar"}
+          onError={() => setImgError(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        getInitials(fullName)
+      )}
+    </div>
+  );
+};
 
 type Row = {
   id: string;
@@ -17,7 +88,7 @@ type Row = {
   entity_id: string | null;
   meta: Record<string, unknown>;
   created_at: string;
-  actor?: { full_name: string | null } | null;
+  actor?: { full_name: string | null; avatar_url: string | null } | null;
   ticket?: { ticket_number: string | null } | null;
 };
 
@@ -57,7 +128,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       user_account_rejected: "Rejected a signup request",
       user_password_changed: "Reset a user's password",
     };
-    return map[action] ?? action.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    return map[action] ?? action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   const prettyEntity = (entityType: string) => {
@@ -78,9 +149,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
     const fullName = typeof meta.full_name === "string" ? meta.full_name : "";
     const username = typeof meta.username === "string" ? meta.username : "";
     const isActive = typeof meta.is_active === "boolean" ? meta.is_active : null;
-    const changedFields = Array.isArray(meta.changed_fields)
-      ? (meta.changed_fields as string[])
-      : null;
+    const changedFields = Array.isArray(meta.changed_fields) ? (meta.changed_fields as string[]) : null;
 
     const labelMap: Record<string, string> = {
       full_name: "name",
@@ -98,329 +167,166 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
     const fullNameSpan = <BrandValue value={fullName || "User"} />;
 
     switch (row.action) {
-          case "ticket_created": {
-            const ticketNum =
-              row.ticket?.ticket_number ||
-              (typeof meta.ticket_number === "string" && meta.ticket_number) ||
-              (typeof meta.title === "string" && meta.title) ||
-              "—";
-            return (
-              <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                Added the ticket <BrandValue value={ticketNum} />
-              </span>
-            );
-          }
-
-          case "ticket_updated": {
-            const ticketNum =
-              row.ticket?.ticket_number ||
-              (typeof meta.ticket_number === "string" && meta.ticket_number) ||
-              (typeof meta.title === "string" && meta.title) ||
-              "—";
-            const assignees = typeof meta.new_assignees === "number" ? meta.new_assignees : null;
-            return (
-              <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                Updated the ticket <BrandValue value={ticketNum} />
-                {assignees !== null && assignees > 0 ? (
-                  <span style={{ color: "#475569" }}>+{assignees} assignee(s)</span>
-                ) : null}
-              </span>
-            );
-          }
-
-          case "ticket_technician_update": {
-            const ticketNum =
-              row.ticket?.ticket_number ||
-              (typeof meta.ticket_number === "string" && meta.ticket_number) ||
-              (typeof meta.title === "string" && meta.title) ||
-              "—";
-            const techStatus =
-              (typeof meta.status === "string" && meta.status) ||
-              (typeof meta.new_status === "string" && meta.new_status) ||
-              "";
-            const statusColor =
-              techStatus === "Resolved"    ? "#15803d" :
-              techStatus === "In Progress" ? "#a16207" :
-              "#475569";
-            const statusBg =
-              techStatus === "Resolved"    ? "rgba(22,163,74,0.10)" :
-              techStatus === "In Progress" ? "rgba(234,179,8,0.11)" :
-              "rgba(100,116,139,0.09)";
-            return (
-              <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                Updated ticket <BrandValue value={ticketNum} />
-                {techStatus ? (
-                  <span style={{
-                    color: statusColor,
-                    fontWeight: 600,
-                    background: statusBg,
-                    padding: "1px 8px",
-                    borderRadius: 999,
-                    fontSize: 11,
-                  }}>
-                    → {techStatus}
-                  </span>
-                ) : null}
-              </span>
-            );
-          }
-      case "repair_created":
-        return "A new repair job was logged.";
-      case "repair_updated":
-        return status ? `Repair status set to "${status}".` : "Repair details were updated.";
-      case "repair_technician_update":
-        return status ? `Repair marked as "${status}".` : "Repair was updated by technician.";
-      case "incoming_unit_created":
-        return unitName ? (
-          <span>
-            Added the incoming unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "A new unit was received."
-        );
-      case "incoming_unit_updated":
-        return unitName ? (
-          <span>
-            Updated the incoming unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "An incoming unit was updated."
-        );
-      case "incoming_unit_archived":
-        return unitName ? (
-          <span>
-            Archived the incoming unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "An incoming unit was archived."
-        );
-      case "incoming_unit_deleted":
-        return unitName ? (
-          <span>
-            Removed the incoming unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "An incoming unit was removed."
-        );
-      case "outgoing_unit_created":
-        return unitName ? (
-          <span>
-            Released the outgoing unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "A unit was released."
-        );
-      case "outgoing_unit_updated":
-        return unitName ? (
-          <span>
-            Updated the outgoing unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "An outgoing unit was updated."
-        );
-      case "outgoing_unit_archived":
-        return unitName ? (
-          <span>
-            Archived the outgoing unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "An outgoing unit was archived."
-        );
-      case "outgoing_unit_deleted":
-        return unitName ? (
-          <span>
-            Removed the outgoing unit <BrandValue value={unitName} />
-          </span>
-        ) : (
-          "An outgoing unit was removed."
-        );
-      case "department_created":
-        return departmentName ? (
-          <span>
-            Added the department <BrandValue value={departmentName} />
-          </span>
-        ) : (
-          "A new department was added."
-        );
-      case "department_updated":
-        return departmentName ? (
-          <span>
-            Updated the department <BrandValue value={departmentName} />
-          </span>
-        ) : (
-          "A department was updated."
-        );
-      case "department_deleted":
-        return departmentName ? (
-          <span>
-            Removed the department <BrandValue value={departmentName} />
-          </span>
-        ) : (
-          "A department was deleted."
-        );
-      case "department_archived":
-        return departmentName ? (
-          <span>
-            Archived the department <BrandValue value={departmentName} />
-          </span>
-        ) : (
-          "A department was archived."
-        );
-      case "user_account_created":
+      case "ticket_created": {
+        const ticketNum =
+          row.ticket?.ticket_number ||
+          (typeof meta.ticket_number === "string" && meta.ticket_number) ||
+          (typeof meta.title === "string" && meta.title) || "—";
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>Added the ticket <BrandValue value={ticketNum} /></span>;
+      }
+      case "ticket_updated": {
+        const ticketNum =
+          row.ticket?.ticket_number ||
+          (typeof meta.ticket_number === "string" && meta.ticket_number) ||
+          (typeof meta.title === "string" && meta.title) || "—";
+        const assignees = typeof meta.new_assignees === "number" ? meta.new_assignees : null;
         return (
           <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Added the account {fullNameSpan} {usernameSpan}</span>
+            Updated the ticket <BrandValue value={ticketNum} />
+            {assignees !== null && assignees > 0 ? <span style={{ color: "#475569" }}>+{assignees} assignee(s)</span> : null}
           </span>
         );
+      }
+      case "ticket_technician_update": {
+        const ticketNum =
+          row.ticket?.ticket_number ||
+          (typeof meta.ticket_number === "string" && meta.ticket_number) ||
+          (typeof meta.title === "string" && meta.title) || "—";
+        const techStatus =
+          (typeof meta.status === "string" && meta.status) ||
+          (typeof meta.new_status === "string" && meta.new_status) || "";
+        const statusColor = techStatus === "Resolved" ? "#15803d" : techStatus === "In Progress" ? "#a16207" : "#475569";
+        const statusBg = techStatus === "Resolved" ? "rgba(22,163,74,0.10)" : techStatus === "In Progress" ? "rgba(234,179,8,0.11)" : "rgba(100,116,139,0.09)";
+        return (
+          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            Updated ticket <BrandValue value={ticketNum} />
+            {techStatus ? <span style={{ color: statusColor, fontWeight: 600, background: statusBg, padding: "1px 8px", borderRadius: 999, fontSize: 11 }}>→ {techStatus}</span> : null}
+          </span>
+        );
+      }
+      case "repair_created": return "A new repair job was logged.";
+      case "repair_updated": return status ? `Repair status set to "${status}".` : "Repair details were updated.";
+      case "repair_technician_update": return status ? `Repair marked as "${status}".` : "Repair was updated by technician.";
+      case "incoming_unit_created": return unitName ? <span>Added the incoming unit <BrandValue value={unitName} /></span> : "A new unit was received.";
+      case "incoming_unit_updated": return unitName ? <span>Updated the incoming unit <BrandValue value={unitName} /></span> : "An incoming unit was updated.";
+      case "incoming_unit_archived": return unitName ? <span>Archived the incoming unit <BrandValue value={unitName} /></span> : "An incoming unit was archived.";
+      case "incoming_unit_deleted": return unitName ? <span>Removed the incoming unit <BrandValue value={unitName} /></span> : "An incoming unit was removed.";
+      case "outgoing_unit_created": return unitName ? <span>Released the outgoing unit <BrandValue value={unitName} /></span> : "A unit was released.";
+      case "outgoing_unit_updated": return unitName ? <span>Updated the outgoing unit <BrandValue value={unitName} /></span> : "An outgoing unit was updated.";
+      case "outgoing_unit_archived": return unitName ? <span>Archived the outgoing unit <BrandValue value={unitName} /></span> : "An outgoing unit was archived.";
+      case "outgoing_unit_deleted": return unitName ? <span>Removed the outgoing unit <BrandValue value={unitName} /></span> : "An outgoing unit was removed.";
+      case "department_created": return departmentName ? <span>Added the department <BrandValue value={departmentName} /></span> : "A new department was added.";
+      case "department_updated": return departmentName ? <span>Updated the department <BrandValue value={departmentName} /></span> : "A department was updated.";
+      case "department_deleted": return departmentName ? <span>Removed the department <BrandValue value={departmentName} /></span> : "A department was deleted.";
+      case "department_archived": return departmentName ? <span>Archived the department <BrandValue value={departmentName} /></span> : "A department was archived.";
+      case "user_account_created":
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Added the account {fullNameSpan} {usernameSpan}</span></span>;
       case "user_account_updated":
         if (changedFields && changedFields.length > 0) {
-          const labels = changedFields.map(f => labelMap[f] ?? f).join(", ");
-          return (
-            <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-              <span>Updated the account {fullNameSpan} {usernameSpan}</span>
-              <span style={{ color: "#475569" }}>{labels}</span>
-            </span>
-          );
+          const labels = changedFields.map((f) => labelMap[f] ?? f).join(", ");
+          return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Updated the account {fullNameSpan} {usernameSpan}</span><span style={{ color: "#475569" }}>{labels}</span></span>;
         }
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Updated the account {fullNameSpan} {usernameSpan}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Updated the account {fullNameSpan} {usernameSpan}</span></span>;
       case "user_password_changed":
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Reset password for {fullNameSpan} {usernameSpan}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Reset password for {fullNameSpan} {usernameSpan}</span></span>;
       case "user_account_deleted":
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Deleted account {fullNameSpan} {usernameSpan}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Deleted account {fullNameSpan} {usernameSpan}</span></span>;
       case "user_account_archived":
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Archived account {fullNameSpan} {usernameSpan}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Archived account {fullNameSpan} {usernameSpan}</span></span>;
       case "user_account_status_changed":
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Changed status for {fullNameSpan} {usernameSpan}</span>
-            <span style={{ color: "#475569" }}>{isActive ? "activated" : "deactivated"}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Changed status for {fullNameSpan} {usernameSpan}</span><span style={{ color: "#475569" }}>{isActive ? "activated" : "deactivated"}</span></span>;
       case "user_account_approved":
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Approved signup for {fullNameSpan} {usernameSpan}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Approved signup for {fullNameSpan} {usernameSpan}</span></span>;
       case "user_account_rejected":
-        return (
-          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span>Rejected signup for {fullNameSpan} {usernameSpan}</span>
-          </span>
-        );
+        return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}><span>Rejected signup for {fullNameSpan} {usernameSpan}</span></span>;
       default:
         return "Action was recorded.";
     }
   };
 
   useEffect(() => {
-  const run = async () => {
-    setLoading(true);
-    let q = supabase
-      .from("activity_log")
-      .select(`
-        id,
-        action,
-        entity_type,
-        entity_id,
-        meta,
-        created_at,
-        actor:user_accounts!activity_log_actor_user_id_fkey(full_name)
-      `)
-      .order("created_at", { ascending: false })
-      .limit(isAdmin ? 400 : 200);
+    const run = async () => {
+      setLoading(true);
+      let q = supabase
+        .from("activity_log")
+        .select(`
+          id,
+          action,
+          entity_type,
+          entity_id,
+          meta,
+          created_at,
+          actor:user_accounts!activity_log_actor_user_id_fkey(full_name, avatar_url)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(isAdmin ? 400 : 200);
 
-    if (!isAdmin && userId) {
-      q = q.eq("actor_user_id", userId);
-    } else if (!isAdmin && !userId) {
-      setRows([]);
-      setLoading(false);
-      return;
-    }
+      if (!isAdmin && userId) {
+        q = q.eq("actor_user_id", userId);
+      } else if (!isAdmin && !userId) {
+        setRows([]);
+        setLoading(false);
+        return;
+      }
 
-    const { data, error } = await q;
-    if (error) {
-      console.error("activity_log error:", error);
-      setRows([]);
-      setLoading(false);
-      return;
-    }
+      const { data, error } = await q;
+      if (error) {
+        console.error("activity_log error:", error);
+        setRows([]);
+        setLoading(false);
+        return;
+      }
 
-    const rawRows = (data ?? []).map((r: any) => ({
-      ...r,
-      meta: (r.meta && typeof r.meta === "object" ? r.meta : {}) as Record<string, unknown>,
-      ticket: null,
-    }));
-
-    // Collect all entity_ids for ticket-related rows
-    const ticketEntityIds = rawRows
-      .filter((r: any) =>
-        ["ticket_created", "ticket_updated", "ticket_technician_update"].includes(r.action) &&
-        r.entity_id
-      )
-      .map((r: any) => r.entity_id as string);
-
-    // Fetch ticket numbers in one batch query
-    if (ticketEntityIds.length > 0) {
-      const { data: tickets } = await supabase
-        .from("file_reports")
-        .select("id, ticket_number")
-        .in("id", ticketEntityIds);
-
-      const ticketMap: Record<string, string | null> = {};
-      (tickets ?? []).forEach((t: any) => {
-        ticketMap[t.id] = t.ticket_number ?? null;
-      });
-
-      const enriched = rawRows.map((r: any) => ({
+      const rawRows = (data ?? []).map((r: any) => ({
         ...r,
-        ticket: ticketMap[r.entity_id] !== undefined
-          ? { ticket_number: ticketMap[r.entity_id] }
-          : null,
+        meta: (r.meta && typeof r.meta === "object" ? r.meta : {}) as Record<string, unknown>,
+        ticket: null,
       }));
 
-      setRows(enriched);
-    } else {
-      setRows(rawRows);
-    }
+      const ticketEntityIds = rawRows
+        .filter((r: any) =>
+          ["ticket_created", "ticket_updated", "ticket_technician_update"].includes(r.action) && r.entity_id
+        )
+        .map((r: any) => r.entity_id as string);
 
-    setLoading(false);
-  };
+      if (ticketEntityIds.length > 0) {
+        const { data: tickets } = await supabase
+          .from("file_reports")
+          .select("id, ticket_number")
+          .in("id", ticketEntityIds);
 
-  run();
+        const ticketMap: Record<string, string | null> = {};
+        (tickets ?? []).forEach((t: any) => { ticketMap[t.id] = t.ticket_number ?? null; });
 
-  const channel = supabase
-    .channel(`activity_log_sync_${isAdmin ? "admin" : userId ?? "guest"}`)
-    .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, () => { void run(); })
-    .subscribe();
+        setRows(rawRows.map((r: any) => ({
+          ...r,
+          ticket: ticketMap[r.entity_id] !== undefined ? { ticket_number: ticketMap[r.entity_id] } : null,
+        })));
+      } else {
+        setRows(rawRows);
+      }
 
-  return () => {
-    void supabase.removeChannel(channel);
-  };
-}, [isAdmin, userId]);
+      setLoading(false);
+    };
+
+    run();
+
+    const channel = supabase
+      .channel(`activity_log_sync_${isAdmin ? "admin" : userId ?? "guest"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, () => { void run(); })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [isAdmin, userId]);
 
   return (
     <div style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem" }}>
         <ScrollText size={22} color={BRAND} />
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>Activity Log</h1>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
+            Activity Log
+          </h1>
           <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
             {isAdmin ? "Recent actions across the system." : "Actions you performed while signed in."}
           </p>
@@ -434,7 +340,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
               {(isAdmin
                 ? ["By", "When", "Action", "Entity", "Details"]
                 : ["When", "Action", "Entity", "Details"]
-              ).map(h => (
+              ).map((h) => (
                 <th
                   key={h}
                   style={{
@@ -467,11 +373,19 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
                 </td>
               </tr>
             ) : (
-              rows.map(r => (
+              rows.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   {isAdmin && (
-                    <td style={{ padding: "0.75rem 1rem", color: "#0f172a", fontSize: 12, fontWeight: 600 }}>
-                      {r.actor?.full_name?.trim() || "System"}
+                    <td style={{ padding: "0.75rem 1rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <UserAvatar
+                          fullName={r.actor?.full_name}
+                          avatarUrl={r.actor?.avatar_url}
+                        />
+                        <span style={{ color: "#0f172a", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {r.actor?.full_name?.trim() || "System"}
+                        </span>
+                      </div>
                     </td>
                   )}
                   <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap", fontSize: 12 }}>
