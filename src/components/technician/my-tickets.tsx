@@ -34,18 +34,16 @@ type TicketRow = {
 
 type DeptMap = Record<string, string>;
 
-// Per-field error shape for the work form
 type FormErrors = {
   status?: string;
   started_at?: string;
   completed_at?: string;
   action_taken?: string;
-  general?: string; // for assignment / save errors
+  general?: string;
 };
 
 const BRAND = "#0a4c86";
 
-// Returns today's date as YYYY-MM-DD in Asia/Manila timezone
 function todayPH(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 }
@@ -107,17 +105,10 @@ const statusStyle: Record<string, { bg: string; color: string; dot: string }> = 
   Resolved:      { bg: "rgba(22,163,74,0.10)",   color: "#15803d", dot: "#22c55e" },
 };
 
-// ── Inline field error ──────────────────────────────────────────────────────
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   <div style={{
-    minHeight: 18,
-    marginTop: 1,
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#dc2626",
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
+    minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
+    color: "#dc2626", display: "flex", alignItems: "center", gap: 4,
     visibility: msg ? "visible" : "hidden",
   }}>
     <AlertTriangle size={10} />
@@ -127,22 +118,34 @@ const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
 
 const MyTickets: React.FC = () => {
   const userId = getSessionUserId();
-  const [rows, setRows]               = useState<TicketRow[]>([]);
-  const [depts, setDepts]             = useState<DeptMap>({});
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState("");
-  const [selected, setSelected]       = useState<TicketRow | null>(null);
+  const today  = todayPH();
+
+  // ── State ────────────────────────────────────────────────────────────────
+  const [rows, setRows]                     = useState<TicketRow[]>([]);
+  const [depts, setDepts]                   = useState<DeptMap>({});
+  const [loading, setLoading]               = useState(true);
+  const [search, setSearch]                 = useState("");
+  const [selected, setSelected]             = useState<TicketRow | null>(null);
   const [focusedTicketId, setFocusedTicketId] = useState<string | null>(null);
-  const [modal, setModal]             = useState<"view" | "work" | null>(null);
-  const [form, setForm]               = useState({
+  const [modal, setModal]                   = useState<"view" | "work" | null>(null);
+  const [form, setForm]                     = useState({
     status: "In Progress" as Status,
     action_taken: "",
     started_at: "",
     completed_at: "",
   });
-  const [formErrors, setFormErrors]   = useState<FormErrors>({});
-  const [saving, setSaving]           = useState(false);
-  const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [formErrors, setFormErrors]         = useState<FormErrors>({});
+  const [saving, setSaving]                 = useState(false);
+  const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [savingQuickId, setSavingQuickId]   = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // ── Close dropdown on outside click ─────────────────────────────────────
+  useEffect(() => {
+    const handleClick = () => setOpenDropdownId(null);
+    if (openDropdownId) document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [openDropdownId]);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -158,6 +161,7 @@ const MyTickets: React.FC = () => {
     });
   };
 
+  // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchAll = async () => {
     if (!userId) { setRows([]); setLoading(false); return; }
     setLoading(true);
@@ -207,6 +211,7 @@ const MyTickets: React.FC = () => {
     setModal("view");
   }, [rows]);
 
+  // ── Filtered rows ────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
@@ -216,42 +221,63 @@ const MyTickets: React.FC = () => {
     );
   }, [rows, search]);
 
+  // ── Modal helpers ────────────────────────────────────────────────────────
   const openView = (r: TicketRow) => {
     setFocusedTicketId(r.id); setSelected(r); setModal("view");
   };
 
   const openWork = (r: TicketRow) => {
-  setFocusedTicketId(r.id);
-  setSelected(r);
-  const today = todayPH(); // always fresh current date
-
-  // Start date = when the ticket was started (or submitted), never today
-  const existingStarted =
-    r.started_at
-      ? r.started_at.slice(0, 10)
-      : r.date_submitted
-        ? r.date_submitted.slice(0, 10)
-        : today;
-
-  const wasInProgress = r.status === "In Progress";
-  const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
-
-  setForm({
-    status: initialStatus,
-    action_taken: r.action_taken ?? "",
-    started_at:   existingStarted,       // ← ticket's actual start/submit date
-    completed_at: initialStatus === "Resolved" ? today : "", // ← always today's fresh date
-  });
-  setFormErrors({});
-  setModal("work");
-};
+    setFocusedTicketId(r.id);
+    setSelected(r);
+    const existingStarted =
+      r.started_at
+        ? r.started_at.slice(0, 10)
+        : r.date_submitted
+          ? r.date_submitted.slice(0, 10)
+          : today;
+    const wasInProgress  = r.status === "In Progress";
+    const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
+    setForm({
+      status:       initialStatus,
+      action_taken: r.action_taken ?? "",
+      started_at:   existingStarted,
+      completed_at: initialStatus === "Resolved" ? today : "",
+    });
+    setFormErrors({});
+    setModal("work");
+  };
 
   const closeModal = () => {
     setModal(null); setSelected(null); setFormErrors({}); setSaving(false);
   };
 
-  const isAlreadyInProgress = selected?.status === "In Progress";
+  // ── Quick set In Progress (no modal) ─────────────────────────────────────
+  const quickSetInProgress = async (r: TicketRow) => {
+    if (!userId) return;
+    setSavingQuickId(r.id);
+    const payload = {
+      status:     "In Progress" as Status,
+      started_at: r.started_at ?? new Date(today).toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("file_reports").update(payload).eq("id", r.id);
+    if (error) { showToast(error.message, "error"); setSavingQuickId(null); return; }
+    await insertActivityLog(supabase, {
+      actorUserId: userId, action: "ticket_technician_update",
+      entityType: "file_report", entityId: r.id,
+      meta: { status: "In Progress", ticket_id: r.id, ticket_number: r.ticket_number ?? null, title: r.title },
+    });
+    await notifyAdminsTicketStatusChanged(supabase, {
+      ticketId: r.id, ticketTitle: r.title,
+      ticketNumber: r.ticket_number ?? null, status: "In Progress",
+      actorUserId: localStorage.getItem("session_user_id"),
+    });
+    showToast("Ticket marked as In Progress.", "success");
+    setSavingQuickId(null);
+    fetchAll();
+  };
 
+  // ── Save resolved work ───────────────────────────────────────────────────
   const saveWork = async () => {
     if (!selected || !userId) return;
     if (!selected.assigned_to.includes(userId)) {
@@ -278,7 +304,8 @@ const MyTickets: React.FC = () => {
     });
     await notifyAdminsTicketStatusChanged(supabase, {
       ticketId: selected.id, ticketTitle: selected.title,
-      ticketNumber: selected.ticket_number ?? null, status: form.status, actorUserId: localStorage.getItem("session_user_id"),
+      ticketNumber: selected.ticket_number ?? null, status: form.status,
+      actorUserId: localStorage.getItem("session_user_id"),
     });
     showToast("Ticket updated successfully.", "success");
     setSaving(false);
@@ -287,6 +314,7 @@ const MyTickets: React.FC = () => {
     fetchAll();
   };
 
+  // ── Styles ───────────────────────────────────────────────────────────────
   const inputBase: React.CSSProperties = {
     width: "100%", padding: "0.55rem 0.8rem", borderRadius: 10,
     border: "1.5px solid #e2e8f0", fontSize: 13,
@@ -294,16 +322,11 @@ const MyTickets: React.FC = () => {
     boxSizing: "border-box", outline: "none", transition: "border-color 0.15s",
     color: "#0f172a", cursor: "pointer",
   };
-
   const inputError: React.CSSProperties = {
-    ...inputBase,
-    border: "1.5px solid #fca5a5",
-    background: "#fff5f5",
+    ...inputBase, border: "1.5px solid #fca5a5", background: "#fff5f5",
   };
-
   const readonlyInput: React.CSSProperties = {
-    ...inputBase,
-    background: "#f1f5f9", color: "#94a3b8",
+    ...inputBase, background: "#f1f5f9", color: "#94a3b8",
     cursor: "not-allowed", border: "1.5px solid #e2e8f0",
   };
 
@@ -315,9 +338,10 @@ const MyTickets: React.FC = () => {
     );
   }
 
-  const isResolved = form.status === "Resolved";
-  const today = todayPH();
+  const isResolved          = form.status === "Resolved";
+  const isAlreadyInProgress = selected?.status === "In Progress";
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
@@ -326,29 +350,23 @@ const MyTickets: React.FC = () => {
         .mt-input:focus { border-color: ${BRAND} !important; box-shadow: 0 0 0 3px ${BRAND}18; }
         .mt-input-err:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
         .mt-btn-cancel:hover { background: #f1f5f9 !important; }
-
         input[type="date"] { position: relative; cursor: pointer; }
         input[type="date"]::-webkit-calendar-picker-indicator {
-          position: absolute; left: 0; top: 0;
-          width: 100%; height: 100%;
+          position: absolute; left: 0; top: 0; width: 100%; height: 100%;
           background: transparent; color: transparent; cursor: pointer; opacity: 0;
         }
-
         .status-option {
-          flex: 1; padding: 0.6rem 0.5rem;
-          border-radius: 10px; border: 1.5px solid #e2e8f0;
-          background: #f8fafc; cursor: pointer;
-          font-size: 12px; font-weight: 600;
-          font-family: 'Poppins', sans-serif;
+          flex: 1; padding: 0.6rem 0.5rem; border-radius: 10px;
+          border: 1.5px solid #e2e8f0; background: #f8fafc; cursor: pointer;
+          font-size: 12px; font-weight: 600; font-family: 'Poppins', sans-serif;
           display: flex; align-items: center; justify-content: center; gap: 6px;
           transition: all 0.15s; color: #64748b;
         }
         .status-option:hover:not(:disabled) { border-color: #cbd5e1; background: #f1f5f9; }
         .status-option:disabled { opacity: 0.45; cursor: not-allowed; }
-        .status-option.active-inprog  { border-color: #eab308; background: rgba(234,179,8,0.08); color: #a16207; }
+        .status-option.active-inprog   { border-color: #eab308; background: rgba(234,179,8,0.08); color: #a16207; }
         .status-option.active-resolved { border-color: #22c55e; background: rgba(22,163,74,0.08); color: #15803d; }
-        .status-option.error-border   { border-color: #fca5a5 !important; }
-
+        .status-option.error-border    { border-color: #fca5a5 !important; }
         @keyframes slideDown {
           from { opacity: 0; transform: translateY(-6px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -359,10 +377,8 @@ const MyTickets: React.FC = () => {
         }
         .field-appear { animation: slideDown 0.2s ease both; }
         .modal-card   { animation: modalIn 0.22s ease both; }
-
         .modal-backdrop {
-          position: fixed; inset: 0;
-          background: rgba(15,23,42,0.45);
+          position: fixed; inset: 0; background: rgba(15,23,42,0.45);
           display: flex; align-items: center; justify-content: center;
           z-index: 1000; padding: 16px;
         }
@@ -411,7 +427,7 @@ const MyTickets: React.FC = () => {
         </div>
 
         {/* ── Table ── */}
-        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "auto" }}>
+        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "visible" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
@@ -444,12 +460,22 @@ const MyTickets: React.FC = () => {
                       background: focusedTicketId === r.id ? "rgba(10,76,134,0.06)" : "#fff",
                       transition: "background 0.15s",
                     }}>
+
+                      {/* ID */}
                       <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: BRAND }}>
                         {r.ticket_number?.trim() || `TKT-${r.id.slice(0, 8).toUpperCase()}`}
                       </td>
+
+                      {/* Title */}
                       <td style={{ padding: "0.75rem 1rem", maxWidth: 200 }}>{r.title}</td>
+
+                      {/* Requester */}
                       <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.employee_name}</td>
+
+                      {/* Office */}
                       <td style={{ padding: "0.75rem 1rem", fontSize: 12 }}>{depts[r.department_id] ?? "—"}</td>
+
+                      {/* Status badge */}
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <span style={{
                           padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
@@ -460,17 +486,127 @@ const MyTickets: React.FC = () => {
                           {r.status}
                         </span>
                       </td>
-                      <td style={{ padding: "0.75rem 1rem", color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDate(r.date_submitted)}</td>
+
+                      {/* Submitted */}
+                      <td style={{ padding: "0.75rem 1rem", color: "#94a3b8", whiteSpace: "nowrap" }}>
+                        {fmtDate(r.date_submitted)}
+                      </td>
+
+                      {/* Actions */}
                       <td style={{ padding: "0.75rem 1rem" }}>
-                        <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+
+                          {/* View button */}
                           <button type="button" title="View" onClick={() => openView(r)}
                             style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <Eye size={14} color={BRAND} />
                           </button>
-                          <button type="button" title="Update work" onClick={() => openWork(r)}
-                            style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Pencil size={14} color={BRAND} />
-                          </button>
+
+                          {/* Status dropdown */}
+                          <div style={{ position: "relative" }}>
+                            <button
+                              type="button"
+                              disabled={savingQuickId === r.id}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setOpenDropdownId(prev => prev === r.id ? null : r.id);
+                              }}
+                              style={{
+                                height: 32, padding: "0 10px 0 8px",
+                                borderRadius: 8, border: "1px solid #e2e8f0",
+                                background: "#fff",
+                                cursor: savingQuickId === r.id ? "not-allowed" : "pointer",
+                                display: "flex", alignItems: "center", gap: 5,
+                                fontSize: 11, fontWeight: 600,
+                                color: r.status === "In Progress" ? "#a16207" : BRAND,
+                                opacity: savingQuickId === r.id ? 0.6 : 1,
+                                transition: "background 0.15s",
+                                fontFamily: "'Poppins', sans-serif",
+                              }}
+                            >
+                              {savingQuickId === r.id ? (
+                                <><Loader size={12} /> Updating…</>
+                              ) : (
+                                <>
+                                  {r.status === "In Progress"
+                                    ? <Timer size={12} color="#a16207" />
+                                    : <Ticket size={12} color={BRAND} />
+                                  }
+                                  {r.status === "In Progress" ? "In Progress" : "Pending"}
+                                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 1 }}>
+                                    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Dropdown menu */}
+                            {openDropdownId === r.id && (
+                              <div
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                  position: "absolute", top: 36, right: 0,
+                                  width: 180, background: "#fff",
+                                  border: "1px solid #e2e8f0", borderRadius: 12,
+                                  boxShadow: "0 8px 24px rgba(15,23,42,0.14)",
+                                  zIndex: 999, padding: "0.4rem",
+                                  animation: "slideDown 0.15s ease both",
+                                  fontFamily: "'Poppins', sans-serif",
+                                }}
+                              >
+                                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", padding: "4px 8px 6px" }}>
+                                  Set Status
+                                </div>
+
+                                {/* In Progress option */}
+                                <button
+                                  type="button"
+                                  disabled={r.status === "In Progress"}
+                                  onClick={() => { setOpenDropdownId(null); quickSetInProgress(r); }}
+                                  style={{
+                                    width: "100%", textAlign: "left", border: "none",
+                                    borderRadius: 8, padding: "0.5rem 0.6rem",
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    fontSize: 12, fontWeight: 600,
+                                    background: r.status === "In Progress" ? "rgba(234,179,8,0.08)" : "transparent",
+                                    color: r.status === "In Progress" ? "#a16207" : "#475569",
+                                    cursor: r.status === "In Progress" ? "not-allowed" : "pointer",
+                                    opacity: r.status === "In Progress" ? 0.6 : 1,
+                                    fontFamily: "'Poppins', sans-serif",
+                                  }}
+                                >
+                                  <span style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(234,179,8,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <Timer size={11} color="#a16207" />
+                                  </span>
+                                  In Progress
+                                  {r.status === "In Progress" && (
+                                    <span style={{ marginLeft: "auto", fontSize: 10, color: "#a16207" }}>● Current</span>
+                                  )}
+                                </button>
+
+                                {/* Resolved option */}
+                                <button
+                                  type="button"
+                                  onClick={() => { setOpenDropdownId(null); openWork(r); }}
+                                  style={{
+                                    width: "100%", textAlign: "left", border: "none",
+                                    borderRadius: 8, padding: "0.5rem 0.6rem",
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    fontSize: 12, fontWeight: 600,
+                                    background: "transparent", color: "#475569",
+                                    cursor: "pointer",
+                                    fontFamily: "'Poppins', sans-serif",
+                                  }}
+                                >
+                                  <span style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(22,163,74,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <CheckCircle2 size={11} color="#15803d" />
+                                  </span>
+                                  Mark as Resolved
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
                         </div>
                       </td>
                     </tr>
@@ -496,8 +632,7 @@ const MyTickets: React.FC = () => {
             >
               {/* Modal header */}
               <div style={{
-                padding: "1.25rem 1.5rem",
-                borderBottom: "1px solid #f1f5f9",
+                padding: "1.25rem 1.5rem", borderBottom: "1px solid #f1f5f9",
                 display: "flex", justifyContent: "space-between", alignItems: "flex-start",
                 position: "sticky", top: 0, background: "#fff",
                 borderRadius: "20px 20px 0 0", zIndex: 1,
@@ -584,11 +719,7 @@ const MyTickets: React.FC = () => {
                       <button
                         type="button"
                         disabled={isAlreadyInProgress}
-                        className={[
-                          "status-option",
-                          form.status === "In Progress" ? "active-inprog" : "",
-                          formErrors.status ? "error-border" : "",
-                        ].join(" ")}
+                        className={["status-option", form.status === "In Progress" ? "active-inprog" : "", formErrors.status ? "error-border" : ""].join(" ")}
                         title={isAlreadyInProgress ? "Cannot revert to In Progress once saved" : undefined}
                         onClick={() => {
                           if (isAlreadyInProgress) return;
@@ -600,11 +731,7 @@ const MyTickets: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        className={[
-                          "status-option",
-                          form.status === "Resolved" ? "active-resolved" : "",
-                          formErrors.status ? "error-border" : "",
-                        ].join(" ")}
+                        className={["status-option", form.status === "Resolved" ? "active-resolved" : "", formErrors.status ? "error-border" : ""].join(" ")}
                         onClick={() => {
                           setForm(f => ({ ...f, status: "Resolved", completed_at: f.completed_at || today, started_at: f.started_at || today }));
                           clearFieldError("status");
@@ -614,7 +741,6 @@ const MyTickets: React.FC = () => {
                       </button>
                     </div>
                     <FieldError msg={formErrors.status} />
-
                     {isAlreadyInProgress && (
                       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
                         <AlertTriangle size={11} color="#eab308" />
@@ -627,14 +753,11 @@ const MyTickets: React.FC = () => {
                   <div className="field-appear">
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>
                       Start Date <span style={{ color: "#ef4444" }}>*</span>
-                      {isResolved && (
-                        <span style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8", marginLeft: 6 }}>(locked)</span>
-                      )}
+                      {isResolved && <span style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8", marginLeft: 6 }}>(locked)</span>}
                     </label>
                     <input
                       type="date"
                       value={form.started_at}
-                      min={today}
                       readOnly={isResolved}
                       onChange={e => {
                         if (isResolved) return;
@@ -647,7 +770,7 @@ const MyTickets: React.FC = () => {
                     <FieldError msg={formErrors.started_at} />
                   </div>
 
-                  {/* End date — only for Resolved */}
+                  {/* End date — Resolved only */}
                   {isResolved && (
                     <div className="field-appear">
                       <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>
@@ -668,7 +791,7 @@ const MyTickets: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Action taken — only for Resolved */}
+                  {/* Action taken — Resolved only */}
                   {isResolved && (
                     <div className="field-appear">
                       <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>
@@ -684,10 +807,7 @@ const MyTickets: React.FC = () => {
                         maxLength={2000}
                         placeholder="Describe what was done to resolve this ticket…"
                         className={formErrors.action_taken ? "mt-input-err" : "mt-input"}
-                        style={{
-                          ...(formErrors.action_taken ? inputError : inputBase),
-                          resize: "vertical", lineHeight: 1.6, cursor: "text",
-                        }}
+                        style={{ ...(formErrors.action_taken ? inputError : inputBase), resize: "vertical", lineHeight: 1.6, cursor: "text" }}
                       />
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 1 }}>
                         <FieldError msg={formErrors.action_taken} />
@@ -698,7 +818,7 @@ const MyTickets: React.FC = () => {
                     </div>
                   )}
 
-                  {/* General / assignment error */}
+                  {/* General error */}
                   {formErrors.general && (
                     <div style={{
                       display: "flex", alignItems: "center", gap: 8,
@@ -710,7 +830,7 @@ const MyTickets: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Footer buttons */}
+                  {/* Footer */}
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
                     <button type="button" onClick={closeModal} className="mt-btn-cancel"
                       style={{ padding: "0.55rem 1rem", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: "'Poppins', sans-serif" }}>
