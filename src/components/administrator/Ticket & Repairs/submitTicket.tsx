@@ -214,6 +214,7 @@ const TechnicianChips: React.FC<{ names: string[] }> = ({ names }) => {
   );
 };
 
+// ── FIXED TechnicianPicker ─────────────────────────────────────────────────────
 const TechnicianPicker: React.FC<{
   users: UserOption[];
   selected: string[];
@@ -221,7 +222,8 @@ const TechnicianPicker: React.FC<{
   hasError: boolean;
   loadMap: Record<string, number>;
   editingTicketId?: string | null;
-}> = ({ users, selected, onChange, hasError, loadMap, editingTicketId }) => {
+  originalAssigned?: string[]; // ← NEW: tracks who was assigned when edit opened
+}> = ({ users, selected, onChange, hasError, loadMap, editingTicketId, originalAssigned = [] }) => {
 
   const toggle = (id: string) => {
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
@@ -241,9 +243,17 @@ const TechnicianPicker: React.FC<{
       ) : users.map(u => {
         const isSelected  = selected.includes(u.id);
         const rawCount    = loadMap[u.id] ?? 0;
-        const activeCount = (editingTicketId && isSelected)
+
+        // ── FIX: subtract 1 for anyone originally on this ticket,
+        //    regardless of whether they're currently checked or not.
+        //    Previously this only applied when isSelected === true,
+        //    so deselecting a technician instantly made them "Unavailable"
+        //    because rawCount jumped back above MAX_ACTIVE_TICKETS.
+        const wasOriginallyAssigned = !!editingTicketId && originalAssigned.includes(u.id);
+        const activeCount = wasOriginallyAssigned
           ? Math.max(0, rawCount - 1)
           : rawCount;
+
         const isOverloaded = !isSelected && activeCount >= MAX_ACTIVE_TICKETS;
 
         return (
@@ -322,6 +332,9 @@ const SubmitTicket: React.FC = () => {
   const [formErrors, setFormErrors]   = useState<FormErrors>({});
   const [submitting, setSubmitting]   = useState(false);
   const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  // ── NEW: snapshot of assigned_to when edit modal opens ──────────────────────
+  const [originalAssigned, setOriginalAssigned] = useState<string[]>([]);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -472,20 +485,23 @@ const SubmitTicket: React.FC = () => {
   const closeModal = () => {
     setModalMode(null); setSelected(null);
     setForm(emptyForm()); setFormErrors({}); setSubmitting(false);
+    setOriginalAssigned([]); // ← reset snapshot on close
   };
   const openAdd  = () => { closeModal(); setModalMode("add"); };
 
   const openEdit = (r: FileReport) => {
     if (r.status === "Resolved") return;
     closeModal(); setSelected(r);
+    const assigned = Array.isArray(r.assigned_to) ? r.assigned_to : [];
     setForm({
       employee_name:  r.employee_name,
       department_id:  r.department_id,
       issue_type:     r.issue_type === "Network / Internet" ? "Internet" : (r.issue_type as IssueType),
       title:          r.title,
       date_submitted: r.date_submitted.slice(0, 10),
-      assigned_to:    Array.isArray(r.assigned_to) ? r.assigned_to : [],
+      assigned_to:    assigned,
     });
+    setOriginalAssigned(assigned); // ← snapshot who was originally assigned
     setModalMode("edit");
   };
   const openView = (r: FileReport) => { setSelected(r); setModalMode("view"); };
@@ -545,7 +561,7 @@ const SubmitTicket: React.FC = () => {
           ticketId: selected.id,
           ticketTitle: form.title,
           ticketNumber: selected.ticket_number ?? null,
-          actorUserId: localStorage.getItem("session_user_id"), // ← FIXED: was missing
+          actorUserId: localStorage.getItem("session_user_id"),
         });
       }
       await insertActivityLog(supabase, {
@@ -856,10 +872,13 @@ const SubmitTicket: React.FC = () => {
                     )}
                   </label>
                   <TechnicianPicker
-                    users={itStaff} selected={form.assigned_to}
+                    users={itStaff}
+                    selected={form.assigned_to}
                     onChange={ids => { setForm(f => ({ ...f, assigned_to: ids })); clearError("assigned_to"); }}
-                    hasError={!!formErrors.assigned_to} loadMap={technicianLoadMap}
+                    hasError={!!formErrors.assigned_to}
+                    loadMap={technicianLoadMap}
                     editingTicketId={modalMode === "edit" ? selected?.id ?? null : null}
+                    originalAssigned={modalMode === "edit" ? originalAssigned : []} 
                   />
                   <FieldError msg={formErrors.assigned_to} />
                 </div>
