@@ -178,6 +178,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               height: "auto",
               display: "block",
               flex: 1,
+              marginTop: 30,
+              marginBottom: 10,
               minWidth: 0,
             }}
           />
