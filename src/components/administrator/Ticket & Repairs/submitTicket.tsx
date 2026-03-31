@@ -60,7 +60,6 @@ type AdminForm = {
 
 type FormState = AdminForm;
 
-// ── Per-field error type ───────────────────────────────────────────────────────
 type FormErrors = {
   title?:          string;
   employee_name?:  string;
@@ -75,6 +74,13 @@ const MAX_ACTIVE_TICKETS = 1;
 
 const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
+
+// ── Moved outside component so useMemo can access it ──────────────────────────
+const STATUS_ORDER: Record<Status, number> = {
+  "Pending":     0,
+  "In Progress": 1,
+  "Resolved":    2,
+};
 
 const ISSUE_TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; activeBg: string; color: string; border: string }> = {
   "Hardware": { icon: <Cpu size={14} />,     bg: "#f8fafc", activeBg: "rgba(10,76,134,0.08)",  color: "#0a4c86", border: "#0a4c86" },
@@ -103,7 +109,6 @@ function sanitize(val: string): string {
     .replace(/&(?!amp;|lt;|gt;|quot;|#)/g, "&amp;").trim();
 }
 
-// ── Per-field validation — returns an errors object ───────────────────────────
 function validateForm(form: FormState): FormErrors {
   const errors: FormErrors = {};
   const title = form.title.trim();
@@ -147,17 +152,10 @@ function friendlyError(msg: string): string {
 const fmtDate = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }) : "—";
 
-// ── Inline field error — visibility:hidden keeps space, no layout shift ────────
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   <div style={{
-    minHeight: 18,
-    marginTop: 1,
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#dc2626",
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
+    minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500, color: "#dc2626",
+    display: "flex", alignItems: "center", gap: 4,
     visibility: msg ? "visible" : "hidden",
   }}>
     <AlertTriangle size={10} />
@@ -165,7 +163,6 @@ const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   </div>
 );
 
-// ── Badges ─────────────────────────────────────────────────────────────────────
 const IssueTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   const lookup = type === "Network / Internet" ? "Internet" : type;
   const cfg =
@@ -217,7 +214,6 @@ const TechnicianChips: React.FC<{ names: string[] }> = ({ names }) => {
   );
 };
 
-// ── TechnicianPicker with load-limiting ────────────────────────────────────────
 const TechnicianPicker: React.FC<{
   users: UserOption[];
   selected: string[];
@@ -260,9 +256,7 @@ const TechnicianPicker: React.FC<{
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
-              background: isSelected
-                ? `${BRAND}10`
-                : isOverloaded ? "#fafafa" : "transparent",
+              background: isSelected ? `${BRAND}10` : isOverloaded ? "#fafafa" : "transparent",
               cursor: isOverloaded ? "not-allowed" : "pointer",
               textAlign: "left", width: "100%", transition: "background 0.12s",
               opacity: isOverloaded ? 0.45 : 1,
@@ -296,7 +290,7 @@ const TechnicianPicker: React.FC<{
                 background: "#fee2e2", color: "#dc2626",
                 whiteSpace: "nowrap", flexShrink: 0,
                 fontFamily: "'Poppins', sans-serif",
-                letterSpacing: 1
+                letterSpacing: 1,
               }}>
                 Unavailable
               </span>
@@ -318,8 +312,8 @@ const SubmitTicket: React.FC = () => {
   const [search, setSearch]           = useState("");
   const [filterIssueType, setFilterIssueType] = useState("All");
   const [filterStatus, setFilterStatus]       = useState("All");
-  const [sortField, setSortField]     = useState<SortField>("date_submitted");
-  const [sortDir, setSortDir]         = useState<SortDir>("desc");
+  const [sortField, setSortField]     = useState<SortField>("status");   // ← default sort by status
+  const [sortDir, setSortDir]         = useState<SortDir>("asc");        // ← asc = Pending first
   const [page, setPage]               = useState(1);
   const [modalMode, setModalMode]     = useState<ModalMode>(null);
   const [selected, setSelected]       = useState<FileReport | null>(null);
@@ -340,7 +334,6 @@ const SubmitTicket: React.FC = () => {
     return m;
   }, [itStaff]);
 
-  // Counts Pending + In Progress tickets per technician (Resolved does NOT count)
   const technicianLoadMap = useMemo(() => {
     const map: Record<string, number> = {};
     reports.forEach(r => {
@@ -361,8 +354,8 @@ const SubmitTicket: React.FC = () => {
       { data: staff },
     ] = await Promise.all([
       supabase.from("file_reports").select("*")
-      .eq("is_archived", false)    
-      .order(sortField, { ascending: sortDir === "asc" }),
+        .eq("is_archived", false)
+        .order("created_at", { ascending: false }), // fetch order; display order handled client-side
       supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
       supabase
         .from("user_accounts")
@@ -379,7 +372,7 @@ const SubmitTicket: React.FC = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, [sortField, sortDir]);
+  useEffect(() => { fetchAll(); }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -391,30 +384,26 @@ const SubmitTicket: React.FC = () => {
           return [{ ...newRow, assigned_to: Array.isArray(newRow.assigned_to) ? newRow.assigned_to : [] }, ...prev];
         });
       })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
-      const updated = payload.new as FileReport;
-
-      // If the updated row is now archived, remove it from state immediately
-      if (updated.is_archived) {
-        setReports(prev => prev.filter(r => r.id !== updated.id));
-        setSelected(prev => (prev?.id === updated.id ? null : prev));
-        return;
-      }
-
-      // Otherwise apply the normal update
-      setReports(prev =>
-        prev.map(r =>
-          r.id === updated.id
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" }, (payload) => {
+        const updated = payload.new as FileReport;
+        if (updated.is_archived) {
+          setReports(prev => prev.filter(r => r.id !== updated.id));
+          setSelected(prev => (prev?.id === updated.id ? null : prev));
+          return;
+        }
+        setReports(prev =>
+          prev.map(r =>
+            r.id === updated.id
+              ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
+              : r
+          )
+        );
+        setSelected(prev =>
+          prev && prev.id === updated.id
             ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
-            : r
-        )
-      );
-      setSelected(prev =>
-        prev && prev.id === updated.id
-          ? { ...updated, assigned_to: Array.isArray(updated.assigned_to) ? updated.assigned_to : [] }
-          : prev
-      );
-    })
+            : prev
+        );
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -434,25 +423,30 @@ const SubmitTicket: React.FC = () => {
     })),
   [reports, userMap]);
 
- const filtered = useMemo(() => {
-  const q = search.trim().toLowerCase();
-  return reportsWithNames
-        .filter(r => {
-          const matchSearch    = !q || [r.title, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
-          const matchIssueType = filterIssueType === "All" || r.issue_type === filterIssueType;
-          const matchStatus    = filterStatus    === "All" || r.status      === filterStatus;
-          return matchSearch && matchIssueType && matchStatus;
-        })
-        .sort((a, b) => {
-          // If user is sorting by status, use custom order
-          if (sortField === "status") {
-            const diff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-            return sortDir === "asc" ? diff : -diff;
-          }
-          // Otherwise keep existing sort from Supabase
-          return 0;
-        });
-    }, [reportsWithNames, search, filterIssueType, filterStatus, sortField, sortDir]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return reportsWithNames
+      .filter(r => {
+        const matchSearch    = !q || [r.title, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
+        const matchIssueType = filterIssueType === "All" || r.issue_type === filterIssueType;
+        const matchStatus    = filterStatus    === "All" || r.status      === filterStatus;
+        return matchSearch && matchIssueType && matchStatus;
+      })
+      .sort((a, b) => {
+        if (sortField === "status") {
+          // Always use STATUS_ORDER for status column — direction flips the order
+          const diff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+          return sortDir === "asc" ? diff : -diff;
+        }
+        // For other columns, do a standard string/date compare
+        const aVal = String((a as any)[sortField] ?? "").toLowerCase();
+        const bVal = String((b as any)[sortField] ?? "").toLowerCase();
+        if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+        // Secondary sort: always keep Pending → In Progress → Resolved within tied values
+        return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+      });
+  }, [reportsWithNames, search, filterIssueType, filterStatus, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -484,7 +478,6 @@ const SubmitTicket: React.FC = () => {
   };
   const openAdd  = () => { closeModal(); setModalMode("add"); };
 
-  // ← UPDATED: block edit if ticket is Resolved
   const openEdit = (r: FileReport) => {
     if (r.status === "Resolved") return;
     closeModal(); setSelected(r);
@@ -500,17 +493,12 @@ const SubmitTicket: React.FC = () => {
   };
   const openView = (r: FileReport) => { setSelected(r); setModalMode("view"); };
 
-
-  // Clear a single field's error as the user types/changes it
   const clearError = (field: keyof FormErrors) =>
     setFormErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
 
   const handleSubmit = async () => {
     const errors = validateForm(form);
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
+    if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
     setFormErrors({});
     setSubmitting(true);
 
@@ -520,9 +508,9 @@ const SubmitTicket: React.FC = () => {
       issue_type:     form.issue_type,
       title:          sanitize(form.title),
       date_submitted: modalMode === "add"
-    ? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
-    : selected!.date_submitted,
-     assigned_to:    form.assigned_to,
+        ? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
+        : selected!.date_submitted,
+      assigned_to: form.assigned_to,
     };
 
     if (modalMode === "add") {
@@ -531,11 +519,7 @@ const SubmitTicket: React.FC = () => {
         .insert({ ...payload, status: "Pending" })
         .select("id, ticket_number")
         .single();
-      if (error) {
-        setFormErrors({ title: friendlyError(error.message) });
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFormErrors({ title: friendlyError(error.message) }); setSubmitting(false); return; }
       if (row?.id && form.assigned_to.length > 0) {
         await notifyTicketAssignees(supabase, form.assigned_to, {
           ticketId: row.id,
@@ -555,11 +539,7 @@ const SubmitTicket: React.FC = () => {
     } else if (modalMode === "edit" && selected) {
       const prevAssigned = Array.isArray(selected.assigned_to) ? selected.assigned_to : [];
       const { error } = await supabase.from("file_reports").update(payload).eq("id", selected.id);
-      if (error) {
-        setFormErrors({ title: friendlyError(error.message) });
-        setSubmitting(false);
-        return;
-      }
+      if (error) { setFormErrors({ title: friendlyError(error.message) }); setSubmitting(false); return; }
       const added = diffNewAssignees(prevAssigned, form.assigned_to);
       if (added.length > 0) {
         await notifyTicketAssignees(supabase, added, {
@@ -588,16 +568,16 @@ const SubmitTicket: React.FC = () => {
     fetchAll();
   };
 
- const confirmDelete = async () => {
-  if (!deleteTarget) return;
-  const { error } = await supabase
-    .from("file_reports")
-    .update({ is_archived: true }) 
-    .eq("id", deleteTarget.id);
-  if (error) showToast(friendlyError(error.message), "error");
-  else showToast(`Ticket "${deleteTarget.title}" archived.`, "success");
-  setDeleteTarget(null);
-};
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { error } = await supabase
+      .from("file_reports")
+      .update({ is_archived: true })
+      .eq("id", deleteTarget.id);
+    if (error) showToast(friendlyError(error.message), "error");
+    else showToast(`Ticket "${deleteTarget.title}" archived.`, "success");
+    setDeleteTarget(null);
+  };
 
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "0.5rem 0.75rem", borderRadius: 8,
@@ -610,12 +590,6 @@ const SubmitTicket: React.FC = () => {
   const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
 
   const getDepartmentName = (id: string) => departments.find(d => d.id === id)?.name ?? id;
-
-  const STATUS_ORDER: Record<Status, number> = {
-  "Pending":     0,
-  "In Progress": 1,
-  "Resolved":    2,
-};
 
   return (
     <>
@@ -759,33 +733,19 @@ const SubmitTicket: React.FC = () => {
                       </td>
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          {/* View — always available */}
-                          <button
-                            title="View"
-                            className="icon-btn-ticket"
-                            onClick={() => openView(r)}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: BRAND, transition: "background 0.15s" }}
-                          >
+                          <button title="View" className="icon-btn-ticket" onClick={() => openView(r)}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: BRAND, transition: "background 0.15s" }}>
                             <Eye size={14} />
                           </button>
-
-                          {/* Edit — disabled when Resolved */}
                           <button
                             title={isResolved ? "Cannot edit a resolved ticket" : "Edit"}
                             className={`icon-btn-ticket${isResolved ? " icon-btn-ticket-disabled" : ""}`}
                             onClick={() => !isResolved && openEdit(r)}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: isResolved ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: isResolved ? "#cbd5e1" : BRAND, transition: "background 0.15s" }}
-                          >
-                            {isResolved ? <Pencil size={14} /> : <Pencil size={14} />}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: isResolved ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: isResolved ? "#cbd5e1" : BRAND, transition: "background 0.15s" }}>
+                            <Pencil size={14} />
                           </button>
-
-                          {/* Delete — always available */}
-                          <button
-                            title="Delete"
-                            className="icon-btn-ticket"
-                            onClick={() => setDeleteTarget(r)}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", transition: "background 0.15s" }}
-                          >
+                          <button title="Delete" className="icon-btn-ticket" onClick={() => setDeleteTarget(r)}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", transition: "background 0.15s" }}>
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -825,7 +785,6 @@ const SubmitTicket: React.FC = () => {
         {(modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-ticket" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-ticket" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
-
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
                   {modalMode === "add" ? "Submit New Ticket" : "Edit Ticket"}
@@ -834,8 +793,6 @@ const SubmitTicket: React.FC = () => {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.9rem" }}>
-
-                {/* ── Issue Type (pill selector — always has a default, no FieldError needed) ── */}
                 <div style={{ gridColumn: "span 2", marginBottom: "0.5rem" }}>
                   <label style={labelStyle}>Issue Type <span style={{ color: "#dc2626" }}>*</span></label>
                   <div className="ticket-issue-pills">
@@ -852,65 +809,42 @@ const SubmitTicket: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ── Problem / Title ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Problem <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input
-                    value={form.title}
-                    onChange={e => { setForm(f => ({ ...f, title: e.target.value })); clearError("title"); }}
-                    placeholder="Brief description of the issue"
-                    maxLength={150}
-                    style={{ ...inputStyle, borderColor: formErrors.title ? "#fca5a5" : "#e2e8f0" }}
-                  />
+                  <input value={form.title} onChange={e => { setForm(f => ({ ...f, title: e.target.value })); clearError("title"); }}
+                    placeholder="Brief description of the issue" maxLength={150}
+                    style={{ ...inputStyle, borderColor: formErrors.title ? "#fca5a5" : "#e2e8f0" }} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <FieldError msg={formErrors.title} />
-                    <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0, paddingTop: 3 }}>
-                      {form.title.length}/150
-                    </span>
+                    <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0, paddingTop: 3 }}>{form.title.length}/150</span>
                   </div>
                 </div>
 
-                {/* ── Employee Name ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={labelStyle}>Name of Employee <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input
-                    value={form.employee_name}
-                    onChange={e => { setForm(f => ({ ...f, employee_name: e.target.value })); clearError("employee_name"); }}
-                    placeholder="e.g. Juan Dela Cruz"
-                    maxLength={100}
-                    style={{ ...inputStyle, borderColor: formErrors.employee_name ? "#fca5a5" : "#e2e8f0" }}
-                  />
+                  <input value={form.employee_name} onChange={e => { setForm(f => ({ ...f, employee_name: e.target.value })); clearError("employee_name"); }}
+                    placeholder="e.g. Juan Dela Cruz" maxLength={100}
+                    style={{ ...inputStyle, borderColor: formErrors.employee_name ? "#fca5a5" : "#e2e8f0" }} />
                   <FieldError msg={formErrors.employee_name} />
                 </div>
 
-                {/* ── Department ── */}
                 <div>
                   <label style={labelStyle}>Department/Office <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select
-                    value={form.department_id}
-                    onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
-                    style={{ ...selectStyle, borderColor: formErrors.department_id ? "#fca5a5" : "#e2e8f0" }}
-                  >
+                  <select value={form.department_id} onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
+                    style={{ ...selectStyle, borderColor: formErrors.department_id ? "#fca5a5" : "#e2e8f0" }}>
                     <option value="">— Select department —</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                   <FieldError msg={formErrors.department_id} />
                 </div>
 
-                {/* ── Date Submitted ── */}
                 <div>
                   <label style={labelStyle}>Date Submitted <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input
-                    type="date"
-                    value={form.date_submitted}
-                    readOnly
-                    onChange={e => { setForm(f => ({ ...f, date_submitted: e.target.value })); clearError("date_submitted"); }}
-                    style={{ ...inputStyle, background: "#f1f5f9", color: "#94a3b8",  cursor: "not-allowed",  pointerEvents: "none", border: "1px solid #e2e8f0" }}
-                  />
+                  <input type="date" value={form.date_submitted} readOnly
+                    style={{ ...inputStyle, background: "#f1f5f9", color: "#94a3b8", cursor: "not-allowed", pointerEvents: "none", border: "1px solid #e2e8f0" }} />
                   <FieldError msg={formErrors.date_submitted} />
                 </div>
 
-                {/* ── Technician Picker ── */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color="#475569" /> Assign IT Technician
@@ -921,25 +855,18 @@ const SubmitTicket: React.FC = () => {
                       </span>
                     )}
                   </label>
-
                   <TechnicianPicker
-                    users={itStaff}
-                    selected={form.assigned_to}
+                    users={itStaff} selected={form.assigned_to}
                     onChange={ids => { setForm(f => ({ ...f, assigned_to: ids })); clearError("assigned_to"); }}
-                    hasError={!!formErrors.assigned_to}
-                    loadMap={technicianLoadMap}
+                    hasError={!!formErrors.assigned_to} loadMap={technicianLoadMap}
                     editingTicketId={modalMode === "edit" ? selected?.id ?? null : null}
                   />
                   <FieldError msg={formErrors.assigned_to} />
                 </div>
-
               </div>
 
-              {/* ── Actions ── */}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.2rem" }}>
-                <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
-                  Cancel
-                </button>
+                <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Cancel</button>
                 <button onClick={handleSubmit} disabled={submitting} style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1 }}>
                   {submitting ? "Saving…" : modalMode === "add" ? "Submit Ticket" : "Save Changes"}
                 </button>
@@ -966,8 +893,8 @@ const SubmitTicket: React.FC = () => {
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND, marginBottom: 4 }}>Ticket Information</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: "1rem" }}>
                 {[
-                  { label: "Name of Employee",  value: selected.employee_name,                    icon: <User size={12} /> },
-                  { label: "Department/Office", value: getDepartmentName(selected.department_id),  icon: <Building2 size={12} /> },
+                  { label: "Name of Employee",  value: selected.employee_name,                   icon: <User size={12} /> },
+                  { label: "Department/Office", value: getDepartmentName(selected.department_id), icon: <Building2 size={12} /> },
                   { label: "Submitted",         value: new Date(selected.date_submitted).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" }), icon: <Clock size={12} /> },
                   { label: "Assigned To",       value: <TechnicianChips names={(selected.assigned_to ?? []).map(id => userMap[id]?.full_name).filter(Boolean) as string[]} />, icon: <Users size={12} /> },
                 ].map(row => (
@@ -1004,7 +931,6 @@ const SubmitTicket: React.FC = () => {
                 </div>
               )}
 
-              {/* ← UPDATED: hide Edit button if Resolved, show lock notice instead */}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", marginTop: "1.4rem" }}>
                 {selected.status === "Resolved" ? (
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5, marginRight: "auto" }}>
@@ -1034,7 +960,7 @@ const SubmitTicket: React.FC = () => {
               </div>
               <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, fontFamily: "'Poppins', sans-serif" }}>Archive Ticket?</h2>
               <p style={{ fontSize: 13, color: "#475569", marginBottom: "1.4rem" }}>
-               Archive <strong>"{deleteTarget.title}"</strong>? This ticket will be permanently removed from the list and cannot be undone.
+                Archive <strong>"{deleteTarget.title}"</strong>? This ticket will be permanently removed from the list and cannot be undone.
               </p>
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                 <button onClick={() => setDeleteTarget(null)}
