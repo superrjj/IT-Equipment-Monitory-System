@@ -73,8 +73,6 @@ function validateTechUpdate(form: {
 
   if (!form.started_at.trim()) {
     errors.started_at = "Start date is required.";
-  } else if (form.started_at < today) {
-    errors.started_at = "Start date cannot be in the past.";
   }
 
   if (form.status === "Resolved") {
@@ -223,22 +221,30 @@ const MyTickets: React.FC = () => {
   };
 
   const openWork = (r: TicketRow) => {
-    setFocusedTicketId(r.id);
-    setSelected(r);
-    const today = todayPH();
-    const existingStarted  = r.started_at   ? r.started_at.slice(0, 10)   : "";
-    const existingCompleted = r.completed_at ? r.completed_at.slice(0, 10) : "";
-    const wasInProgress    = r.status === "In Progress";
-    const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
-    setForm({
-      status: initialStatus,
-      action_taken: r.action_taken ?? "",
-      started_at:   existingStarted  || today,
-      completed_at: existingCompleted || (initialStatus === "Resolved" ? today : ""),
-    });
-    setFormErrors({});
-    setModal("work");
-  };
+  setFocusedTicketId(r.id);
+  setSelected(r);
+  const today = todayPH(); // always fresh current date
+
+  // Start date = when the ticket was started (or submitted), never today
+  const existingStarted =
+    r.started_at
+      ? r.started_at.slice(0, 10)
+      : r.date_submitted
+        ? r.date_submitted.slice(0, 10)
+        : today;
+
+  const wasInProgress = r.status === "In Progress";
+  const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
+
+  setForm({
+    status: initialStatus,
+    action_taken: r.action_taken ?? "",
+    started_at:   existingStarted,       // ← ticket's actual start/submit date
+    completed_at: initialStatus === "Resolved" ? today : "", // ← always today's fresh date
+  });
+  setFormErrors({});
+  setModal("work");
+};
 
   const closeModal = () => {
     setModal(null); setSelected(null); setFormErrors({}); setSaving(false);

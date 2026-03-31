@@ -318,8 +318,8 @@ export async function exportToWord(
   };
 
   // ── Layout ──────────────────────────────────────────────────────────────────
-  const TABLE_W = 14800;
-  const COL_W   = [1400, 2600, 2600, 2600, 1600, 2800, 1400];
+  const TABLE_W = 15000;
+  const COL_W   = [1200, 2400, 2400, 2900, 1600, 2200, 1400];
 
   // ── Cell builders ───────────────────────────────────────────────────────────
   const hCell = (text: string) =>
@@ -349,7 +349,7 @@ export async function exportToWord(
       margins: { top: 80, bottom: 80, left: 120, right: 120 },
       children: [
         new Paragraph({
-          alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+          alignment: AlignmentType.CENTER,
           children: [
             new TextRun({
               text,
@@ -485,11 +485,11 @@ export async function exportToWord(
                     r.ticket_number?.trim() || `TKT-${r.id.slice(0, 8).toUpperCase()}`,
                     { center: true, bold: true, color: BRAND_HEX }
                   ),
-                  dCell(r.title),
-                  dCell(r.employee_name),
-                  dCell(depts[r.department_id] ?? "—"),
+                  dCell(r.title , {center: true}),
+                  dCell(r.employee_name, {center: true}),
+                  dCell(depts[r.department_id] ?? "—", {center: true}),
                   dCell(r.issue_type, { center: true }),
-                  dCell(r.action_taken || "—"),
+                  dCell(r.action_taken || "—", {center: true}),
                   dCell(fmtDate(r.completed_at), { center: true, bold: false }),
                 ],
               })
