@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Activity } from "react";
+import React, { useState, useEffect} from "react";
 import { getSessionUserId } from "../../lib/audit-notifications";
 import { supabase } from "../../lib/supabaseClient";
 import { ActivityIcon } from "lucide-react";
@@ -278,7 +278,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       {/* Header */}
       <div style={{ marginBottom: "1.5rem" }}>
        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", color: BRAND }}>
-              <ActivityIcon size={20} color={BRAND} /> Activity
+              <ActivityIcon size={20} color={BRAND} /> Activity Logs
         </h2>
         <p style={{ ...poppins, fontSize: 12, color: "#64748b", margin: 0 }}>
           {isAdmin
