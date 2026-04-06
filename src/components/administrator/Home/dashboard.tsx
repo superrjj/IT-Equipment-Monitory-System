@@ -482,7 +482,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
 
 // ── Dashboard Shell ───────────────────────────────────────────────────────────
 const Dashboard: React.FC = () => {
-  const [activeLabel, setActiveLabel]           = useState("Home");
+  const [activeLabel, setActiveLabel]           = useState("Dashboard");
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [headerAvatarUrl, setHeaderAvatarUrl]   = useState("");
 
@@ -521,7 +521,7 @@ const Dashboard: React.FC = () => {
     const adminOnlyLabels = new Set(["Submit Ticket", "Repair History", "Resolved Tickets", "Departments", "User Accounts", "Reports & Analytics"]);
     if (!isAdmin && adminOnlyLabels.has(label)) return dashHomeNode.current;
     switch (label) {
-      case "Home":                return dashHomeNode.current;
+      case "Dashboard":                return dashHomeNode.current;
       case "Submit Ticket":       return <FileReports />;
       case "Repair History":      return <Repairs />;
       case "My Tickets":          return <MyTickets />;
@@ -549,7 +549,7 @@ const Dashboard: React.FC = () => {
 
       <div style={{
         height: "100vh", minHeight: 0, display: "flex", flexDirection: "column",
-        overflow: "hidden", background: "#f4f5fb",
+        overflow: "hidden", background: "#f5f6f7",
         fontFamily: "'Poppins', sans-serif", color: "#0f172a",
       }}>
         {/* Header — top */}

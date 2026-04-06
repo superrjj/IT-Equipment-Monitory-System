@@ -44,7 +44,7 @@ const adminMenuSections: MenuSection[] = [
 ];
 
 const technicianMenuSections: MenuSection[] = [
-  { items: [{ label: "Home", icon: LayoutDashboard }] },
+  { items: [{ label: "Dashboard", icon: LayoutDashboard }] },
   {
     heading: "Tickets",
     items: [
@@ -138,10 +138,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           align-items: center;
           gap: 2px;
           background: #ffffff;
-          border: 1px solid #e2e8f0;
+          border: 1.5px solid #e2e8f0;
           border-radius: 999px;
-          padding: 6px 12px 2px;
-          box-shadow: 0 8px 32px rgba(10,76,134,0.18), 0 2px 8px rgba(0,0,0,0.08);
+          padding: 6px 8px;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06);
           font-family: 'Poppins', sans-serif;
           width: max-content;
           max-width: calc(100vw - 32px);
@@ -153,12 +153,12 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           align-items: center;
           justify-content: center;
           gap: 3px;
-          padding: 9px 18px 6px;
+          padding: 8px 18px 7px;
           border-radius: 999px;
           border: none;
           background: transparent;
           cursor: pointer;
-          transition: background 0.18s, color 0.18s, transform 0.15s;
+          transition: background 0.18s, color 0.18s;
           min-width: 88px;
           font-family: 'Poppins', sans-serif;
           color: #94a3b8;
@@ -167,18 +167,16 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
         .bnav-item:hover:not(.bnav-active) {
           background: #f1f5f9;
           color: #475569;
-          transform: translateY(-1px);
         }
 
         .bnav-item.bnav-active {
           background: ${baseBlue};
           color: #ffffff;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 14px rgba(10,76,134,0.35);
+          box-shadow: 0 4px 14px rgba(10,76,134,0.28);
         }
 
         .bnav-label {
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 600;
           white-space: nowrap;
           letter-spacing: 0.02em;
@@ -190,7 +188,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           align-items: center;
           justify-content: center;
           gap: 3px;
-          padding: 9px 18px 6px;
+          padding: 8px 18px 7px;
           border-radius: 999px;
           border: none;
           background: transparent;
@@ -272,6 +270,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           text-transform: uppercase;
           letter-spacing: 0.1em;
           padding: 8px 12px 4px;
+          font-family: 'Poppins', sans-serif;
         }
 
         .bnav-drawer-divider {
@@ -291,7 +290,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
         }
       `}</style>
 
-      {/* Overlay behind drawer */}
+      {/* Overlay */}
       <div
         className={`bnav-overlay${drawerOpen ? " bnav-overlay-open" : ""}`}
         onClick={() => setDrawerOpen(false)}
@@ -306,7 +305,12 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "4px 12px 10px", borderBottom: "1px solid #f1f5f9", marginBottom: 6,
         }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>More options</span>
+          <span style={{
+            fontSize: 13, fontWeight: 700, color: "#0f172a",
+            fontFamily: "'Poppins', sans-serif",
+          }}>
+            More options
+          </span>
           <button
             onClick={() => setDrawerOpen(false)}
             style={{
@@ -332,7 +336,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
                   className={`bnav-drawer-item${active ? " bnav-drawer-active" : ""}`}
                   onClick={() => handleNav(label)}
                 >
-                  <Icon size={16} strokeWidth={2} />
+                  <Icon size={16} strokeWidth={2} color={active ? baseBlue : "#64748b"} />
                   {label}
                 </button>
               );
@@ -353,7 +357,11 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
               onClick={() => handleNav(label)}
               title={label}
             >
-              <Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
+              <Icon
+                size={18}
+                strokeWidth={active ? 2.2 : 1.8}
+                color={active ? "#ffffff" : "#94a3b8"}
+              />
               <span className="bnav-label">{label}</span>
             </button>
           );
@@ -368,6 +376,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           <ChevronUp
             size={18}
             strokeWidth={1.8}
+            color={drawerOpen ? baseBlue : "#94a3b8"}
             style={{
               transform: drawerOpen ? "rotate(180deg)" : "rotate(0deg)",
               transition: "transform 0.2s",
