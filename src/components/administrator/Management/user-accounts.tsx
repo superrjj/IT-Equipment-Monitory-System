@@ -508,7 +508,7 @@ export default function UserAccounts() {
       {/* Page Header */}
       <div className="ua-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", color: BRAND }}>
             <User2Icon size={20} color={BRAND} /> User Accounts
           </h2>
           <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>Passwords are stored as bcrypt hashes.</div>
@@ -521,7 +521,7 @@ export default function UserAccounts() {
       {/* ── Pending approvals ─────────────────────────────────────────────── */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
         <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 900, letterSpacing: 1 }}>Pending approvals</div>
+          <div style={{ fontWeight: 600, letterSpacing: 1, color: BRAND }}>Pending approvals</div>
           <div style={{ fontSize: 12, color: "#64748b" }}>{pendingLoading ? "Loading…" : `${pending.length} pending`}</div>
         </div>
         <div style={{ overflowX: "auto" }}>
@@ -680,7 +680,7 @@ export default function UserAccounts() {
                   )}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>
+                  <div style={{fontSize: 16, fontWeight: 700, margin: 0, color: BRAND}}>
                     {modalMode === "add" ? "Add New User" : "Edit User"}
                   </div>
                   <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>
@@ -792,7 +792,7 @@ export default function UserAccounts() {
                 Cancel
               </button>
               <button disabled={submitting} onClick={submit}
-                style={{ border: "none", background: submitting ? "#94a3b8" : BRAND, color: "#fff", borderRadius: 10, padding: "0.55rem 1.2rem", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 800, fontSize: 13, fontFamily: "inherit", boxShadow: submitting ? "none" : "0 4px 14px rgba(10,76,134,0.28)", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+                style={{ border: "none", background: submitting ? "#94a3b8" : BRAND, color: "#fff", borderRadius: 10, padding: "0.55rem 1.2rem", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 500, fontSize: 13, fontFamily: "inherit", boxShadow: submitting ? "none" : "0 4px 14px rgba(10,76,134,0.28)", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
                 {submitting ? "Saving…" : (modalMode === "add" ? "Create User" : "Save Changes")}
               </button>
             </div>

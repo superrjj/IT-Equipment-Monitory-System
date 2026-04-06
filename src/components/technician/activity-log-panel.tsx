@@ -319,7 +319,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem" }}>
         <ScrollText size={22} color={BRAND} />
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1, color:BRAND }}>
             Activity Log
           </h1>
           <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>

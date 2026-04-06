@@ -394,7 +394,7 @@ const Departments: React.FC = () => {
         {/* ── Header row ── */}
         <div className="dept-header-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.2rem", flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif"}}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", color: brandBlue}}>
               <Building2 size={20} color={brandBlue} /> Departments
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>Manage office departments and view their support tickets.</p>
@@ -536,8 +536,8 @@ const Departments: React.FC = () => {
         {(modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 440, boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem", }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: brandBlue }}>
                   {modalMode === "add" ? "Add Department" : "Edit Department"}
                 </h2>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>

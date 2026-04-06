@@ -8,7 +8,7 @@ import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifica
 import { supabase } from "../../../lib/supabaseClient";
 
 const BUCKET = "profile-avatar";
-
+const Blue = "#0a4c86";
 type ProfileRow = {
   id: string;
   username: string;
@@ -526,7 +526,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
           {/* Header */}
           <div className="pm-header">
             <div>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.01em" }}>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: Blue, letterSpacing: 1, fontFamily: '"Poppins", sans-serif' }}>
                 My Profile
               </h2>
             </div>

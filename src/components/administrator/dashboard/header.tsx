@@ -658,21 +658,35 @@ const Header: React.FC<HeaderProps> = ({
           justifyContent: "space-between",
           fontFamily: "'Poppins', sans-serif",
           flexWrap: "wrap", gap: "0.75rem",
+          padding: "1rem 2rem",          // add padding here instead of wrapper
+          minHeight: "60px",             // increase height
+          background: "#ffffff",
         }}
       >
-        {/* Left: clock */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: "1 1 auto" }}>
+        {/* Left: logo + clock */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: "1 1 auto" }}>
           {onMenuClick && (
             <button type="button" className="hdr-menu-btn" onClick={onMenuClick} aria-label="Open menu">
               <Menu size={20} strokeWidth={2} />
             </button>
           )}
+          
+          {/* ── City Logo ── */}
+          <img
+            src="/masaya-sa-tarlac-city.png"
+            alt="Masaya sa Tarlac City"
+            style={{ height: 64, width: "auto", objectFit: "contain", flexShrink: 0 }}
+          />
+
+          {/* Divider */}
+          <div style={{ width: 1, height: 60, background: "#e2e8f0", flexShrink: 0 }} />
+
+          {/* Clock */}
           <div className="hdr-datetime">
-            <div style={{ fontSize: 20, fontWeight: 700, color: brandBlue, letterSpacing: "0.02em" }}>{timeStr}</div>
-            <div className="hdr-date" style={{ fontSize: 14, color: "#64748b", marginTop: 2 }}>{dateStr}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: brandBlue, letterSpacing: "0.02em" }}>{timeStr}</div>
+            <div className="hdr-date" style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>{dateStr}</div>
           </div>
         </div>
-
         {/* Right: bell + user */}
         <div className="hdr-user-block" style={{ display: "flex", alignItems: "center", gap: "0.5rem", position: "relative" }}>
 
