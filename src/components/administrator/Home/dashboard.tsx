@@ -167,23 +167,18 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
   );
 };
 
-// ── Issue Types Line Chart (dynamic import) ───────────────────────────────────
+// ── Issue Types Line Chart ────────────────────────────────────────────────────
 const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<any>(null);
 
   useEffect(() => {
     if (!canvasRef.current || issueBreakdown.length === 0) return;
-
     let cancelled = false;
 
     import("chart.js/auto").then(({ default: Chart }) => {
       if (cancelled || !canvasRef.current) return;
-
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
       const sliced      = issueBreakdown.slice(0, 6);
       const pointColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b", "#ef4444", "#10b981"];
@@ -192,22 +187,20 @@ const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreak
         type: "line",
         data: {
           labels: sliced.map(i => i.type),
-          datasets: [
-            {
-              label: "Tickets",
-              data: sliced.map(i => i.count),
-              borderColor: "#0a4c86",
-              backgroundColor: "rgba(10,76,134,0.07)",
-              pointBackgroundColor: sliced.map((_, i) => pointColors[i] ?? "#0a4c86"),
-              pointBorderColor: "#fff",
-              pointBorderWidth: 2,
-              pointRadius: 6,
-              pointHoverRadius: 9,
-              fill: true,
-              tension: 0.4,
-              borderWidth: 2,
-            },
-          ],
+          datasets: [{
+            label: "Tickets",
+            data: sliced.map(i => i.count),
+            borderColor: "#0a4c86",
+            backgroundColor: "rgba(10,76,134,0.07)",
+            pointBackgroundColor: sliced.map((_, i) => pointColors[i] ?? "#0a4c86"),
+            pointBorderColor: "#fff",
+            pointBorderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 9,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+          }],
         },
         options: {
           responsive: true,
@@ -230,34 +223,20 @@ const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreak
             x: {
               grid: { display: false },
               border: { display: false },
-              ticks: {
-                font: { size: 11, family: "'DM Sans', sans-serif" },
-                color: "#94a3b8",
-                maxRotation: 25,
-                autoSkip: false,
-              },
+              ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", maxRotation: 25, autoSkip: false },
             },
             y: {
               beginAtZero: true,
               grid: { color: "#f1f5f9" },
               border: { display: false },
-              ticks: {
-                font: { size: 11, family: "'DM Sans', sans-serif" },
-                color: "#94a3b8",
-                stepSize: 1,
-                precision: 0,
-              },
+              ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", stepSize: 1, precision: 0 },
             },
           },
         },
       });
     });
 
-    return () => {
-      cancelled = true;
-      chartRef.current?.destroy();
-      chartRef.current = null;
-    };
+    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
   }, [issueBreakdown]);
 
   return (
@@ -267,48 +246,60 @@ const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreak
   );
 };
 
-// ── Department Line Chart (dynamic import) ────────────────────────────────────
-const DeptLineChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
+// ── Department Horizontal Bar Chart (REDESIGNED) ──────────────────────────────
+const DEPT_PALETTE = [
+  "#0a4c86", // navy blue
+  "#7c3aed", // violet
+  "#0891b2", // cyan
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#ef4444", // red
+  "#f97316", // orange
+  "#8b5cf6", // purple
+  "#06b6d4", // teal
+  "#84cc16", // lime
+  "#e11d48", // rose
+  "#14b8a6", // teal-2
+];
+
+function getDeptColor(name: string): string {
+  // Hash the department name so the same dept always gets the same color
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const paletteIndex = Math.abs(hash) % DEPT_PALETTE.length;
+  return DEPT_PALETTE[paletteIndex];
+}
+
+const DeptBarChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<any>(null);
 
   useEffect(() => {
     if (!canvasRef.current || deptRows.length === 0) return;
-
     let cancelled = false;
 
     import("chart.js/auto").then(({ default: Chart }) => {
       if (cancelled || !canvasRef.current) return;
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-
-      const pointColors = ["#8b5cf6", "#0891b2", "#0a4c86", "#f59e0b", "#10b981"];
+      const barColors = deptRows.map((d) => getDeptColor(d.name));
 
       chartRef.current = new Chart(canvasRef.current, {
-        type: "line",
+        type: "bar",
         data: {
           labels: deptRows.map(d => d.name),
-          datasets: [
-            {
-              label: "Tickets",
-              data: deptRows.map(d => d.tickets),
-              borderColor: "#8b5cf6",
-              backgroundColor: "rgba(139,92,246,0.07)",
-              pointBackgroundColor: deptRows.map((_, i) => pointColors[i] ?? "#8b5cf6"),
-              pointBorderColor: "#fff",
-              pointBorderWidth: 2,
-              pointRadius: 6,
-              pointHoverRadius: 9,
-              fill: true,
-              tension: 0.4,
-              borderWidth: 2,
-            },
-          ],
+          datasets: [{
+            data: deptRows.map(d => d.tickets),
+            backgroundColor: barColors,
+            borderRadius: 8,
+            borderSkipped: false,
+            barThickness: 26,
+          }],
         },
         options: {
+          indexAxis: "y",
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -316,7 +307,7 @@ const DeptLineChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
             tooltip: {
               backgroundColor: "#0f172a",
               titleColor: "#f8fafc",
-              bodyColor: "#cbd5e1",
+              bodyColor: "#94a3b8",
               padding: 10,
               cornerRadius: 8,
               callbacks: {
@@ -327,60 +318,57 @@ const DeptLineChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
           },
           scales: {
             x: {
-              grid: { display: false },
+              grid: { color: "rgba(148,163,184,0.12)" },
               border: { display: false },
               ticks: {
                 font: { size: 11, family: "'DM Sans', sans-serif" },
                 color: "#94a3b8",
-                maxRotation: 25,
-                autoSkip: false,
-              },
-            },
-            y: {
-              beginAtZero: true,
-              grid: { color: "#f1f5f9" },
-              border: { display: false },
-              ticks: {
-                font: { size: 11, family: "'DM Sans', sans-serif" },
-                color: "#94a3b8",
-                stepSize: 1,
                 precision: 0,
               },
             },
+            y: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: {
+                font: { size: 12, family: "'DM Sans', sans-serif", weight: 500 },
+                color: "#475569",
+                padding: 4,
+              },
+            },
           },
+          layout: { padding: { right: 8 } },
         },
       });
     });
 
-    return () => {
-      cancelled = true;
-      chartRef.current?.destroy();
-      chartRef.current = null;
-    };
+    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
   }, [deptRows]);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: 190 }}>
+    <div style={{ position: "relative", width: "100%", height: `${Math.max(deptRows.length * 52 + 32, 160)}px` }}>
       <canvas ref={canvasRef} />
     </div>
   );
 };
 
-// ── Technician Leaderboard ────────────────────────────────────────────────────
+// ── IT Technician Leaderboard (REDESIGNED) ────────────────────────────────────
 const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
   const medals      = ["🥇", "🥈", "🥉"];
   const maxResolved = Math.max(...techs.map(t => t.resolved), 1);
 
+  const avatarBgs   = ["#fef9c3", "#e0e7ff", "#d1fae5", "#fce7f3", "#e0f2fe"];
+  const avatarTexts = ["#92400e", "#3730a3", "#065f46", "#9d174d", "#0c4a6e"];
+
   const getPerformanceBadge = (resolved: number, rank: number) => {
-    if (rank === 0 && resolved > 0) return { label: "Top Performer", color: "#b45309", bg: "#fef9c3" };
-    if (resolved >= 10)             return { label: "Expert",        color: "#0f766e", bg: "#ccfbf1" };
-    if (resolved >= 5)              return { label: "Active",        color: "#1d4ed8", bg: "#dbeafe" };
-    if (resolved >= 1)              return { label: "Getting there", color: "#6d28d9", bg: "#ede9fe" };
-    return                                 { label: "No tickets yet",color: "#64748b", bg: "#f1f5f9" };
+    if (rank === 0 && resolved > 0) return { label: "Top performer",   color: "#92400e", bg: "#fef9c3" };
+    if (resolved >= 10)             return { label: "Expert",          color: "#1e40af", bg: "#dbeafe" };
+    if (resolved >= 5)              return { label: "Active",          color: "#1e40af", bg: "#dbeafe" };
+    if (resolved >= 1)              return { label: "Getting started", color: "#475569", bg: "#f1f5f9" };
+    return                                 { label: "No tickets yet",  color: "#94a3b8", bg: "#f8fafc" };
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {techs.map((tech, i) => {
         const initials    = tech.full_name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
         const isFirst     = i === 0;
@@ -388,6 +376,9 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
         const total       = tech.resolved + tech.inProgress + tech.pending;
         const resolvedPct = total > 0 ? Math.round((tech.resolved / total) * 100) : 0;
         const barWidth    = Math.round((tech.resolved / maxResolved) * 100);
+        const avatarBg    = avatarBgs[i]   ?? "#f1f5f9";
+        const avatarText  = avatarTexts[i] ?? "#475569";
+        const rankColor   = i < 3 ? (["#d97706", "#64748b", "#92400e"][i]) : "#94a3b8";
 
         return (
           <div
@@ -395,31 +386,34 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
             className="tech-row"
             style={{
               display: "grid",
-              gridTemplateColumns: "36px 44px 1fr auto",
+              gridTemplateColumns: "28px 40px 1fr auto",
               alignItems: "center",
-              gap: 14,
-              padding: "0.9rem 1rem",
-              borderRadius: 16,
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 12,
               background: isFirst ? "#fffbeb" : "#f8fafc",
-              border: `1px solid ${isFirst ? "#fde68a" : "#f1f5f9"}`,
-              transition: "box-shadow 0.15s",
+              border: `0.5px solid ${isFirst ? "#fde68a" : "#f1f5f9"}`,
+              transition: "background 0.15s, box-shadow 0.15s",
             }}
           >
+            {/* Rank badge */}
             <div style={{
-              width: 32, height: 32, borderRadius: 10, flexShrink: 0,
-              background: isFirst ? "#fef9c3" : "#f1f5f9",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: i < 3 ? 18 : 12, fontWeight: 700, color: "#94a3b8",
+              textAlign: "center",
+              fontSize: i < 3 ? 16 : 11,
+              fontWeight: 700,
+              color: rankColor,
+              lineHeight: 1,
             }}>
               {medals[i] ?? `#${i + 1}`}
             </div>
 
+            {/* Avatar */}
             <div style={{
-              width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-              overflow: "hidden", background: "#e2e8f0",
+              width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+              background: avatarBg, overflow: "hidden",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 13, fontWeight: 700, color: "#475569",
-              border: isFirst ? "2px solid #fbbf24" : "2px solid #e2e8f0",
+              fontSize: 12, fontWeight: 700, color: avatarText,
+              border: isFirst ? "2px solid #fbbf24" : "1.5px solid rgba(0,0,0,0.06)",
             }}>
               {tech.avatar_url ? (
                 <img
@@ -431,9 +425,13 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
               ) : initials}
             </div>
 
+            {/* Name + progress bar */}
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 600, color: "#0f172a",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
                   {tech.full_name}
                 </span>
                 <span style={{
@@ -445,36 +443,46 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1, height: 7, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 5, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
                   <div style={{
                     height: "100%",
                     width: `${barWidth}%`,
                     background: isFirst
                       ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
-                      : "linear-gradient(90deg, #0a4c86, #3b82f6)",
+                      : "linear-gradient(90deg, #7c3aed, #a78bfa)",
                     borderRadius: 99,
                     transition: "width 0.6s ease",
-                    minWidth: barWidth > 0 ? 6 : 0,
+                    minWidth: barWidth > 0 ? 5 : 0,
                   }} />
                 </div>
-                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 500, whiteSpace: "nowrap", minWidth: 60 }}>
+                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 500, whiteSpace: "nowrap", minWidth: 56 }}>
                   {resolvedPct}% resolved
                 </span>
               </div>
             </div>
 
+            {/* Stats badges */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", background: "#d1fae5", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: "#065f46",
+                  background: "#d1fae5", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
+                }}>
                   ✓ {tech.resolved} resolved
                 </span>
                 {tech.inProgress > 0 && (
-                  <span style={{ fontSize: 10, fontWeight: 600, color: "#3b82f6", background: "#dbeafe", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: "#1e40af",
+                    background: "#dbeafe", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
+                  }}>
                     ↻ {tech.inProgress} active
                   </span>
                 )}
                 {tech.pending > 0 && (
-                  <span style={{ fontSize: 10, fontWeight: 600, color: "#f59e0b", background: "#fef9c3", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: "#92400e",
+                    background: "#fef3c7", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
+                  }}>
                     ⏳ {tech.pending} pending
                   </span>
                 )}
@@ -723,7 +731,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         .dash-new *, .dash-new { box-sizing: border-box; }
         .dash-new  { font-family: 'DM Sans', sans-serif; }
         .refresh-btn:hover { background: #f1f5f9 !important; }
-        .tech-row:hover    { box-shadow: 0 4px 16px rgba(10,76,134,0.10) !important; }
+        .tech-row:hover { background: #f1f5f9 !important; box-shadow: 0 2px 12px rgba(10,76,134,0.08) !important; }
         @media (max-width: 1100px) {
           .dash-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .dash-mid-grid { grid-template-columns: 1fr !important; }
@@ -799,7 +807,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </div>
         </div>
 
-        {/* Bottom row — line charts */}
+        {/* Bottom row — charts */}
         <div className="dash-bot-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
 
           {/* Recurring Issue Types */}
@@ -817,39 +825,50 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             )}
           </div>
 
-          {/* Top Departments */}
+          {/* Top Departments — redesigned horizontal bar */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#8b5cf615", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <TrendingUp size={14} color="#8b5cf6" />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#8b5cf615", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <TrendingUp size={14} color="#8b5cf6" />
+                </div>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", display: "block" }}>Top Departments by Tickets</span>
+                  <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Top 5 most active</span>
+                </div>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Top Departments by Tickets</span>
             </div>
             {data.deptRows.length === 0 ? (
               <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No department data yet.</p>
             ) : (
-              <DeptLineChart deptRows={data.deptRows} />
+              <DeptBarChart deptRows={data.deptRows} />
             )}
           </div>
 
         </div>
 
-        {/* IT Technician Leaderboard — full width */}
+        {/* IT Technician Leaderboard — full width, redesigned */}
         <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.1rem", flexWrap: "wrap", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#f59e0b15", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Trophy size={14} color="#f59e0b" />
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>IT Technician Leaderboard</span>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", display: "block" }}>IT Technician Leaderboard</span>
+                <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Ranked by resolved tickets</span>
+              </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {[
-                { color: "#10b981", bg: "#d1fae5", label: "✓ Resolved" },
-                { color: "#3b82f6", bg: "#dbeafe", label: "↻ Active" },
-                { color: "#f59e0b", bg: "#fef9c3", label: "⏳ Pending" },
+                { color: "#065f46", bg: "#d1fae5", label: "✓ Resolved" },
+                { color: "#1e40af", bg: "#dbeafe", label: "↻ Active" },
+                { color: "#92400e", bg: "#fef3c7", label: "⏳ Pending" },
               ].map(s => (
-                <span key={s.label} style={{ fontSize: 10, fontWeight: 600, color: s.color, background: s.bg, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                <span key={s.label} style={{
+                  fontSize: 10, fontWeight: 600, color: s.color,
+                  background: s.bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap",
+                }}>
                   {s.label}
                 </span>
               ))}
