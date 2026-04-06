@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
+import { supabase } from "../lib/supabaseClient";
 import {
   Key,
   ShieldAlert,
@@ -442,11 +442,6 @@ export default function LoginPage() {
   const [create, setCreate] = useState({
     full_name: "", username: "", email: "", password: "", confirmPassword: "",
   });
-
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL as string,
-    import.meta.env.VITE_SUPABASE_ANON_KEY as string
-  );
 
   // ── Restore pending state on mount (survives page refresh) ────────────────
   useEffect(() => {

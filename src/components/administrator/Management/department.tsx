@@ -1,17 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   Plus, Pencil, Trash2, Eye, Search, ChevronUp, ChevronDown,
   X, AlertTriangle, ChevronLeft, ChevronRight, Building2,
   Ticket, Clock, CheckCircle2, CircleDot, Hash, Archive
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
-
-// ── Supabase client ────────────────────────────────────────────────────────────
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../../lib/supabaseClient";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Department = {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../../../lib/supabaseClient";
 import Sidebar from "../dashboard/sidebar";
 import Header from "../dashboard/header";
 import ProfileModal from "../Management/my-profiles";
@@ -21,10 +21,6 @@ import {
   BarChart3, AlertTriangle, RefreshCw, ArrowUpRight, Trophy,
 } from "lucide-react";
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
 
 type IssueCount = { type: string; count: number };
 type DeptRow    = { name: string; tickets: number; repairs: number };
@@ -49,8 +45,6 @@ type DashData = {
   techLeaderboard:   TechStat[];
 };
 
-// ── Helper: check if a technician is assigned to a ticket ────────────────────
-// assigned_to can be uuid[] (array) or a single uuid string depending on schema
 function isAssigned(assignedTo: any, techId: string): boolean {
   if (!assignedTo) return false;
   if (Array.isArray(assignedTo)) return assignedTo.includes(techId);
@@ -173,25 +167,208 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
   );
 };
 
-// ── Horizontal Bar ────────────────────────────────────────────────────────────
-const HorizBar: React.FC<{ label: string; value: number; max: number; color: string }> = ({ label, value, max, color }) => {
-  const width = (value / Math.max(max, 1)) * 100;
+// ── Issue Types Line Chart (dynamic import) ───────────────────────────────────
+const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef  = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || issueBreakdown.length === 0) return;
+
+    let cancelled = false;
+
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+
+      const sliced      = issueBreakdown.slice(0, 6);
+      const pointColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b", "#ef4444", "#10b981"];
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "line",
+        data: {
+          labels: sliced.map(i => i.type),
+          datasets: [
+            {
+              label: "Tickets",
+              data: sliced.map(i => i.count),
+              borderColor: "#0a4c86",
+              backgroundColor: "rgba(10,76,134,0.07)",
+              pointBackgroundColor: sliced.map((_, i) => pointColors[i] ?? "#0a4c86"),
+              pointBorderColor: "#fff",
+              pointBorderWidth: 2,
+              pointRadius: 6,
+              pointHoverRadius: 9,
+              fill: true,
+              tension: 0.4,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+              callbacks: {
+                title: (items) => items[0]?.label ?? "",
+                label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: {
+                font: { size: 11, family: "'DM Sans', sans-serif" },
+                color: "#94a3b8",
+                maxRotation: 25,
+                autoSkip: false,
+              },
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+              ticks: {
+                font: { size: 11, family: "'DM Sans', sans-serif" },
+                color: "#94a3b8",
+                stepSize: 1,
+                precision: 0,
+              },
+            },
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [issueBreakdown]);
+
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{value}</span>
-      </div>
-      <div style={{ height: 7, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 4 }} />
-      </div>
+    <div style={{ position: "relative", width: "100%", height: 190 }}>
+      <canvas ref={canvasRef} />
     </div>
   );
 };
 
-// ── Technician Leaderboard — redesigned with progress bars ────────────────────
+// ── Department Line Chart (dynamic import) ────────────────────────────────────
+const DeptLineChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef  = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || deptRows.length === 0) return;
+
+    let cancelled = false;
+
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+
+      const pointColors = ["#8b5cf6", "#0891b2", "#0a4c86", "#f59e0b", "#10b981"];
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "line",
+        data: {
+          labels: deptRows.map(d => d.name),
+          datasets: [
+            {
+              label: "Tickets",
+              data: deptRows.map(d => d.tickets),
+              borderColor: "#8b5cf6",
+              backgroundColor: "rgba(139,92,246,0.07)",
+              pointBackgroundColor: deptRows.map((_, i) => pointColors[i] ?? "#8b5cf6"),
+              pointBorderColor: "#fff",
+              pointBorderWidth: 2,
+              pointRadius: 6,
+              pointHoverRadius: 9,
+              fill: true,
+              tension: 0.4,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+              callbacks: {
+                title: (items) => items[0]?.label ?? "",
+                label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: {
+                font: { size: 11, family: "'DM Sans', sans-serif" },
+                color: "#94a3b8",
+                maxRotation: 25,
+                autoSkip: false,
+              },
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+              ticks: {
+                font: { size: 11, family: "'DM Sans', sans-serif" },
+                color: "#94a3b8",
+                stepSize: 1,
+                precision: 0,
+              },
+            },
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [deptRows]);
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: 190 }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+};
+
+// ── Technician Leaderboard ────────────────────────────────────────────────────
 const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
-  const medals     = ["🥇", "🥈", "🥉"];
+  const medals      = ["🥇", "🥈", "🥉"];
   const maxResolved = Math.max(...techs.map(t => t.resolved), 1);
 
   const getPerformanceBadge = (resolved: number, rank: number) => {
@@ -228,7 +405,6 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
               transition: "box-shadow 0.15s",
             }}
           >
-            {/* Rank badge */}
             <div style={{
               width: 32, height: 32, borderRadius: 10, flexShrink: 0,
               background: isFirst ? "#fef9c3" : "#f1f5f9",
@@ -238,7 +414,6 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
               {medals[i] ?? `#${i + 1}`}
             </div>
 
-            {/* Avatar */}
             <div style={{
               width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
               overflow: "hidden", background: "#e2e8f0",
@@ -256,9 +431,7 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
               ) : initials}
             </div>
 
-            {/* Name + progress bar */}
             <div style={{ minWidth: 0 }}>
-              {/* Row 1: name + badge */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {tech.full_name}
@@ -271,7 +444,6 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
                   {badge.label}
                 </span>
               </div>
-              {/* Row 2: progress bar */}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ flex: 1, height: 7, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
                   <div style={{
@@ -291,7 +463,6 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
               </div>
             </div>
 
-            {/* Stat pills */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", background: "#d1fae5", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
@@ -320,12 +491,6 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function hashDeptColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return `hsl(${Math.abs(hash) % 360}, 65%, 48%)`;
-}
-
 const stampAvatar = (t: any) => ({
   ...t,
   avatar_url: t.avatar_url
@@ -375,7 +540,6 @@ function buildDashData(
     .sort((a: DeptRow, b: DeptRow) => b.tickets - a.tickets)
     .slice(0, 5);
 
-  // ── FIXED: assigned_to is uuid[] — use isAssigned() helper ───────────────
   const techLeaderboard: TechStat[] = (techs ?? [])
     .map((tech: any) => ({
       id:         tech.id,
@@ -551,8 +715,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
     { label: "In Progress", value: data.inProgressTickets, color: "#3b82f6" },
     { label: "Resolved",    value: data.resolvedTickets,   color: "#10b981" },
   ];
-  const issueColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b", "#ef4444"];
-  const maxIssue    = Math.max(...data.issueBreakdown.map(i => i.count), 1);
 
   return (
     <>
@@ -561,7 +723,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         .dash-new *, .dash-new { box-sizing: border-box; }
         .dash-new  { font-family: 'DM Sans', sans-serif; }
         .refresh-btn:hover { background: #f1f5f9 !important; }
-        .dept-row-h:hover  { background: #f8fafc !important; }
         .tech-row:hover    { box-shadow: 0 4px 16px rgba(10,76,134,0.10) !important; }
         @media (max-width: 1100px) {
           .dash-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -638,8 +799,10 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </div>
         </div>
 
-        {/* Bottom row */}
+        {/* Bottom row — line charts */}
         <div className="dash-bot-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+
+          {/* Recurring Issue Types */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#ef444415", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -650,14 +813,11 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             {data.issueBreakdown.length === 0 ? (
               <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No issue data yet.</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {data.issueBreakdown.slice(0, 5).map((item, i) => (
-                  <HorizBar key={item.type} label={item.type} value={item.count} max={maxIssue} color={issueColors[i] ?? "#0a4c86"} />
-                ))}
-              </div>
+              <IssueLineChart issueBreakdown={data.issueBreakdown} />
             )}
           </div>
 
+          {/* Top Departments */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#8b5cf615", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -668,34 +828,10 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             {data.deptRows.length === 0 ? (
               <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No department data yet.</p>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    {["#", "Department", "Tickets"].map(h => (
-                      <th key={h} style={{ padding: "0.4rem 0.5rem", textAlign: h === "Tickets" ? "right" : "left", fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.deptRows.map((row, i) => {
-                    const pct = (row.tickets / (data.deptRows[0]?.tickets ?? 1)) * 100;
-                    return (
-                      <tr key={row.name} className="dept-row-h" style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s" }}>
-                        <td style={{ padding: "0.6rem 0.5rem", fontWeight: 700, color: "#cbd5e1", fontSize: 12, width: 28 }}>{i + 1}</td>
-                        <td style={{ padding: "0.6rem 0.5rem" }}>
-                          <div style={{ fontWeight: 600, color: "#374151", fontSize: 13 }}>{row.name}</div>
-                          <div style={{ height: 3, background: "#f1f5f9", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${pct}%`, background: hashDeptColor(row.name), borderRadius: 2 }} />
-                          </div>
-                        </td>
-                        <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontWeight: 800, color: hashDeptColor(row.name), fontSize: 15 }}>{row.tickets}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <DeptLineChart deptRows={data.deptRows} />
             )}
           </div>
+
         </div>
 
         {/* IT Technician Leaderboard — full width */}
@@ -707,7 +843,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>IT Technician Leaderboard</span>
             </div>
-            {/* Legend */}
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {[
                 { color: "#10b981", bg: "#d1fae5", label: "✓ Resolved" },

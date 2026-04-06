@@ -1,16 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   Plus, Pencil, Trash2, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
-
-// ── Supabase client ────────────────────────────────────────────────────────────
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../../lib/supabaseClient";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type EquipmentStatus = "Active" | "Defective" | "Under Repair" | "Retired";

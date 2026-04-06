@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   BarChart2,
   TrendingUp,
@@ -9,11 +8,7 @@ import {
   Calendar,
   Loader,
 } from "lucide-react";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../../lib/supabaseClient";
 
 const brandBlue = "#0a4c86";
 

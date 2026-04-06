@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { ScrollText, Loader } from "lucide-react";
 import { getSessionUserId } from "../../lib/audit-notifications";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../lib/supabaseClient";
 
 const BRAND = "#0a4c86";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   notifyRepairAssignees,
   diffNewAssignees,
@@ -12,11 +11,7 @@ import {
   ChevronLeft, ChevronRight, Wrench,
   ClipboardList, Loader, CheckCircle, Users,
 } from "lucide-react";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../../lib/supabaseClient";
 
 type RepairStatus = "Pending" | "In Progress" | "Completed";
 type SortField    = "status" | "created_at" | "started_at" | "completed_at";

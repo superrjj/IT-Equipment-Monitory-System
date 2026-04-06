@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   Eye, Search, X, Clock, Loader, Calendar,
   BadgeAlert, User, CheckCircle2, FileSpreadsheet, FileText, ChevronDown,
@@ -14,11 +13,7 @@ import {
   type TicketRow,
   type DeptMap,
 } from "../../utils/exportWorkHistory";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../lib/supabaseClient";
 
 const BRAND = "#0a4c86";
 const GREEN = "#16a34a";

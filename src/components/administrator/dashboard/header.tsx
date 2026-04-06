@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { createClient } from "@supabase/supabase-js";
-import { LogOut, Menu, Bell, ChevronDown, User } from "lucide-react";
+import { LogOut, Menu, Bell, Settings, ChevronDown } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
+import { supabase } from "../../../lib/supabaseClient";
 
 const brandBlue = "#0a4c86";
 
@@ -14,6 +14,7 @@ const headerStyles = `
     inset: 0;
     z-index: 999;
     background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -22,22 +23,6 @@ const headerStyles = `
   @keyframes hdrFadeIn {
     from { opacity: 0; }
     to   { opacity: 1; }
-  }
-
-  /* ── Notifications panel scrollbar — matches sidebar style ── */
-  .hdr-notif-panel::-webkit-scrollbar {
-    width: 5px;
-  }
-  .hdr-notif-panel::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 999px;
-  }
-  .hdr-notif-panel::-webkit-scrollbar-thumb {
-    background: #0a4c8655;
-    border-radius: 999px;
-  }
-  .hdr-notif-panel::-webkit-scrollbar-thumb:hover {
-    background: #0a4c86;
   }
 
   .hdr-dialog {
@@ -224,44 +209,6 @@ const headerStyles = `
     flex-shrink: 0;
   }
 
-  @keyframes hdrAvatarPop {
-    0%   { transform: scale(1); }
-    40%  { transform: scale(1.12); }
-    100% { transform: scale(1); }
-  }
-  .hdr-avatar-updated {
-    animation: hdrAvatarPop 0.35s cubic-bezier(0.16,1,0.3,1) both;
-  }
-
-  .hdr-mark-all-btn {
-    border: none;
-    background: none;
-    color: ${brandBlue};
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'Poppins', sans-serif;
-    padding: 2px 6px;
-    border-radius: 6px;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    transition: opacity 0.15s;
-  }
-  .hdr-mark-all-btn:hover { opacity: 0.7; }
-
-  /* ── Notification item hover ── */
-  .hdr-notif-item {
-    width: 100%;
-    text-align: left;
-    border: none;
-    border-radius: 10px;
-    padding: 0.75rem;
-    margin-bottom: 6px;
-    cursor: pointer;
-    transition: filter 0.15s;
-  }
-  .hdr-notif-item:hover { filter: brightness(0.96); }
-
   @media (max-width: 1024px) {
     .hdr-menu-btn { display: flex; }
     .hdr-user-meta { display: none; }
@@ -277,14 +224,6 @@ const headerStyles = `
   }
 `;
 
-// ── Actor info component ───────────────────────────────────────────────────────
-type ActorInfo = {
-  id: string;
-  full_name: string;
-  avatar_url: string | null;
-};
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 type HeaderProps = {
   currentUserName: string;
   userRole: string;
@@ -303,26 +242,8 @@ type NotificationRow = {
   entity_id: string | null;
   read_at: string | null;
   created_at: string;
-  actor_user_id: string | null; // ← NEW
 };
 
-const PROFILE_TABLE   = "user_accounts";
-const FIELD_FULL_NAME  = "full_name";
-const FIELD_ROLE       = "role";
-const FIELD_AVATAR_URL = "avatar_url";
-
-type ProfileState = {
-  name: string;
-  role: string;
-  avatarUrl: string;
-};
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
-
-// ── Main component ────────────────────────────────────────────────────────────
 const Header: React.FC<HeaderProps> = ({
   currentUserName,
   userRole,
@@ -332,117 +253,20 @@ const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
 }) => {
   const navigate = useNavigate();
-  const [now, setNow]                 = useState(new Date());
+  const [now, setNow]               = useState(new Date());
   const [showConfirm, setShowConfirm] = useState(false);
   const [loggingOut, setLoggingOut]   = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
-  const [notifLoading, setNotifLoading]     = useState(false);
-  const [markingAll, setMarkingAll]         = useState(false);
-  const [notifs, setNotifs]                 = useState<NotificationRow[]>([]);
-  const [actorMap, setActorMap]             = useState<Record<string, ActorInfo>>({}); // ← NEW
-  const [showUserMenu, setShowUserMenu]     = useState(false);
-  const notifPanelRef  = useRef<HTMLDivElement | null>(null);
-  const notifBtnRef    = useRef<HTMLButtonElement | null>(null);
-  const userMenuRef    = useRef<HTMLDivElement | null>(null);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifs, setNotifs] = useState<NotificationRow[]>([]);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const notifPanelRef = useRef<HTMLDivElement | null>(null);
+  const notifBtnRef = useRef<HTMLButtonElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const userTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const prevUnreadRef  = useRef<number>(0);
-  const avatarRef      = useRef<HTMLDivElement | null>(null);
+  const prevUnreadRef = useRef<number>(0);
 
-  // ── Live profile state ───────────────────────────────────────────────────
-  const [profile, setProfile] = useState<ProfileState>({
-    name: currentUserName,
-    role: userRole,
-    avatarUrl: avatarUrl,
-  });
-
-  const profileRef = useRef<ProfileState>(profile);
-  useEffect(() => { profileRef.current = profile; }, [profile]);
-
-  useEffect(() => {
-    setProfile((prev) => ({
-      name: currentUserName || prev.name,
-      role: userRole || prev.role,
-      avatarUrl: avatarUrl || prev.avatarUrl,
-    }));
-  }, [currentUserName, userRole, avatarUrl]);
-
-  // ── Fetch latest profile from DB on mount ────────────────────────────────
-  const fetchProfile = useCallback(async () => {
-    const uid = localStorage.getItem("session_user_id");
-    if (!uid) return;
-    const { data, error } = await supabase
-      .from(PROFILE_TABLE)
-      .select(`${FIELD_FULL_NAME}, ${FIELD_ROLE}, ${FIELD_AVATAR_URL}`)
-      .eq("id", uid)
-      .single();
-    if (error || !data) return;
-    setProfile({
-      name: (data as any)[FIELD_FULL_NAME] ?? currentUserName,
-      role: (data as any)[FIELD_ROLE] ?? userRole,
-      avatarUrl: (data as any)[FIELD_AVATAR_URL] ?? avatarUrl,
-    });
-  }, []);
-
-  useEffect(() => { fetchProfile(); }, [fetchProfile]);
-
-  // ── Avatar updated event ─────────────────────────────────────────────────
-  useEffect(() => {
-    const handleAvatarUpdated = (e: Event) => {
-      const freshUrl = (e as CustomEvent<{ url: string }>).detail?.url;
-      if (!freshUrl) return;
-      setProfile((p) => ({ ...p, avatarUrl: freshUrl }));
-      if (avatarRef.current) {
-        avatarRef.current.classList.remove("hdr-avatar-updated");
-        void avatarRef.current.offsetWidth;
-        avatarRef.current.classList.add("hdr-avatar-updated");
-      }
-    };
-    window.addEventListener("avatar-updated", handleAvatarUpdated);
-    return () => window.removeEventListener("avatar-updated", handleAvatarUpdated);
-  }, []);
-
-  // ── Realtime: profile row changes ────────────────────────────────────────
-  useEffect(() => {
-    const uid = localStorage.getItem("session_user_id");
-    if (!uid) return;
-    const channel = supabase
-      .channel("header-profile-sync")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: PROFILE_TABLE, filter: `id=eq.${uid}` },
-        (payload) => {
-          const row = payload.new as any;
-          const current = profileRef.current;
-          const nextName = row[FIELD_FULL_NAME] ?? current.name;
-          const nextRole = row[FIELD_ROLE]       ?? current.role;
-          const rawAvatarUrl = row[FIELD_AVATAR_URL];
-          let nextAvatarUrl = current.avatarUrl;
-          if (rawAvatarUrl && rawAvatarUrl !== current.avatarUrl.split("?")[0]) {
-            nextAvatarUrl = `${rawAvatarUrl}?t=${Date.now()}`;
-            if (avatarRef.current) {
-              avatarRef.current.classList.remove("hdr-avatar-updated");
-              void avatarRef.current.offsetWidth;
-              avatarRef.current.classList.add("hdr-avatar-updated");
-            }
-          }
-          setProfile({ name: nextName, role: nextRole, avatarUrl: nextAvatarUrl });
-          if (nextName) localStorage.setItem("session_user_full_name", nextName);
-          if (nextRole) localStorage.setItem("session_user_role", nextRole);
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  // ── Derived initials ─────────────────────────────────────────────────────
-  const initials = profile.name
-    .split(" ")
-    .map((part) => part[0]?.toUpperCase())
-    .join("")
-    .slice(0, 2);
-
-  // ── Notification sound ───────────────────────────────────────────────────
   const playNotificationSound = useCallback(() => {
     if (typeof window === "undefined") return;
     const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as
@@ -453,22 +277,28 @@ const Header: React.FC<HeaderProps> = ({
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+
       osc.type = "sine";
       osc.frequency.value = 880;
       gain.gain.value = 0.0001;
+
       osc.connect(gain);
       gain.connect(ctx.destination);
+
       const t = ctx.currentTime;
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+
       osc.start(t);
       osc.stop(t + 0.2);
-      setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 300);
-    } catch { /* ignore */ }
+
+      setTimeout(() => {
+        try { ctx.close(); } catch { /* ignore */ }
+      }, 300);
+    } catch { /* ignore sound errors */ }
   }, []);
 
-  // ── Unread count ─────────────────────────────────────────────────────────
   const refreshUnread = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
     if (!uid) { setUnreadNotifications(0); return; }
@@ -498,39 +328,17 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, [refreshUnread]);
 
-  // ── Fetch notifications list + actor info ─────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     const uid = localStorage.getItem("session_user_id");
     if (!uid) { setNotifs([]); return; }
     setNotifLoading(true);
-
     const { data } = await supabase
       .from("app_notifications")
-      .select("id, type, title, body, entity_type, entity_id, read_at, created_at, actor_user_id")
+      .select("id, type, title, body, entity_type, entity_id, read_at, created_at")
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(40);
-
-    const rows = (data ?? []) as NotificationRow[];
-    setNotifs(rows);
-
-    // ── Fetch unique actor profiles ──────────────────────────────────────
-    const actorIds = [
-      ...new Set(rows.map((r) => r.actor_user_id).filter(Boolean)),
-    ] as string[];
-
-    if (actorIds.length > 0) {
-      const { data: actors } = await supabase
-        .from("user_accounts")
-        .select("id, full_name, avatar_url")
-        .in("id", actorIds);
-      const map: Record<string, ActorInfo> = {};
-      for (const a of (actors ?? []) as ActorInfo[]) map[a.id] = a;
-      setActorMap(map);
-    } else {
-      setActorMap({});
-    }
-
+    setNotifs((data ?? []) as NotificationRow[]);
     setNotifLoading(false);
   }, []);
 
@@ -539,22 +347,6 @@ const Header: React.FC<HeaderProps> = ({
     fetchNotifications();
   }, [showNotifPanel, fetchNotifications]);
 
-  // ── Mark ALL as read ─────────────────────────────────────────────────────
-  const markAllAsRead = useCallback(async () => {
-    const uid = localStorage.getItem("session_user_id");
-    if (!uid) return;
-    setMarkingAll(true);
-    await supabase
-      .from("app_notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("user_id", uid)
-      .is("read_at", null);
-    await fetchNotifications();
-    refreshUnread();
-    setMarkingAll(false);
-  }, [fetchNotifications, refreshUnread]);
-
-  // ── Close panels on outside click ────────────────────────────────────────
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const t = e.target as Node;
@@ -585,7 +377,6 @@ const Header: React.FC<HeaderProps> = ({
     prevUnreadRef.current = unreadNotifications;
   }, [onNotificationNavigate, unreadNotifications, playNotificationSound]);
 
-  // ── Mark single as read ──────────────────────────────────────────────────
   const markNotifRead = useCallback(async (id: string) => {
     await supabase.from("app_notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
     refreshUnread();
@@ -597,16 +388,20 @@ const Header: React.FC<HeaderProps> = ({
     onNotificationNavigate?.(row.entity_type ?? "", row.entity_id ?? null);
   }, [markNotifRead, onNotificationNavigate]);
 
-  // ── Clock ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  const initials = currentUserName
+    .split(" ")
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
+    .slice(0, 2);
+
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-  // ── Logout ───────────────────────────────────────────────────────────────
   const confirmLogout = () => {
     setShowConfirm(false);
     setLoggingOut(true);
@@ -620,193 +415,24 @@ const Header: React.FC<HeaderProps> = ({
     }, 3000);
   };
 
-  const hasUnread = notifs.some((n) => !n.read_at);
-
-  // ── Notification item renderer ───────────────────────────────────────────
-  const renderNotifItem = (n: NotificationRow) => {
-    const isUnread = !n.read_at;
-    const actor = n.actor_user_id ? actorMap[String(n.actor_user_id)] : undefined;
-
-    const initials = actor?.full_name
-      .split(" ")
-      .map((p) => p[0]?.toUpperCase())
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("") ?? "?";
-
-    const timeAgo = (() => {
-      const diff = Date.now() - new Date(n.created_at).getTime();
-      const m = Math.floor(diff / 60000);
-      const h = Math.floor(m / 60);
-      const d = Math.floor(h / 24);
-      if (d > 0) return `${d}d ago`;
-      if (h > 0) return `${h}h ago`;
-      if (m > 0) return `${m}m ago`;
-      return "Just now";
-    })();
-
-    // Map notification type to an icon background color + emoji-like SVG badge
-   const typeColor: Record<string, string> = {
-      ticket_assigned:             "#22c55e", // green — assigned
-      repair_assigned:             "#22c55e", // green — assigned
-      signup_request:              "#0a4c86", // brand blue — account approval
-    };
-
-    const statusBadgeColor =
-      n.body?.toLowerCase().includes("resolved")    ? "#22c55e" : // green
-      n.body?.toLowerCase().includes("in progress") ? "#eab308" : // yellow
-                                                      "#3b82f6";  // blue — Pending
-
-    const badgeBg = n.type.includes("status")
-      ? statusBadgeColor
-      : (typeColor[n.type] ?? "#22c55e");
-
-    return (
-      <button
-        key={n.id}
-        type="button"
-        onClick={() => { void openNotification(n); }}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "6px 10px",
-          marginBottom: 4,
-          borderRadius: 10,
-          border: "none",
-          background: isUnread ? "#e7f0fd" : "transparent",
-          cursor: "pointer",
-          textAlign: "left",
-          transition: "background 0.15s",
-          position: "relative",
-          fontFamily: "'Poppins', sans-serif",
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = isUnread ? "#dce8fc" : "#f2f2f2")}
-        onMouseLeave={e => (e.currentTarget.style.background = isUnread ? "#e7f0fd" : "transparent")}
-      >
-        {/* Avatar with badge */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: "50%",
-            background: "#d0e4ff",
-            border: "1px solid #c8d8f0",
-            overflow: "hidden",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18, fontWeight: 700, color: "#1877f2",
-            fontFamily: "'Poppins', sans-serif",
-          }}>
-            {actor?.avatar_url ? (
-              <img src={actor.avatar_url} alt={actor.full_name}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : initials}
-          </div>
-          {/* Type badge icon */}
-          <div style={{
-            position: "absolute", bottom: -2, right: -2,
-            width: 22, height: 22, borderRadius: "50%",
-            background: badgeBg,
-            border: "2px solid #fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            {n.type.includes("signup") ? (
-              <>
-                <circle cx="8" cy="5" r="2.8" stroke="#fff" strokeWidth="1.7"/>
-                <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
-              </>
-            ) : n.type.includes("status") ? (
-              n.body?.toLowerCase().includes("resolved") ? (
-                <path d="M3 8l3.5 3.5L13 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              ) : n.body?.toLowerCase().includes("in progress") ? (
-                <>
-                  <circle cx="8" cy="8" r="5.5" stroke="#fff" strokeWidth="1.7"/>
-                  <path d="M8 5v3.5l2 2" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
-                </>
-              ) : (
-                <>
-                  <path d="M4 2h8M4 14h8" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/>
-                  <path d="M5 2c0 3 3 4 3 6s-3 3-3 6M11 2c0 3-3 4-3 6s3 3 3 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
-                </>
-              )
-            ) : (
-              <path d="M2 5a1 1 0 011-1h10a1 1 0 011 1v1.5a1.5 1.5 0 000 3V11a1 1 0 01-1 1H3a1 1 0 01-1-1V9.5a1.5 1.5 0 000-3V5z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round"/>
-            )}
-          </svg>
-          </div>
-        </div>
-
-        {/* Text content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 13.5,
-            fontWeight: isUnread ? 700 : 500,
-            color: "#050505",
-            lineHeight: 1.35,
-            marginBottom: 3,
-            fontFamily: "'Poppins', sans-serif",
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-          }}>
-            {actor?.full_name && (
-              <span style={{ fontWeight: 700 }}>{actor.full_name} </span>
-            )}
-            <span style={{ fontWeight: isUnread ? 600 : 400 }}>{n.title}</span>
-          </div>
-          {n.body && (
-            <div style={{
-              fontSize: 12,
-              color: "#65676b",
-              lineHeight: 1.4,
-              overflow: "hidden",
-              display: "-webkit-box",
-              WebkitLineClamp: 1,
-              WebkitBoxOrient: "vertical",
-              fontFamily: "'Poppins', sans-serif",
-            }}>
-              {n.body}
-            </div>
-          )}
-          <div style={{
-            fontSize: 12,
-            fontWeight: isUnread ? 700 : 400,
-            color: isUnread ? "#1877f2" : "#65676b",
-            marginTop: 4,
-            fontFamily: "'Poppins', sans-serif",
-          }}>
-            {timeAgo}
-          </div>
-        </div>
-
-        {/* Unread blue dot */}
-        {isUnread && (
-          <div style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: "#1877f2", flexShrink: 0,
-          }} />
-        )}
-      </button>
-    );
-  };
   return (
     <>
       <style>{headerStyles}</style>
 
-      {/* ── Confirm logout dialog ── */}
+      {/* ── Confirm dialog ── */}
       {showConfirm && !loggingOut && (
         <div className="hdr-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false); }}>
           <div className="hdr-dialog" role="dialog" aria-modal="true" aria-labelledby="logout-title">
             <div className="hdr-dialog-icon"><LogOut size={24} strokeWidth={2} /></div>
             <p className="hdr-dialog-title" id="logout-title">Sign out?</p>
             <p className="hdr-dialog-desc">
-              You're about to sign out of the IT Helpdesk Ticketing system. Any unsaved changes will be lost.
+              You're about to sign out of the IT Equipment Monitoring system. Any unsaved changes will be lost.
             </p>
             <div className="hdr-dialog-actions">
-              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)} style={{ fontFamily: "'Poppins', sans-serif", fontSize: 13, fontWeight: 600 }}>Stay</button>
-              <button className="hdr-btn-confirm" onClick={confirmLogout} style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500, fontSize: 13 }}>
-                <LogOut size={13} strokeWidth={2.2} /> SIGN OUT
+              <button className="hdr-btn-cancel" onClick={() => setShowConfirm(false)}>Stay</button>
+              <button className="hdr-btn-confirm" onClick={confirmLogout}>
+                <LogOut size={13} strokeWidth={2.2} />
+                Sign out
               </button>
             </div>
           </div>
@@ -845,10 +471,9 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* ── Right side ── */}
+        {/* Right side */}
         <div className="hdr-user-block" style={{ display: "flex", alignItems: "center", gap: "0.5rem", position: "relative" }}>
-
-          {/* ── Bell button ── */}
+          {/* Bell */}
           {onNotificationNavigate && (
             <button
               ref={notifBtnRef}
@@ -856,19 +481,26 @@ const Header: React.FC<HeaderProps> = ({
               onClick={() => setShowNotifPanel((v) => !v)}
               title="Notifications"
               style={{
-                position: "relative", width: 40, height: 40,
-                borderRadius: 12, border: "none", background: "transparent",
-                color: brandBlue, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
+                position: "relative",
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                border: "none",
+                background: "transparent",
+                color: brandBlue,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               <Bell size={20} strokeWidth={2.2} />
               {unreadNotifications > 0 && (
                 <span style={{
                   position: "absolute", top: 4, right: 4,
-                  minWidth: 14, height: 14, padding: "0 4px",
+                  minWidth: 16, height: 16, padding: "0 4px",
                   borderRadius: 999, background: "#dc2626", color: "#fff",
-                  fontSize: 11, fontWeight: 700,
+                  fontSize: 10, fontWeight: 700,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {unreadNotifications > 99 ? "99+" : unreadNotifications}
@@ -877,86 +509,52 @@ const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* ── Notifications panel ── */}
+          {/* Notifications panel */}
           {onNotificationNavigate && showNotifPanel && (
-            <div
-              ref={notifPanelRef}
-              className="hdr-notif-panel"
-              style={{
-                position: "absolute", top: 52, right: 0,
-                width: 440, maxHeight: 520, overflowY: "scroll",
-                background: "#fff", border: "1px solid #e2e8f0",
-                borderRadius: 14, boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
-                zIndex: 1200, padding: "0.75rem",
-                scrollbarWidth: "thin",
-                scrollbarColor: "#0a4c8655 #f1f5f9",
-              }}
-            >
-              {/* ── Panel header ── */}
-              <div style={{
-                display: "flex", alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 10,
-                paddingBottom: 8,
-                borderBottom: "1px solid #f1f5f9",
-              }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", fontFamily: "'Poppins', sans-serif" }}>
-                  Notifications
-                </div>
-                {hasUnread && (
-                  <button
-                    type="button"
-                    className="hdr-mark-all-btn"
-                    disabled={markingAll}
-                    onClick={() => { void markAllAsRead(); }}
-                    style={{ opacity: markingAll ? 0.5 : 1, cursor: markingAll ? "not-allowed" : "pointer" }}
-                  >
-                    {markingAll ? "Marking…" : "Mark all as read"}
-                  </button>
-                )}
-              </div>
-
+            <div ref={notifPanelRef} style={{
+              position: "absolute", top: 52, right: 0,
+              width: 360, maxHeight: 520, overflowY: "auto",
+              background: "#fff", border: "1px solid #e2e8f0",
+              borderRadius: 14, boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
+              zIndex: 1200, padding: "0.75rem",
+            }}>
+              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Notifications</div>
               {notifLoading ? (
-                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>
-                  Loading...
-                </div>
+                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem" }}>Loading...</div>
               ) : notifs.length === 0 ? (
-                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem", fontFamily: "'Poppins', sans-serif" }}>
-                  No notifications.
-                </div>
+                <div style={{ fontSize: 13, color: "#94a3b8", padding: "1rem 0.5rem" }}>No notifications.</div>
               ) : (
                 <>
-                  {/* ── Unread ── */}
                   {notifs.some((n) => !n.read_at) && (
-                    <div style={{
-                      fontSize: 11, fontWeight: 700, color: "#64748b",
-                      margin: "0.25rem 0.25rem 0.3rem",
-                      fontFamily: "'Poppins', sans-serif",
-                      textTransform: "uppercase", letterSpacing: "0.07em",
-                    }}>
-                      New
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem" }}>New</div>
                   )}
-                  {notifs.filter((n) => !n.read_at).map(renderNotifItem)}
-
-                  {/* ── Read / Earlier ── */}
+                  {notifs.filter((n) => !n.read_at).map((n) => (
+                    <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
+                      style={{ width: "100%", textAlign: "left", border: "none", background: "rgba(10,76,134,0.08)", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{n.type.replace(/_/g, " ")}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginTop: 4 }}>{n.title}</div>
+                      {n.body && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{n.body}</div>}
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
+                    </button>
+                  ))}
                   {notifs.some((n) => !!n.read_at) && (
-                    <div style={{
-                      fontSize: 11, fontWeight: 700, color: "#64748b",
-                      margin: "0.75rem 0.25rem 0.4rem",
-                      fontFamily: "'Poppins', sans-serif",
-                      textTransform: "uppercase", letterSpacing: "0.07em",
-                    }}>
-                      Earlier
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", margin: "0.5rem 0.25rem" }}>Earlier</div>
                   )}
-                  {notifs.filter((n) => !!n.read_at).map(renderNotifItem)}
+                  {notifs.filter((n) => !!n.read_at).map((n) => (
+                    <button key={n.id} type="button" onClick={() => { void openNotification(n); }}
+                      style={{ width: "100%", textAlign: "left", border: "none", background: "#fff", borderRadius: 10, padding: "0.7rem", marginBottom: 8, cursor: "pointer" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{n.type.replace(/_/g, " ")}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginTop: 4 }}>{n.title}</div>
+                      {n.body && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{n.body}</div>}
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{new Date(n.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</div>
+                    </button>
+                  ))}
                 </>
               )}
             </div>
           )}
 
-          {/* ── User trigger: avatar + name ── */}
+          {/* ── User trigger: avatar + name (clickable) ── */}
           <button
             ref={userTriggerRef}
             type="button"
@@ -964,26 +562,35 @@ const Header: React.FC<HeaderProps> = ({
             aria-label="Open user menu"
             onClick={() => setShowUserMenu((v) => !v)}
           >
+            {/* Avatar */}
             <div
-              ref={avatarRef}
               className="hdr-avatar"
               style={{
-                width: 40, height: 40, borderRadius: "999px",
-                background: "#ffffff", border: "1.5px solid #e2e8f0",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: brandBlue, fontSize: 16, fontWeight: 600,
-                flexShrink: 0, overflow: "hidden",
+                width: 36,
+                height: 36,
+                borderRadius: "999px",
+                background: brandBlue,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+                overflow: "hidden",
               }}
             >
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }} />
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", borderRadius: "999px", objectFit: "cover" }} />
               ) : (
                 initials
               )}
             </div>
+
+            {/* Name + role — hidden on mobile */}
             <div className="hdr-user-meta">
-              <span className="hdr-user-name-text">{profile.name}</span>
-              <span className="hdr-user-role-text">{profile.role}</span>
+              <span className="hdr-user-name-text">{currentUserName}</span>
+              <span className="hdr-user-role-text">{userRole}</span>
             </div>
             <ChevronDown
               size={15}
@@ -993,23 +600,30 @@ const Header: React.FC<HeaderProps> = ({
             />
           </button>
 
-          {/* ── User dropdown menu ── */}
+          {/* Dropdown menu */}
           {showUserMenu && (
             <div
               ref={userMenuRef}
               style={{
-                position: "absolute", top: 52, right: 0,
-                width: 220, background: "#fff",
-                border: "1px solid #e2e8f0", borderRadius: 14,
+                position: "absolute",
+                top: 52,
+                right: 0,
+                width: 220,
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 14,
                 boxShadow: "0 18px 36px rgba(15,23,42,0.18)",
-                zIndex: 1200, padding: "0.5rem",
+                zIndex: 1200,
+                padding: "0.5rem",
                 animation: "hdrMenuDrop 0.18s ease both",
               }}
             >
+              {/* User info header in dropdown */}
               <div style={{ padding: "0.5rem 0.7rem 0.65rem", borderBottom: "1px solid #f1f5f9", marginBottom: "0.35rem" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{profile.name}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{profile.role}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{currentUserName}</div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{userRole}</div>
               </div>
+
               <button
                 type="button"
                 onClick={() => { setShowUserMenu(false); if (onOpenProfile) onOpenProfile(); }}
@@ -1021,7 +635,8 @@ const Header: React.FC<HeaderProps> = ({
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                <User size={15} /> My Profile
+                <Settings size={15} />
+                My Profile
               </button>
               <button
                 type="button"
@@ -1034,7 +649,8 @@ const Header: React.FC<HeaderProps> = ({
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                <LogOut size={15} /> Logout
+                <LogOut size={15} />
+                Logout
               </button>
             </div>
           )}

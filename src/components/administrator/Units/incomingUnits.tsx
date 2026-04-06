@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
@@ -12,11 +11,7 @@ import {
   exportIncomingUnitsToExcel,
   exportIncomingUnitsToWord,
 } from "../../../utils/exportIncomingUnits";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../../lib/supabaseClient";
 
 type SortField = "date_received" | "unit_name" | "reported_by";
 type SortDir   = "asc" | "desc";

@@ -1,18 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
-import Cropper from "react-easy-crop";
-import type { Area } from "react-easy-crop";
 import {
-  X, Camera, KeyRound, Save, UserRound,
+  X, Camera, KeyRound, Save, UserCircle2,
   Eye, EyeOff, Check, AlertCircle, Loader2,
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../../lib/supabaseClient";
 
 const BUCKET = "profile-avatar";
 
@@ -61,6 +54,7 @@ const css = `
 .pm-overlay {
   position: fixed; inset: 0; z-index: 1400;
   background: rgba(10, 20, 40, 0.5);
+  backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 1rem;
   animation: pmFade .2s ease both;
@@ -122,9 +116,9 @@ const css = `
 .pm-body {
   padding: 1.1rem 1.5rem 1.35rem;
   overflow-y: auto; flex: 1;
-  scrollbar-width: none;
+  scrollbar-width: none; /* Firefox: hide scrollbar */
 }
-.pm-body::-webkit-scrollbar { width: 0; height: 0; }
+.pm-body::-webkit-scrollbar { width: 0; height: 0; } /* Chrome/Safari: hide scrollbar */
 
 .pm-label {
   display: block;
@@ -270,86 +264,6 @@ const css = `
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Crop modal ─── */
-.pm-crop-overlay {
-  position: fixed; inset: 0; z-index: 1500;
-  background: rgba(0, 0, 0, 0.88);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 1.25rem;
-  font-family: 'Poppins', sans-serif;
-  animation: pmFade .2s ease both;
-}
-
-.pm-crop-title {
-  font-size: 14px; font-weight: 700;
-  color: #fff; letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.85;
-}
-
-.pm-crop-container {
-  position: relative;
-  width: 380px; height: 380px;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.12), 0 24px 48px rgba(0,0,0,0.5);
-}
-
-.pm-crop-zoom-wrap {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 6px;
-}
-
-.pm-crop-zoom-label {
-  font-size: 10px; font-weight: 700;
-  color: #94a3b8; letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.pm-crop-zoom-slider {
-  width: 220px;
-  accent-color: #0a4c86;
-  cursor: pointer;
-  height: 4px;
-}
-
-.pm-crop-actions {
-  display: flex; gap: 10px;
-}
-
-.pm-crop-btn-cancel {
-  padding: 0.6rem 1.4rem;
-  border-radius: 10px;
-  border: 1.5px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
-  color: #e2e8f0;
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px; font-weight: 600;
-  cursor: pointer;
-  transition: background .15s, border-color .15s;
-}
-.pm-crop-btn-cancel:hover {
-  background: rgba(255,255,255,0.14);
-  border-color: rgba(255,255,255,0.3);
-}
-
-.pm-crop-btn-apply {
-  padding: 0.6rem 1.4rem;
-  border-radius: 10px;
-  border: none;
-  background: #0a4c86;
-  color: #fff;
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px; font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(10,76,134,0.45);
-  transition: filter .15s, transform .12s;
-}
-.pm-crop-btn-apply:hover { filter: brightness(1.12); transform: translateY(-1px); }
-.pm-crop-btn-apply:active { transform: translateY(0); filter: brightness(1); }
-
-@keyframes spin { to { transform: rotate(360deg); } }
 `;
 
 export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange }) => {
@@ -362,12 +276,6 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const [form, setForm] = useState({ username: "", full_name: "", email: "" });
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-
-  // ── Crop state ──────────────────────────────────────────────────────────
-  const [cropSrc, setCropSrc] = useState<string | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
@@ -384,53 +292,6 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
-
-  /* ─── FIX 1: crop helper — do NOT set crossOrigin on data: URLs ─── */
-  const getCroppedBlob = (imageSrc: string, pixelCrop: Area): Promise<Blob> =>
-    new Promise((resolve, reject) => {
-      const image = new Image();
-
-      // ✅ FIXED: crossOrigin must NOT be set on data: URIs — it breaks image loading
-      // in Chrome/Firefox and causes the canvas to be tainted or empty.
-      // Only set it for actual remote http(s) URLs.
-      if (!imageSrc.startsWith("data:")) {
-        image.crossOrigin = "anonymous";
-      }
-
-      image.src = imageSrc;
-      image.onload = () => {
-        // Clamp crop area to actual image bounds
-        const x      = Math.max(0, pixelCrop.x);
-        const y      = Math.max(0, pixelCrop.y);
-        const width  = Math.min(pixelCrop.width,  image.naturalWidth  - x);
-        const height = Math.min(pixelCrop.height, image.naturalHeight - y);
-
-        // Output canvas is always a fixed square for consistent avatar size
-        const OUTPUT_SIZE = 400;
-        const canvas = document.createElement("canvas");
-        canvas.width  = OUTPUT_SIZE;
-        canvas.height = OUTPUT_SIZE;
-        const ctx = canvas.getContext("2d")!;
-
-        // Fill white background in case of transparent images
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-
-        // Draw the clamped crop area scaled to OUTPUT_SIZE
-        ctx.drawImage(
-          image,
-          x, y, width, height,
-          0, 0, OUTPUT_SIZE, OUTPUT_SIZE
-        );
-
-        canvas.toBlob(
-          (blob) => (blob ? resolve(blob) : reject(new Error("Canvas is empty"))),
-          "image/jpeg",
-          0.92
-        );
-      };
-      image.onerror = reject;
-    });
 
   /* ── load profile ── */
   const loadProfile = useCallback(async () => {
@@ -458,7 +319,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     if (open) { loadProfile(); setTab("account"); setProfileError(""); setPwError(""); }
   }, [open, loadProfile]);
 
-  /* ── close on Escape ── */
+  /* ── close on overlay click / Escape ── */
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -466,7 +327,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  /* ── avatar file selection → open crop modal ── */
+  /* ── avatar upload ── */
   const handleAvatarFile = async (file: File) => {
     if (!userId) {
       showToast("No active session. Please sign in again.", "error");
@@ -480,38 +341,17 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
       showToast("Invalid image file.", "error");
       return;
     }
-    if (file.size > 25 * 1024 * 1024) {
-      setProfileError("Image must be 25 MB or smaller.");
-      return;
-    }
+    if (file.size > 25 * 1024 * 1024) { setProfileError("Image must be 25 MB or smaller."); return; }
     setProfileError("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCropSrc(reader.result as string);
-      setZoom(0.5); // 
-      setCrop({ x: 0, y: 0 });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  /* ── confirm crop → upload ── */
-  const handleCropConfirm = async () => {
-    if (!cropSrc || !croppedAreaPixels || !userId) return;
-
-    // ✅ Capture snapshots BEFORE clearing state
-    const srcSnapshot  = cropSrc;
-    const cropSnapshot = { ...croppedAreaPixels };
 
     setUploadingAvatar(true);
-    setCropSrc(null); // close crop modal — safe because we captured above
-
     try {
-      const blob = await getCroppedBlob(srcSnapshot, cropSnapshot);
-      const path = `${userId}/avatar.jpg`;
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${userId}/avatar.${ext}`;
 
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
-        .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+        .upload(path, file, { upsert: true, contentType: file.type || "image/*" });
       if (upErr) {
         setProfileError(`Upload failed: ${upErr.message}`);
         showToast("Upload failed.", "error");
@@ -532,23 +372,10 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
         return;
       }
 
-      // ✅ Cache-busting: append Date.now() so browser always re-fetches the new image
-      const fresh = `${avatar_url}?t=${Date.now()}`;
-
+      const fresh = `${avatar_url}?t=${encodeURIComponent(updated_at)}`;
       setAvatarUrl(fresh);
       setProfile((p) => (p ? { ...p, avatar_url, updated_at } : p));
-
-      // ✅ FIX 2: Notify the Header immediately via a custom window event.
-      // The Supabase realtime payload in the Header only carries the raw DB URL
-      // (no cache-buster), so the browser would serve the stale cached image.
-      // This event carries the fresh URL so the Header updates instantly and correctly.
-      window.dispatchEvent(
-        new CustomEvent("avatar-updated", { detail: { url: fresh } })
-      );
-
-      // Also call the prop callback for any parent component listening
       onAvatarChange?.(fresh);
-
       showToast("Profile picture updated.", "success");
     } finally {
       setUploadingAvatar(false);
@@ -559,9 +386,9 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const saveProfile = async () => {
     if (!profile || !userId) return;
     setProfileError("");
-    const username  = form.username.trim();
+    const username = form.username.trim();
     const full_name = form.full_name.trim();
-    const email     = form.email.trim();
+    const email = form.email.trim();
 
     const uErr = validateUsername(username);
     if (uErr) { setProfileError(uErr); return; }
@@ -585,7 +412,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
       return;
     }
 
-    const updatePayload = {
+    const updatePayload: { email: string; username: string; full_name: string; updated_at: string } = {
       email,
       username,
       full_name,
@@ -597,7 +424,8 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
       .update(updatePayload)
       .eq("id", userId);
     if (error) { setProfileError(error.message); setSavingProfile(false); return; }
-
+    // If RLS blocks or id doesn't match, update may affect 0 rows with no error.
+    // Re-fetch the row to confirm persistence and to get latest updated_at/avatar_url.
     const { data: refreshed, error: refErr } = await supabase
       .from("user_accounts")
       .select("id, full_name, email, role, username, avatar_url, updated_at")
@@ -675,11 +503,11 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     <>
       <style>{css}</style>
 
-      {/* ── Toast ── */}
+      {/* Toast */}
       {toast && (
         <div className="pm-toast" style={{
           background: toast.type === "success" ? "#ecfdf5" : "#fef2f2",
-          color:      toast.type === "success" ? "#15803d" : "#b91c1c",
+          color: toast.type === "success" ? "#15803d" : "#b91c1c",
           border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
         }}>
           {toast.type === "success" ? <Check size={14} strokeWidth={2.5} /> : <AlertCircle size={14} />}
@@ -687,56 +515,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
         </div>
       )}
 
-      {/* ── Crop modal ── */}
-      {cropSrc && (
-        <div className="pm-crop-overlay">
-          <p className="pm-crop-title">Adjust Photo</p>
-
-          <div className="pm-crop-container">
-            <Cropper
-              image={cropSrc}
-              crop={crop}
-              zoom={zoom}
-              aspect={1}
-              cropShape="round"
-              showGrid={false}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)}
-            />
-          </div>
-
-          <div className="pm-crop-zoom-wrap">
-            <span className="pm-crop-zoom-label">Zoom</span>
-            <input
-              type="range"
-              min={0.5}
-              max={3}
-              step={0.01}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="pm-crop-zoom-slider"
-            />
-          </div>
-
-          <div className="pm-crop-actions">
-            <button
-              className="pm-crop-btn-cancel"
-              onClick={() => { setCropSrc(null); }}
-            >
-              Cancel
-            </button>
-            <button
-              className="pm-crop-btn-apply"
-              onClick={() => void handleCropConfirm()}
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Profile modal overlay ── */}
+      {/* Overlay */}
       <div
         ref={overlayRef}
         className="pm-overlay"
@@ -762,7 +541,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
               className={`pm-tab${tab === "account" ? " pm-tab--active" : ""}`}
               onClick={() => setTab("account")}
             >
-              <UserRound size={14} />
+              <UserCircle2 size={14} />
               Account Info
             </button>
             <button
@@ -797,7 +576,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                           }}
                         />
                       ) : (
-                        <UserRound size={42} color="#cbd5e1" />
+                        <UserCircle2 size={42} color="#cbd5e1" />
                       )}
                       <div className="pm-avatar-overlay">
                         {uploadingAvatar
@@ -808,8 +587,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                     </div>
                     <input
                       ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
+                      type="file" accept="image/*"
                       style={{ display: "none" }}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -819,11 +597,11 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                     />
                   </label>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
                       {profile?.full_name || "User"}
                     </div>
                     <p style={{ margin: "5px 0 0", fontSize: 11, color: "#94a3b8" }}>
-                      Click avatar to change · max 25 MB
+                      Click avatar to change · JPG, PNG, GIF, WEBP · max 25 MB
                     </p>
                   </div>
                 </div>
@@ -866,7 +644,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                         className="pm-input"
                         value={form.email}
                         onChange={(e) => { setForm((p) => ({ ...p, email: e.target.value })); setProfileError(""); }}
-                        placeholder="name@email.com"
+                        placeholder="your@email.com"
                       />
                     </div>
                   </div>
@@ -897,7 +675,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                   {(["current", "next", "confirm"] as const).map((field) => {
                     const labels = {
                       current: "Current Password",
-                      next:    "New Password",
+                      next: "New Password",
                       confirm: "Confirm New Password",
                     };
                     return (
@@ -909,11 +687,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                             type={showPw[field] ? "text" : "password"}
                             value={pwForm[field]}
                             onChange={(e) => { setPwForm((p) => ({ ...p, [field]: e.target.value })); setPwError(""); }}
-                            placeholder={
-                              field === "current" ? "Enter current password"
-                              : field === "next"  ? "Min 8 characters"
-                              : "Repeat new password"
-                            }
+                            placeholder={field === "current" ? "Enter current password" : field === "next" ? "Min 8 characters" : "Repeat new password"}
                           />
                           <button
                             type="button"
@@ -952,6 +726,9 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
           </div>
         </div>
       </div>
+
+      {/* inline spin keyframe */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   );
 };

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   Eye, Search, X, AlertTriangle, Pencil, Ticket,
   Clock, Loader, Building2, User, CheckCircle2, Timer,
@@ -9,11 +8,7 @@ import {
   insertActivityLog,
   notifyAdminsTicketStatusChanged,
 } from "../../lib/audit-notifications";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
+import { supabase } from "../../lib/supabaseClient";
 
 type Status = "In Progress" | "Resolved";
 

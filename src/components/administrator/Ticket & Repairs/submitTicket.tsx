@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
   notifyTicketAssignees,
   diffNewAssignees,
   insertActivityLog,
   getSessionUserId,
 } from "../../../lib/audit-notifications";
+import { supabase } from "../../../lib/supabaseClient";
 import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
@@ -14,11 +14,6 @@ import {
   Clock, CheckCircle, AlertCircle, Loader, User, Users,
   Ticket, Lock, Archive,
 } from "lucide-react";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
-);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type IssueType = "Hardware" | "Software" | "Internet";
