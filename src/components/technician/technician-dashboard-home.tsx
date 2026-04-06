@@ -1,12 +1,23 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   Ticket, Clock, CheckCircle2, CircleDot,
-  RefreshCw, ArrowUpRight,
+  RefreshCw, ArrowUpRight, Trophy, Activity,
+  TrendingUp, Zap,
 } from "lucide-react";
 import { getSessionUserId } from "../../lib/audit-notifications";
 import { supabase } from "../../lib/supabaseClient";
 
 const BRAND = "#0a4c86";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+type TechStat = {
+  id: string;
+  full_name: string;
+  avatar_url: string;
+  resolved: number;
+  inProgress: number;
+  pending: number;
+};
 
 // ── Count-up hook ─────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 700) {
@@ -27,16 +38,31 @@ function useCountUp(target: number, duration = 700) {
   return val;
 }
 
+// ── Avatar helpers ─────────────────────────────────────────────────────────────
+const AVATAR_BG   = ["#fef9c3","#e0e7ff","#d1fae5","#fce7f3","#e0f2fe","#fce7f3","#e0e7ff"];
+const AVATAR_TEXT = ["#92400e","#3730a3","#065f46","#9d174d","#0c4a6e","#9d174d","#3730a3"];
+
+function getInitials(name: string) {
+  return name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+}
+function getResolutionRate(tech: TechStat) {
+  const total = tech.resolved + tech.inProgress + tech.pending;
+  return total > 0 ? Math.round((tech.resolved / total) * 100) : 0;
+}
+function getPerformanceBadge(resolved: number, rank: number) {
+  if (rank === 0 && resolved > 0) return { label: "Top performer", color: "#92400e", bg: "#fef9c3" };
+  if (resolved >= 10)             return { label: "Expert",        color: "#1e40af", bg: "#dbeafe" };
+  if (resolved >= 5)              return { label: "Active",        color: "#1e40af", bg: "#dbeafe" };
+  if (resolved >= 1)              return { label: "Getting started", color: "#475569", bg: "#f1f5f9" };
+  return                                 { label: "No tickets yet",  color: "#94a3b8", bg: "#f8fafc" };
+}
+
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 const KpiCard: React.FC<{
-  label: string;
-  value: number;
-  sub: string;
-  icon: React.ReactNode;
-  accent: string;
-  delay?: number;
-  animKey?: number;
-}> = ({ label, value, sub, icon, accent, delay = 0, animKey = 0 }) => {
+  label: string; value: number; sub: string;
+  icon: React.ReactNode; accent: string;
+  delay?: number; animKey?: number; onClick?: () => void;
+}> = ({ label, value, sub, icon, accent, delay = 0, animKey = 0, onClick }) => {
   const [visible, setVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
 
@@ -50,77 +76,44 @@ const KpiCard: React.FC<{
 
   return (
     <div
+      onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: "#fff",
-        borderRadius: 14,
+        background: "#fff", borderRadius: 16,
         padding: "1rem 1.1rem 0.9rem",
-        border: "1px solid #e8edf5",
-        position: "relative",
-        overflow: "hidden",
+        border: `1px solid ${hovered ? accent + "40" : "#e8edf5"}`,
+        position: "relative", overflow: "hidden",
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(10px)",
-        transition: `opacity 0.35s ease ${delay}ms, transform 0.35s ease ${delay}ms, box-shadow 0.2s`,
-        boxShadow: hovered ? "0 4px 18px rgba(10,76,134,0.08)" : "none",
+        transition: `opacity 0.35s ease ${delay}ms, transform 0.35s ease ${delay}ms, box-shadow 0.2s, border-color 0.2s`,
+        boxShadow: hovered ? `0 4px 18px ${accent}14` : "none",
+        cursor: onClick ? "pointer" : "default",
       }}
     >
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 3,
-        background: accent, borderRadius: "14px 14px 0 0",
-      }} />
-      <div style={{
-        position: "absolute", top: 10, right: 12,
-        color: accent, opacity: hovered ? 0.15 : 0.07,
-        transition: "opacity 0.2s",
-        transform: "scale(2)",
-        transformOrigin: "top right",
-        pointerEvents: "none",
-      }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: "16px 16px 0 0" }} />
+      <div style={{ position: "absolute", top: 10, right: 12, color: accent, opacity: hovered ? 0.12 : 0.06, transition: "opacity 0.2s", transform: "scale(2.2)", transformOrigin: "top right", pointerEvents: "none" }}>
         {icon}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 8,
-          background: `${accent}13`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: accent,
-        }}>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: `${accent}13`, display: "flex", alignItems: "center", justifyContent: "center", color: accent }}>
           {icon}
         </div>
-        <ArrowUpRight
-          size={13}
-          color={hovered ? accent : "#d1d5db"}
-          style={{ transition: "color 0.2s, transform 0.2s", transform: hovered ? "translate(1px,-1px)" : "none" }}
-        />
+        <ArrowUpRight size={13} color={hovered ? accent : "#d1d5db"} style={{ transition: "color 0.2s, transform 0.2s", transform: hovered ? "translate(1px,-1px)" : "none" }} />
       </div>
-      <div style={{
-        fontSize: 32, fontWeight: 800, color: "#0f172a",
-        lineHeight: 1, letterSpacing: "-1px",
-        fontFamily: "'DM Sans', sans-serif",
-        marginBottom: 4,
-      }}>
+      <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1px", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>
         {displayed}
       </div>
-      <div style={{
-        fontSize: 10, fontWeight: 700, color: "#64748b",
-        textTransform: "uppercase", letterSpacing: "0.09em",
-      }}>
-        {label}
-      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.09em" }}>{label}</div>
       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{sub}</div>
     </div>
   );
 };
 
-// ── Resolution bar ────────────────────────────────────────────────────────────
+// ── Resolution bar ─────────────────────────────────────────────────────────────
 const ResolutionBar: React.FC<{
-  label: string;
-  value: number;
-  total: number;
-  color: string;
-  delay?: number;
-  animKey?: number;
+  label: string; value: number; total: number;
+  color: string; delay?: number; animKey?: number;
 }> = ({ label, value, total, color, delay = 0, animKey = 0 }) => {
   const [width, setWidth] = useState(0);
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -144,58 +137,433 @@ const ResolutionBar: React.FC<{
         </div>
       </div>
       <div style={{ height: 5, background: "#f1f5f9", borderRadius: 999, overflow: "hidden" }}>
-        <div style={{
-          height: "100%", width: `${width}%`,
-          background: color, borderRadius: 999,
-          transition: "width 0.65s cubic-bezier(.22,.68,0,1.2)",
-        }} />
+        <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 999, transition: "width 0.65s cubic-bezier(.22,.68,0,1.2)" }} />
       </div>
     </div>
   );
 };
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Weekly Activity Heatmap (Mon–Thu only) ────────────────────────────────────
+const WeeklyHeatmap: React.FC<{ tickets: any[] }> = ({ tickets }) => {
+  // Only Mon(1), Tue(2), Wed(3), Thu(4)
+  const allDays   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const allCounts = Array(7).fill(0);
+  tickets.forEach((t: any) => {
+    if (t.date_submitted) {
+      const d = new Date(t.date_submitted).getDay();
+      allCounts[d]++;
+    }
+  });
+
+  const days   = allDays.slice(1, 5);    // Mon–Thu
+  const counts = allCounts.slice(1, 5);  // Mon–Thu counts
+  const max    = Math.max(...counts, 1);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+        {counts.map((count, i) => {
+          const intensity = count / max;
+          const bg = intensity === 0
+            ? "#f1f5f9"
+            : `rgba(10,76,134,${0.15 + intensity * 0.85})`;
+          return (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8" }}>{count}</div>
+              <div
+                title={`${days[i]}: ${count} ticket${count !== 1 ? "s" : ""}`}
+                style={{
+                  width: "100%", height: 44, borderRadius: 6,
+                  background: bg,
+                  transition: "background 0.3s",
+                  cursor: "default",
+                }}
+              />
+              <div style={{ fontSize: 9, color: "#94a3b8", fontWeight: 500 }}>{days[i]}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+        <span style={{ fontSize: 10, color: "#94a3b8" }}>Less</span>
+        {[0.1, 0.3, 0.55, 0.75, 1].map((op, i) => (
+          <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: `rgba(10,76,134,${op})` }} />
+        ))}
+        <span style={{ fontSize: 10, color: "#94a3b8" }}>More</span>
+      </div>
+    </div>
+  );
+};
+
+// ── Donut / Ring Chart ─────────────────────────────────────────────────────────
+const RingChart: React.FC<{
+  pending: number; inProg: number; resolved: number;
+}> = ({ pending, inProg, resolved }) => {
+  const total = pending + inProg + resolved;
+  const r = 48, cx = 60, cy = 60, stroke = 14;
+  const circ = 2 * Math.PI * r;
+
+  const segments = [
+    { value: resolved, color: "#10b981" },
+    { value: inProg,   color: "#3b82f6" },
+    { value: pending,  color: "#f59e0b" },
+  ];
+
+  let offset = 0;
+  const resolveRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "1.2rem" }}>
+      <svg width={120} height={120} viewBox="0 0 120 120">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+        {total > 0 && segments.map((seg, i) => {
+          const pct  = seg.value / total;
+          const dash = pct * circ;
+          const gap  = circ - dash;
+          const el = (
+            <circle key={i}
+              cx={cx} cy={cy} r={r} fill="none"
+              stroke={seg.color} strokeWidth={stroke}
+              strokeDasharray={`${dash} ${gap}`}
+              strokeDashoffset={-offset * circ + circ / 4}
+              strokeLinecap="round"
+            />
+          );
+          offset += pct;
+          return el;
+        })}
+        <text x={cx} y={cy - 5} textAnchor="middle" fontSize={20} fontWeight={800} fill="#0f172a" fontFamily="'DM Sans',sans-serif">{resolveRate}%</text>
+        <text x={cx} y={cy + 10} textAnchor="middle" fontSize={8} fill="#94a3b8" fontWeight={600} letterSpacing="1">RESOLVED</text>
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[
+          { label: "Resolved",    value: resolved, color: "#10b981" },
+          { label: "In Progress", value: inProg,   color: "#3b82f6" },
+          { label: "Pending",     value: pending,  color: "#f59e0b" },
+        ].map(d => (
+          <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: "#475569", fontWeight: 500 }}>{d.label}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginLeft: "auto", paddingLeft: 16 }}>{d.value}</span>
+          </div>
+        ))}
+        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 2 }}>
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>Total assigned: <strong style={{ color: "#0f172a" }}>{total}</strong></span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Leaderboard Cards ──────────────────────────────────────────────────────────
+const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> = ({ techs, currentUserId }) => {
+  const medals = ["🥇", "🥈", "🥉"];
+
+  if (techs.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "1.5rem 0", color: "#94a3b8", fontSize: 13 }}>
+        No technician data yet.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+      {techs.map((tech, i) => {
+        const badge   = getPerformanceBadge(tech.resolved, i);
+        const rate    = getResolutionRate(tech);
+        const isFirst = i === 0;
+        const isMe    = tech.id === currentUserId;
+        const total   = tech.resolved + tech.inProgress + tech.pending;
+        const bg      = AVATAR_BG[i]   ?? "#f1f5f9";
+        const textCol = AVATAR_TEXT[i] ?? "#475569";
+
+        return (
+          <div
+            key={tech.id}
+            style={{
+              border: isMe
+                ? `1.5px solid ${BRAND}50`
+                : `0.5px solid ${isFirst ? "#fde68a" : "#e8edf5"}`,
+              borderRadius: 16,
+              padding: "14px 16px",
+              background: isMe ? `${BRAND}05` : isFirst ? "#fffbeb" : "#fff",
+              position: "relative",
+              boxShadow: isFirst
+                ? "0 2px 12px rgba(251,191,36,0.1)"
+                : isMe
+                ? `0 2px 12px ${BRAND}10`
+                : "0 1px 6px rgba(10,76,134,0.04)",
+            }}
+          >
+            {/* ── Top row: ME badge (left) + Rank medal (right) ── */}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8,
+              minHeight: 24,
+            }}>
+              {isMe ? (
+                <span style={{
+                  fontSize: 9, fontWeight: 700,
+                  padding: "2px 7px", borderRadius: 999,
+                  background: BRAND, color: "#fff",
+                  letterSpacing: "0.10em",
+                }}>ME</span>
+              ) : (
+                <span /> // empty spacer so rank stays right-aligned
+              )}
+              <span style={{
+                fontSize: i < 3 ? 18 : 12,
+                fontWeight: 700,
+                color: "#94a3b8",
+                lineHeight: 1,
+              }}>
+                {medals[i] ?? `#${i + 1}`}
+              </span>
+            </div>
+
+            {/* Avatar */}
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: bg, overflow: "hidden",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 700, color: textCol,
+              border: isFirst ? "2px solid #fbbf24" : isMe ? `2px solid ${BRAND}` : "1.5px solid rgba(0,0,0,0.06)",
+              marginBottom: 8,
+            }}>
+              {tech.avatar_url ? (
+                <img src={tech.avatar_url} alt={tech.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              ) : getInitials(tech.full_name)}
+            </div>
+
+            {/* Name + badge */}
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2, paddingRight: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {tech.full_name}
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999, color: badge.color, background: badge.bg, display: "inline-block", marginBottom: 10 }}>
+              {badge.label}
+            </span>
+
+            {/* Stat trio */}
+            <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
+              {[
+                { num: tech.resolved,   lbl: "Resolved",  col: "#065f46", bg: "#d1fae5" },
+                { num: tech.inProgress, lbl: "Active",    col: "#1e40af", bg: "#dbeafe" },
+                { num: tech.pending,    lbl: "Pending",   col: "#92400e", bg: "#fef3c7" },
+              ].map(s => (
+                <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 8, padding: "6px 3px", textAlign: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: s.col, marginTop: 2, opacity: 0.75 }}>{s.lbl}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Resolution rate bar */}
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>
+              <span>Resolution rate</span>
+              <span style={{ fontWeight: 600, color: "#475569" }}>{rate}%</span>
+            </div>
+            <div style={{ height: 4, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", width: `${rate}%`,
+                background: isFirst ? "linear-gradient(90deg,#f59e0b,#fbbf24)" : isMe ? `linear-gradient(90deg,${BRAND},#3b82f6)` : "linear-gradient(90deg,#7c3aed,#a78bfa)",
+                borderRadius: 99, transition: "width 0.6s ease",
+              }} />
+            </div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4, textAlign: "right" }}>{total} total</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Trend Line (mini chart using canvas) ─────────────────────────────────────
+const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef  = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let cancelled = false;
+
+    const now   = new Date();
+    const weeks: string[] = [];
+    const counts: number[] = [];
+    for (let w = 7; w >= 0; w--) {
+      const start = new Date(now);
+      start.setDate(now.getDate() - w * 7);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      weeks.push(`W-${w === 0 ? "now" : w}`);
+      counts.push(tickets.filter((t: any) => {
+        const d = new Date(t.date_submitted);
+        return d >= start && d < end;
+      }).length);
+    }
+
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "line",
+        data: {
+          labels: weeks,
+          datasets: [{
+            label: "Tickets",
+            data: counts,
+            borderColor: BRAND,
+            backgroundColor: "rgba(10,76,134,0.07)",
+            pointBackgroundColor: BRAND,
+            pointBorderColor: "#fff",
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 8,
+              cornerRadius: 8,
+              callbacks: {
+                label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: { font: { size: 10, family: "'DM Sans',sans-serif" }, color: "#94a3b8" },
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+              ticks: { font: { size: 10, family: "'DM Sans',sans-serif" }, color: "#94a3b8", precision: 0, stepSize: 1 },
+            },
+          },
+        },
+      });
+    });
+
+    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
+  }, [tickets]);
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: 160 }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 const TechnicianDashboardHome: React.FC = () => {
   const userId = getSessionUserId();
+
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [animKey, setAnimKey]       = useState(0);
+
+  const [myTickets, setMyTickets]   = useState<any[]>([]);
   const [tickets, setTickets]       = useState({ total: 0, pending: 0, inProg: 0, resolved: 0 });
 
-  const load = async (isRefresh = false) => {
+  const [leaderboard, setLeaderboard] = useState<TechStat[]>([]);
+
+  const stampAvatar = (t: any) => ({
+    ...t,
+    avatar_url: t.avatar_url
+      ? `${t.avatar_url}?t=${encodeURIComponent(String(t.updated_at ?? ""))}`
+      : "",
+  });
+
+  const load = useCallback(async (isRefresh = false) => {
     if (!userId) { setLoading(false); return; }
 
-    if (isRefresh) {
-      setTickets({ total: 0, pending: 0, inProg: 0, resolved: 0 });
-    }
+    if (isRefresh) setTickets({ total: 0, pending: 0, inProg: 0, resolved: 0 });
 
-    const { data: tix } = await supabase
-      .from("file_reports")
-      .select("id, status")
-      .contains("assigned_to", [userId]);
+    const [
+      { data: myTix },
+      { data: allTix },
+      { data: techs },
+    ] = await Promise.all([
+      supabase
+        .from("file_reports")
+        .select("id, status, date_submitted")
+        .contains("assigned_to", [userId]),
+      supabase
+        .from("file_reports")
+        .select("id, status, assigned_to, date_submitted"),
+      supabase
+        .from("user_accounts")
+        .select("id, full_name, avatar_url, updated_at")
+        .eq("role", "IT Technician")
+        .eq("is_active", true)
+        .eq("is_archived", false)
+        .order("full_name"),
+    ]);
 
-    const t = tix ?? [];
+    const t = myTix ?? [];
+    setMyTickets(t);
     setTickets({
       total:    t.length,
       pending:  t.filter((x: any) => x.status === "Pending").length,
       inProg:   t.filter((x: any) => x.status === "In Progress").length,
       resolved: t.filter((x: any) => x.status === "Resolved").length,
     });
-    setLoading(false);
-  };
 
-  useEffect(() => { load(); }, [userId]);
+    const allT = allTix ?? [];
+    const board: TechStat[] = (techs ?? []).map(stampAvatar).map((tech: any) => {
+      const isAssigned = (assignedTo: any) => {
+        if (!assignedTo) return false;
+        if (Array.isArray(assignedTo)) return assignedTo.includes(tech.id);
+        return assignedTo === tech.id;
+      };
+      return {
+        id:         tech.id,
+        full_name:  tech.full_name,
+        avatar_url: tech.avatar_url ?? "",
+        resolved:   allT.filter((x: any) => isAssigned(x.assigned_to) && x.status === "Resolved").length,
+        inProgress: allT.filter((x: any) => isAssigned(x.assigned_to) && x.status === "In Progress").length,
+        pending:    allT.filter((x: any) => isAssigned(x.assigned_to) && x.status === "Pending").length,
+      };
+    }).sort((a: TechStat, b: TechStat) => b.resolved - a.resolved || b.inProgress - a.inProgress);
+
+    setLeaderboard(board);
+    setLoading(false);
+  }, [userId]);
+
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel(`technician_dashboard_sync_${userId}`)
+      .channel(`technician_dashboard_v2_${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void load(); })
       .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [userId]);
+    return () => { void supabase.removeChannel(channel); };
+  }, [userId, load]);
+
+  useEffect(() => {
+    const id = setInterval(() => { void load(); }, 30000);
+    return () => clearInterval(id);
+  }, [load]);
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -208,6 +576,8 @@ const TechnicianDashboardHome: React.FC = () => {
   const resolveRate = tickets.total > 0
     ? Math.round((tickets.resolved / tickets.total) * 100)
     : 0;
+
+  const myRank = leaderboard.findIndex(t => t.id === userId);
 
   if (!userId) {
     return (
@@ -227,16 +597,21 @@ const TechnicianDashboardHome: React.FC = () => {
         @keyframes tdb2-up    { from{ opacity:0; transform:translateY(12px) } to{ opacity:1; transform:translateY(0) } }
         .tdb2-in { animation: tdb2-up 0.35s ease both; }
         .tdb2-refresh:hover { background: #f1f5f9 !important; }
+        @media(max-width:900px){
+          .tdb2-mid { grid-template-columns: 1fr !important; }
+          .tdb2-bot { grid-template-columns: 1fr !important; }
+        }
         @media(max-width:640px){
-          .tdb2-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .tdb2-kpi { grid-template-columns: repeat(2,1fr) !important; }
         }
         @media(max-width:400px){
-          .tdb2-grid { grid-template-columns: 1fr !important; }
+          .tdb2-kpi { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
-      <div className="tdb2" style={{ fontFamily: "'DM Sans', sans-serif", color: "#0f172a" }}>
+      <div className="tdb2" style={{ fontFamily: "'DM Sans', sans-serif", color: "#0f172a", paddingRight: 4 }}>
 
+        {/* Refresh */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
           <button
             className="tdb2-refresh"
@@ -253,67 +628,86 @@ const TechnicianDashboardHome: React.FC = () => {
               opacity: refreshing ? 0.6 : 1,
             }}
           >
-            <RefreshCw
-              size={13}
-              style={{ animation: refreshing ? "tdb2-spin 0.6s linear infinite" : "none" }}
-            />
+            <RefreshCw size={13} style={{ animation: refreshing ? "tdb2-spin 0.6s linear infinite" : "none" }} />
             Refresh
           </button>
         </div>
 
         {/* ── Skeleton ── */}
         {loading ? (
-          <div className="tdb2-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.7rem" }}>
+          <div className="tdb2-kpi" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem" }}>
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{
-                background: "#fff", borderRadius: 14, height: 120,
-                border: "1px solid #e8edf5",
-                animation: `tdb2-pulse 1.4s ease infinite`,
-                animationDelay: `${i * 80}ms`,
-              }} />
+              <div key={i} style={{ background: "#fff", borderRadius: 16, height: 120, border: "1px solid #e8edf5", animation: "tdb2-pulse 1.4s ease infinite", animationDelay: `${i * 80}ms` }} />
             ))}
           </div>
         ) : (
           <>
-            {/* ── Row 1: 3 cards ── */}
-            <div
-              className="tdb2-in tdb2-grid"
-              style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.7rem", marginBottom: "0.7rem" }}
-            >
-              <KpiCard label="My Tickets"  value={tickets.total}   sub="Assigned to you"  icon={<Ticket size={15} />}      accent={BRAND}   delay={0}   animKey={animKey} />
-              <KpiCard label="Pending"     value={tickets.pending} sub="Awaiting action"  icon={<Clock size={15} />}        accent="#f59e0b" delay={50}  animKey={animKey} />
-              <KpiCard label="In Progress" value={tickets.inProg}  sub="Currently active" icon={<CircleDot size={15} />}    accent="#3b82f6" delay={100} animKey={animKey} />
+            {/* ── KPI Row ── */}
+            <div className="tdb2-in tdb2-kpi" style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem", marginBottom: "0.85rem" }}>
+              <KpiCard label="My Tickets"  value={tickets.total}    sub="Assigned to you"   icon={<Ticket size={15} />}       accent={BRAND}   delay={0}   animKey={animKey} />
+              <KpiCard label="Pending"     value={tickets.pending}  sub="Awaiting action"   icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
+              <KpiCard label="In Progress" value={tickets.inProg}   sub="Currently active"  icon={<CircleDot size={15} />}     accent="#3b82f6" delay={100} animKey={animKey} />
+              <KpiCard label="Resolved"    value={tickets.resolved} sub="Closed tickets"    icon={<CheckCircle2 size={15} />}  accent="#10b981" delay={150} animKey={animKey} />
             </div>
 
-            {/* ── Row 2: 1 card ── */}
-            <div
-              className="tdb2-in tdb2-grid"
-              style={{ animationDelay: "100ms", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.7rem", marginBottom: "1rem" }}
-            >
-              <KpiCard label="Resolved" value={tickets.resolved} sub="Closed tickets" icon={<CheckCircle2 size={15} />} accent="#10b981" delay={150} animKey={animKey} />
+            {/* ── Mid row: Ring chart + Weekly heatmap ── */}
+            <div className="tdb2-in tdb2-mid" style={{ animationDelay: "100ms", display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
+
+              {/* Ring chart */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: "1rem" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: `${BRAND}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Activity size={13} color={BRAND} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>My Ticket Status</span>
+                </div>
+                {tickets.total > 0 ? (
+                  <RingChart pending={tickets.pending} inProg={tickets.inProg} resolved={tickets.resolved} />
+                ) : (
+                  <div style={{ textAlign: "center", padding: "1.2rem 0", color: "#94a3b8", fontSize: 12 }}>No tickets assigned yet.</div>
+                )}
+              </div>
+
+              {/* Weekly heatmap */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 7, background: "#f59e0b12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Zap size={13} color="#f59e0b" />
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Activity by Day of Week</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}>Mon – Thu</span>
+                </div>
+                <WeeklyHeatmap tickets={myTickets} />
+              </div>
             </div>
 
-            {/* ── Breakdown panel ── */}
-            {tickets.total > 0 && (
-              <div
-                className="tdb2-in"
-                style={{
-                  animationDelay: "180ms",
-                  background: "#fff", borderRadius: 14,
-                  border: "1px solid #e8edf5",
-                  padding: "1rem 1.1rem",
-                }}
-              >
+            {/* ── Bottom row: Trend line + Breakdown ── */}
+            <div className="tdb2-in tdb2-bot" style={{ animationDelay: "140ms", display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
+
+              {/* Trend line chart */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 7, background: "#10b98112", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <TrendingUp size={13} color="#10b981" />
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Ticket Volume (8 Weeks)</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}>My assignments</span>
+                </div>
+                <TrendLineChart tickets={myTickets} />
+              </div>
+
+              {/* Breakdown panel */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <div style={{
-                      width: 26, height: 26, borderRadius: 7,
-                      background: `${BRAND}12`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 7, background: `${BRAND}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <Ticket size={13} color={BRAND} />
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>Ticket Breakdown</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>Breakdown</span>
                   </div>
                   <span style={{
                     fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
@@ -324,51 +718,56 @@ const TechnicianDashboardHome: React.FC = () => {
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <ResolutionBar label="Pending"     value={tickets.pending}  total={tickets.total} color="#f59e0b" delay={0}   animKey={animKey} />
-                  <ResolutionBar label="In Progress" value={tickets.inProg}   total={tickets.total} color="#3b82f6" delay={70}  animKey={animKey} />
-                  <ResolutionBar label="Resolved"    value={tickets.resolved} total={tickets.total} color="#10b981" delay={140} animKey={animKey} />
-                </div>
-
-                <div style={{
-                  display: "flex", gap: "1.5rem",
-                  marginTop: "0.85rem", paddingTop: "0.85rem",
-                  borderTop: "1px solid #f1f5f9",
-                }}>
-                  {[
-                    { label: "Total Assigned", value: tickets.total,                    color: BRAND     },
-                    { label: "Open",           value: tickets.pending + tickets.inProg, color: "#f59e0b" },
-                    { label: "Resolved",       value: tickets.resolved,                 color: "#10b981" },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: s.color, letterSpacing: "-0.5px" }}>
-                        {s.value}
-                      </div>
-                      <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginTop: 1 }}>
-                        {s.label}
-                      </div>
+                {tickets.total > 0 ? (
+                  <>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: "0.85rem" }}>
+                      <ResolutionBar label="Pending"     value={tickets.pending}  total={tickets.total} color="#f59e0b" delay={0}   animKey={animKey} />
+                      <ResolutionBar label="In Progress" value={tickets.inProg}   total={tickets.total} color="#3b82f6" delay={70}  animKey={animKey} />
+                      <ResolutionBar label="Resolved"    value={tickets.resolved} total={tickets.total} color="#10b981" delay={140} animKey={animKey} />
                     </div>
-                  ))}
-                </div>
+                    <div style={{ display: "flex", gap: "1.2rem", paddingTop: "0.75rem", borderTop: "1px solid #f1f5f9" }}>
+                      {[
+                        { label: "Total",    value: tickets.total,                    color: BRAND     },
+                        { label: "Open",     value: tickets.pending + tickets.inProg, color: "#f59e0b" },
+                        { label: "Resolved", value: tickets.resolved,                 color: "#10b981" },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: s.color, letterSpacing: "-0.5px" }}>{s.value}</div>
+                          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginTop: 1 }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "1.2rem 0", color: "#94a3b8", fontSize: 12 }}>No tickets assigned yet.</div>
+                )}
               </div>
-            )}
+            </div>
 
-            {/* ── Empty state ── */}
-            {tickets.total === 0 && (
-              <div
-                className="tdb2-in"
-                style={{
-                  animationDelay: "180ms",
-                  background: "#fff", borderRadius: 14,
-                  border: "1px solid #e8edf5",
-                  padding: "1.8rem", textAlign: "center",
-                }}
-              >
-                <CheckCircle2 size={24} color="#10b981" style={{ marginBottom: 8, opacity: 0.7 }} />
-                <div style={{ fontWeight: 700, fontSize: 13, color: "#374151" }}>All caught up!</div>
-                <div style={{ marginTop: 3, fontSize: 12, color: "#94a3b8" }}>No active assignments right now.</div>
+            {/* ── Leaderboard ── */}
+            <div className="tdb2-in" style={{ animationDelay: "180ms", background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: "#f59e0b12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Trophy size={13} color="#f59e0b" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>IT Technician Leaderboard</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>Ranked by resolved tickets</div>
+                  </div>
+                </div>
+                {myRank >= 0 && (
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999,
+                    background: `${BRAND}10`, color: BRAND, border: `1px solid ${BRAND}25`,
+                  }}>
+                    Your rank: #{myRank + 1}
+                  </div>
+                )}
               </div>
-            )}
+              <LeaderboardCards techs={leaderboard} currentUserId={userId} />
+            </div>
+
           </>
         )}
       </div>

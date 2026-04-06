@@ -246,30 +246,19 @@ const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreak
   );
 };
 
-// ── Department Horizontal Bar Chart (REDESIGNED) ──────────────────────────────
+// ── Department Horizontal Bar Chart ──────────────────────────────────────────
 const DEPT_PALETTE = [
-  "#0a4c86", // navy blue
-  "#7c3aed", // violet
-  "#0891b2", // cyan
-  "#f59e0b", // amber
-  "#10b981", // emerald
-  "#ef4444", // red
-  "#f97316", // orange
-  "#8b5cf6", // purple
-  "#06b6d4", // teal
-  "#84cc16", // lime
-  "#e11d48", // rose
-  "#14b8a6", // teal-2
+  "#0a4c86","#7c3aed","#0891b2","#f59e0b","#10b981",
+  "#ef4444","#f97316","#8b5cf6","#06b6d4","#84cc16",
+  "#e11d48","#14b8a6",
 ];
 
 function getDeptColor(name: string): string {
-  // Hash the department name so the same dept always gets the same color
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const paletteIndex = Math.abs(hash) % DEPT_PALETTE.length;
-  return DEPT_PALETTE[paletteIndex];
+  return DEPT_PALETTE[Math.abs(hash) % DEPT_PALETTE.length];
 }
 
 const DeptBarChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
@@ -284,15 +273,13 @@ const DeptBarChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
       if (cancelled || !canvasRef.current) return;
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
-      const barColors = deptRows.map((d) => getDeptColor(d.name));
-
       chartRef.current = new Chart(canvasRef.current, {
         type: "bar",
         data: {
           labels: deptRows.map(d => d.name),
           datasets: [{
             data: deptRows.map(d => d.tickets),
-            backgroundColor: barColors,
+            backgroundColor: deptRows.map(d => getDeptColor(d.name)),
             borderRadius: 8,
             borderSkipped: false,
             barThickness: 26,
@@ -320,20 +307,12 @@ const DeptBarChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
             x: {
               grid: { color: "rgba(148,163,184,0.12)" },
               border: { display: false },
-              ticks: {
-                font: { size: 11, family: "'DM Sans', sans-serif" },
-                color: "#94a3b8",
-                precision: 0,
-              },
+              ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", precision: 0 },
             },
             y: {
               grid: { display: false },
               border: { display: false },
-              ticks: {
-                font: { size: 12, family: "'DM Sans', sans-serif", weight: 500 },
-                color: "#475569",
-                padding: 4,
-              },
+              ticks: { font: { size: 12, family: "'DM Sans', sans-serif", weight: 500 }, color: "#475569", padding: 4 },
             },
           },
           layout: { padding: { right: 8 } },
@@ -351,145 +330,125 @@ const DeptBarChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
   );
 };
 
-// ── IT Technician Leaderboard (REDESIGNED) ────────────────────────────────────
-const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
-  const medals      = ["🥇", "🥈", "🥉"];
-  const maxResolved = Math.max(...techs.map(t => t.resolved), 1);
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  const avatarBgs   = ["#fef9c3", "#e0e7ff", "#d1fae5", "#fce7f3", "#e0f2fe"];
-  const avatarTexts = ["#92400e", "#3730a3", "#065f46", "#9d174d", "#0c4a6e"];
 
-  const getPerformanceBadge = (resolved: number, rank: number) => {
-    if (rank === 0 && resolved > 0) return { label: "Top performer",   color: "#92400e", bg: "#fef9c3" };
-    if (resolved >= 10)             return { label: "Expert",          color: "#1e40af", bg: "#dbeafe" };
-    if (resolved >= 5)              return { label: "Active",          color: "#1e40af", bg: "#dbeafe" };
-    if (resolved >= 1)              return { label: "Getting started", color: "#475569", bg: "#f1f5f9" };
-    return                                 { label: "No tickets yet",  color: "#94a3b8", bg: "#f8fafc" };
-  };
+const AVATAR_BG   = ["#fef9c3","#e0e7ff","#d1fae5","#fce7f3","#e0f2fe","#fce7f3","#e0e7ff"];
+const AVATAR_TEXT = ["#92400e","#3730a3","#065f46","#9d174d","#0c4a6e","#9d174d","#3730a3"];
 
+function getInitials(name: string): string {
+  return name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
+}
+
+function getResolutionRate(tech: TechStat): number {
+  const total = tech.resolved + tech.inProgress + tech.pending;
+  return total > 0 ? Math.round((tech.resolved / total) * 100) : 0;
+}
+
+function getPerformanceBadge(resolved: number, rank: number) {
+  if (rank === 0 && resolved > 0) return { label: "Top performer", color: "#92400e", bg: "#fef9c3" };
+  if (resolved >= 10)             return { label: "Expert",        color: "#1e40af", bg: "#dbeafe" };
+  if (resolved >= 5)              return { label: "Active",        color: "#1e40af", bg: "#dbeafe" };
+  if (resolved >= 1)              return { label: "Getting started",color: "#475569", bg: "#f1f5f9" };
+  return                                 { label: "No tickets yet", color: "#94a3b8", bg: "#f8fafc" };
+}
+
+// ── Leaderboard: Avatar ───────────────────────────────────────────────────────
+const TechAvatar: React.FC<{
+  tech: TechStat; index: number;
+  size?: number; fontSize?: number; borderColor?: string;
+}> = ({ tech, index, size = 38, fontSize = 12, borderColor }) => {
+  const bg   = AVATAR_BG[index]   ?? "#f1f5f9";
+  const text = AVATAR_TEXT[index] ?? "#475569";
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {techs.map((tech, i) => {
-        const initials    = tech.full_name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
-        const isFirst     = i === 0;
-        const badge       = getPerformanceBadge(tech.resolved, i);
-        const total       = tech.resolved + tech.inProgress + tech.pending;
-        const resolvedPct = total > 0 ? Math.round((tech.resolved / total) * 100) : 0;
-        const barWidth    = Math.round((tech.resolved / maxResolved) * 100);
-        const avatarBg    = avatarBgs[i]   ?? "#f1f5f9";
-        const avatarText  = avatarTexts[i] ?? "#475569";
-        const rankColor   = i < 3 ? (["#d97706", "#64748b", "#92400e"][i]) : "#94a3b8";
+    <div style={{
+      width: size, height: size, borderRadius: "50%", flexShrink: 0,
+      background: bg, overflow: "hidden",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize, fontWeight: 700, color: text,
+      border: borderColor ? `2px solid ${borderColor}` : "1.5px solid rgba(0,0,0,0.06)",
+    }}>
+      {tech.avatar_url ? (
+        <img
+          src={tech.avatar_url}
+          alt={tech.full_name}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+        />
+      ) : getInitials(tech.full_name)}
+    </div>
+  );
+};
 
+
+
+// ── Leaderboard View: Cards ───────────────────────────────────────────────────
+const CardsView: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
+  const medals = ["🥇", "🥈", "🥉"];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+      {techs.map((tech, i) => {
+        const badge   = getPerformanceBadge(tech.resolved, i);
+        const rate    = getResolutionRate(tech);
+        const isFirst = i === 0;
+        const total   = tech.resolved + tech.inProgress + tech.pending;
         return (
           <div
             key={tech.id}
-            className="tech-row"
             style={{
-              display: "grid",
-              gridTemplateColumns: "28px 40px 1fr auto",
-              alignItems: "center",
-              gap: 12,
-              padding: "12px 14px",
-              borderRadius: 12,
-              background: isFirst ? "#fffbeb" : "#f8fafc",
-              border: `0.5px solid ${isFirst ? "#fde68a" : "#f1f5f9"}`,
-              transition: "background 0.15s, box-shadow 0.15s",
+              border: `0.5px solid ${isFirst ? "#fde68a" : "#e8edf5"}`,
+              borderRadius: 16,
+              padding: "16px 18px",
+              background: isFirst ? "#fffbeb" : "#fff",
+              position: "relative",
+              boxShadow: isFirst ? "0 2px 12px rgba(251,191,36,0.12)" : "0 2px 8px rgba(10,76,134,0.04)",
+              transition: "box-shadow 0.2s",
             }}
           >
             {/* Rank badge */}
-            <div style={{
-              textAlign: "center",
-              fontSize: i < 3 ? 16 : 11,
-              fontWeight: 700,
-              color: rankColor,
-              lineHeight: 1,
-            }}>
+            <div style={{ position: "absolute", top: 14, right: 16, fontSize: i < 3 ? 18 : 12, fontWeight: 700, color: "#94a3b8" }}>
               {medals[i] ?? `#${i + 1}`}
             </div>
 
-            {/* Avatar */}
-            <div style={{
-              width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
-              background: avatarBg, overflow: "hidden",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 12, fontWeight: 700, color: avatarText,
-              border: isFirst ? "2px solid #fbbf24" : "1.5px solid rgba(0,0,0,0.06)",
-            }}>
-              {tech.avatar_url ? (
-                <img
-                  src={tech.avatar_url}
-                  alt={tech.full_name}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                />
-              ) : initials}
-            </div>
+            <TechAvatar tech={tech} index={i} size={42} fontSize={13} borderColor={isFirst ? "#fbbf24" : undefined} />
 
-            {/* Name + progress bar */}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                <span style={{
-                  fontSize: 13, fontWeight: 600, color: "#0f172a",
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
-                  {tech.full_name}
-                </span>
-                <span style={{
-                  fontSize: 10, fontWeight: 600, padding: "2px 8px",
-                  borderRadius: 999, whiteSpace: "nowrap",
-                  color: badge.color, background: badge.bg,
-                }}>
-                  {badge.label}
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1, height: 5, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%",
-                    width: `${barWidth}%`,
-                    background: isFirst
-                      ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
-                      : "linear-gradient(90deg, #7c3aed, #a78bfa)",
-                    borderRadius: 99,
-                    transition: "width 0.6s ease",
-                    minWidth: barWidth > 0 ? 5 : 0,
-                  }} />
+            <div style={{ marginTop: 10, marginBottom: 4, fontSize: 13, fontWeight: 600, color: "#0f172a", paddingRight: 24, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {tech.full_name}
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 9px", borderRadius: 999, color: badge.color, background: badge.bg, display: "inline-block", marginBottom: 12 }}>
+              {badge.label}
+            </span>
+
+            {/* Stat trio */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {[
+                { num: tech.resolved,   lbl: "Resolved",  col: "#065f46", bg: "#d1fae5" },
+                { num: tech.inProgress, lbl: "Active",    col: "#1e40af", bg: "#dbeafe" },
+                { num: tech.pending,    lbl: "Pending",   col: "#92400e", bg: "#fef3c7" },
+              ].map(s => (
+                <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "7px 4px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: s.col, marginTop: 3, opacity: 0.75 }}>{s.lbl}</div>
                 </div>
-                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 500, whiteSpace: "nowrap", minWidth: 56 }}>
-                  {resolvedPct}% resolved
-                </span>
-              </div>
+              ))}
             </div>
 
-            {/* Stats badges */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 600, color: "#065f46",
-                  background: "#d1fae5", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
-                }}>
-                  ✓ {tech.resolved} resolved
-                </span>
-                {tech.inProgress > 0 && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, color: "#1e40af",
-                    background: "#dbeafe", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
-                  }}>
-                    ↻ {tech.inProgress} active
-                  </span>
-                )}
-                {tech.pending > 0 && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, color: "#92400e",
-                    background: "#fef3c7", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
-                  }}>
-                    ⏳ {tech.pending} pending
-                  </span>
-                )}
+            {/* Resolution rate bar */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>
+                <span>Resolution rate</span>
+                <span style={{ fontWeight: 600, color: "#475569" }}>{rate}%</span>
               </div>
-              <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 500 }}>
-                {total} total assigned
-              </span>
+              <div style={{ height: 4, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${rate}%`,
+                  background: isFirst ? "linear-gradient(90deg,#f59e0b,#fbbf24)" : "linear-gradient(90deg,#7c3aed,#a78bfa)",
+                  borderRadius: 99,
+                  transition: "width 0.6s ease",
+                }} />
+              </div>
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4, textAlign: "right" }}>{total} total assigned</div>
             </div>
           </div>
         );
@@ -498,7 +457,13 @@ const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
   );
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+// ── IT Technician Leaderboard (cards only) ───────────────────────────────────
+const TechLeaderboard: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
+  return <CardsView techs={techs} />;
+};
+
 const stampAvatar = (t: any) => ({
   ...t,
   avatar_url: t.avatar_url
@@ -553,15 +518,9 @@ function buildDashData(
       id:         tech.id,
       full_name:  tech.full_name,
       avatar_url: tech.avatar_url ?? "",
-      resolved:   tickets.filter(t =>
-        isAssigned(t.assigned_to, tech.id) && t.status === "Resolved"
-      ).length,
-      inProgress: tickets.filter(t =>
-        isAssigned(t.assigned_to, tech.id) && t.status === "In Progress"
-      ).length,
-      pending:    tickets.filter(t =>
-        isAssigned(t.assigned_to, tech.id) && t.status === "Pending"
-      ).length,
+      resolved:   tickets.filter(t => isAssigned(t.assigned_to, tech.id) && t.status === "Resolved").length,
+      inProgress: tickets.filter(t => isAssigned(t.assigned_to, tech.id) && t.status === "In Progress").length,
+      pending:    tickets.filter(t => isAssigned(t.assigned_to, tech.id) && t.status === "Pending").length,
     }))
     .sort((a: TechStat, b: TechStat) => b.resolved - a.resolved || b.inProgress - a.inProgress);
 
@@ -731,7 +690,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         .dash-new *, .dash-new { box-sizing: border-box; }
         .dash-new  { font-family: 'DM Sans', sans-serif; }
         .refresh-btn:hover { background: #f1f5f9 !important; }
-        .tech-row:hover { background: #f1f5f9 !important; box-shadow: 0 2px 12px rgba(10,76,134,0.08) !important; }
         @media (max-width: 1100px) {
           .dash-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .dash-mid-grid { grid-template-columns: 1fr !important; }
@@ -809,8 +767,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
 
         {/* Bottom row — charts */}
         <div className="dash-bot-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-
-          {/* Recurring Issue Types */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "#ef444415", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -825,7 +781,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             )}
           </div>
 
-          {/* Top Departments — redesigned horizontal bar */}
           <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.1rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -844,10 +799,9 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               <DeptBarChart deptRows={data.deptRows} />
             )}
           </div>
-
         </div>
 
-        {/* IT Technician Leaderboard — full width, redesigned */}
+        {/* IT Technician Leaderboard — full width, multi-view */}
         <div style={{ background: "#fff", borderRadius: 20, padding: "1.3rem", border: "1px solid #e8edf5", boxShadow: "0 2px 12px rgba(10,76,134,0.04)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.1rem", flexWrap: "wrap", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -858,20 +812,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", display: "block" }}>IT Technician Leaderboard</span>
                 <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Ranked by resolved tickets</span>
               </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {[
-                { color: "#065f46", bg: "#d1fae5", label: "✓ Resolved" },
-                { color: "#1e40af", bg: "#dbeafe", label: "↻ Active" },
-                { color: "#92400e", bg: "#fef3c7", label: "⏳ Pending" },
-              ].map(s => (
-                <span key={s.label} style={{
-                  fontSize: 10, fontWeight: 600, color: s.color,
-                  background: s.bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap",
-                }}>
-                  {s.label}
-                </span>
-              ))}
             </div>
           </div>
 
