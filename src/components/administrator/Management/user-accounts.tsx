@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import bcrypt from "bcryptjs";
-import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon, Archive } from "lucide-react";
+import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon, Archive, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
 import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
@@ -21,16 +21,6 @@ type UserAccount = {
   avatar_url: string | null;
 };
 
-type SignupRequest = {
-  id: string;
-  full_name: string;
-  username: string;
-  email: string;
-  password_hash: string;
-  status: "pending" | "approved" | "rejected";
-  created_at: string;
-};
-
 type UserFormErrors = {
   username?: string;
   full_name?: string;
@@ -39,7 +29,7 @@ type UserFormErrors = {
   confirmPassword?: string;
 };
 
-const BRAND = "#0a4c86";
+const BRAND = "#0D518C";
 const PAGE_SIZE = 8;
 const BCRYPT_ROUNDS = 10;
 
@@ -74,7 +64,6 @@ function validatePassword(pw: string) {
   return "";
 }
 
-// ── Derive avatar URL from storage using user ID ───────────────────────────────
 const getAvatarUrl = (userId: string, avatarUrl: string | null): string | null => {
   if (avatarUrl) return avatarUrl;
   return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/profile-avatar/${userId}/avatar.jpg`;
@@ -149,8 +138,6 @@ const Avatar: React.FC<{ name: string; avatarUrl: string | null; size?: number }
   name, avatarUrl, size = 34,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
-
-  // Reset failed state if avatarUrl changes
   useEffect(() => { setImgFailed(false); }, [avatarUrl]);
 
   const initials = name
@@ -193,17 +180,19 @@ const Avatar: React.FC<{ name: string; avatarUrl: string | null; size?: number }
   );
 };
 
+// ── Sort field type ────────────────────────────────────────────────────────────
+type SortField = "full_name" | "created_at";
+type SortDir = "asc" | "desc";
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function UserAccounts() {
   const [rows, setRows] = useState<UserAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [sortField, setSortField] = useState<SortField>("full_name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-
-  const [pending, setPending] = useState<SignupRequest[]>([]);
-  const [pendingLoading, setPendingLoading] = useState(true);
-  const [pendingError, setPendingError] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -229,48 +218,48 @@ export default function UserAccounts() {
     const { data, error } = await supabase
       .from("user_accounts")
       .select("id, username, full_name, email, role, is_active, created_at, updated_at, avatar_url")
-      .order("created_at", { ascending: false })
+      .order(sortField, { ascending: sortDir === "asc" })
       .eq("is_archived", false);
     if (error) { showToast(error.message, "error"); setRows([]); setUsersError(error.message); }
     else { setRows((data ?? []) as UserAccount[]); setUsersError(null); }
     setLoading(false);
   };
 
-  const fetchPending = async () => {
-    setPendingLoading(true);
-    const { data, error } = await supabase
-      .from("signup_requests")
-      .select("id, full_name, username, email, password_hash, status, created_at")
-      .eq("status", "pending").order("created_at", { ascending: true });
-    if (error) { showToast(error.message, "error"); setPending([]); setPendingError(error.message); }
-    else { setPending((data ?? []) as SignupRequest[]); setPendingError(null); }
-    setPendingLoading(false);
-  };
-
-  useEffect(() => { fetchUsers(); fetchPending(); }, []); 
+  useEffect(() => { fetchUsers(); }, [sortField, sortDir]);
 
   useEffect(() => {
-  const channel = supabase
-    .channel("user_accounts_sync")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_accounts" }, (payload) => {
-      const newRow = payload.new as UserAccount;
-      if (newRow.is_archived) return;
-      setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
-    })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_accounts" }, (payload) => {
-      const updated = payload.new as UserAccount;
-      if (updated.is_archived) {
-        setRows(prev => prev.filter(r => r.id !== updated.id));
-        setSelected(prev => prev?.id === updated.id ? null : prev);
-        return;
-      }
-      setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
-      setSelected(prev => prev?.id === updated.id ? updated : prev);
-    })
-    .on("postgres_changes", { event: "*", schema: "public", table: "signup_requests" }, () => { void fetchPending(); })
-    .subscribe();
-  return () => { void supabase.removeChannel(channel); };
-}, []);
+    const channel = supabase
+      .channel("user_accounts_sync")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_accounts" }, (payload) => {
+        const newRow = payload.new as UserAccount;
+        if (newRow.is_archived) return;
+        setRows(prev => prev.some(r => r.id === newRow.id) ? prev : [newRow, ...prev]);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_accounts" }, (payload) => {
+        const updated = payload.new as UserAccount;
+        if (updated.is_archived) {
+          setRows(prev => prev.filter(r => r.id !== updated.id));
+          setSelected(prev => prev?.id === updated.id ? null : prev);
+          return;
+        }
+        setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
+        setSelected(prev => prev?.id === updated.id ? updated : prev);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, []);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => (
+    <span style={{ display: "inline-flex", flexDirection: "column", marginLeft: 4, verticalAlign: "middle" }}>
+      <ChevronUp   size={10} color={sortField === field && sortDir === "asc"  ? BRAND : "#cbd5e1"} />
+      <ChevronDown size={10} color={sortField === field && sortDir === "desc" ? BRAND : "#cbd5e1"} />
+    </span>
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -368,7 +357,7 @@ export default function UserAccounts() {
         });
         showToast("User updated.", "success");
       }
-      closeModal()
+      closeModal();
     } catch (e: any) {
       setFormErrors({ username: e?.message ?? "Something went wrong." });
     } finally { setSubmitting(false); }
@@ -397,47 +386,25 @@ export default function UserAccounts() {
         actorUserId: getSessionUserId(), action: "user_account_archived",
         entityType: "user_account", entityId: removed.id,
         meta: { username: removed.username, full_name: removed.full_name },
-    });
+      });
       showToast("User archived.", "success");
-  }
+    }
     closeModal();
   };
 
-  const approveRequest = async (r: SignupRequest) => {
-    const unique = await checkUniqueness(r.username, r.email);
-    if (unique) { showToast(unique.msg, "error"); return; }
-    const { data: inserted, error: insertErr } = await supabase.from("user_accounts").insert({
-      username: r.username.trim(), full_name: r.full_name.trim(), email: r.email.trim(),
-      role: "IT Technician", is_active: true, password_hash: r.password_hash,
-    }).select("id").single();
-    if (insertErr) { showToast(insertErr.message, "error"); return; }
-    const { error: updErr } = await supabase.from("signup_requests").update({ status: "approved" }).eq("id", r.id);
-    if (updErr) { showToast(updErr.message, "error"); return; }
-    await insertActivityLog(supabase, {
-      actorUserId: getSessionUserId(), action: "user_account_approved",
-      entityType: "user_account", entityId: inserted?.id ?? null,
-      meta: { username: r.username.trim(), full_name: r.full_name.trim(), role: "IT Technician" },
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-PH", {
+      year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Manila",
     });
-    showToast("Request approved.", "success"); fetchUsers(); fetchPending();
-  };
-
-  const rejectRequest = async (r: SignupRequest) => {
-    const { error } = await supabase.from("signup_requests").update({ status: "rejected" }).eq("id", r.id);
-    if (error) showToast(error.message, "error");
-    else {
-      await insertActivityLog(supabase, {
-        actorUserId: getSessionUserId(), action: "user_account_rejected",
-        entityType: "user_account", entityId: null,
-        meta: { username: r.username.trim(), full_name: r.full_name.trim() },
-      });
-      showToast("Request rejected.", "success"); fetchPending();
-    }
-  };
 
   return (
-    <div style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+    <div style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+        .ua-root, .ua-root * { box-sizing: border-box; }
+        .ua-row:hover { background: #f8fafc !important; }
+        .icon-btn-ua { transition: box-shadow 0.15s, transform 0.12s !important; }
+        .icon-btn-ua:hover { background: #f1f5f9 !important; box-shadow: 0 3px 8px rgba(0,0,0,0.10) !important; transform: translateY(-1px) !important; }
         .ua-modal-overlay {
           position: fixed; inset: 0;
           background: rgba(15,23,42,0.45);
@@ -450,7 +417,7 @@ export default function UserAccounts() {
           max-height: calc(100vh - 32px);
           overflow-y: auto; overflow-x: hidden;
           background: #fff; border-radius: 20px;
-          box-shadow: 0 32px 80px rgba(10,20,60,0.22), 0 0 0 1px rgba(10,76,134,0.07);
+          box-shadow: 0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08);
           animation: slideUp 0.2s ease;
         }
         .ua-modal-box--sm { width: min(420px, calc(100vw - 32px)); }
@@ -475,7 +442,6 @@ export default function UserAccounts() {
         .ua-select { appearance: none; -webkit-appearance: none; padding-right: 2.2rem !important; }
         .ua-btn-close:hover { background: #f1f5f9 !important; }
         .ua-btn-cancel:hover { background: #f8fafc !important; }
-        .ua-row:hover { background: #f8fafc !important; }
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
         @media (max-width: 680px) {
@@ -487,126 +453,104 @@ export default function UserAccounts() {
         }
       `}</style>
 
-      {/* Toast */}
       <CrudAlertToast toast={toast} />
 
-      {(pendingError || usersError) && (
+      {usersError && (
         <div style={{ marginBottom: 14, padding: "0.75rem 0.9rem", borderRadius: 14, border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: 12, fontWeight: 700, lineHeight: 1.5 }}>
-          {pendingError && <div>Pending approvals error: <span style={{ fontFamily: "monospace" }}>{pendingError}</span></div>}
-          {!pendingError && usersError && <div>User accounts error: <span style={{ fontFamily: "monospace" }}>{usersError}</span></div>}
+          User accounts error: <span style={{ fontFamily: "monospace" }}>{usersError}</span>
         </div>
       )}
 
       {/* Page Header */}
-      <div className="ua-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: "0.75rem" }}>
+      <div className="ua-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", color: BRAND }}>
             <User2Icon size={20} color={BRAND} /> User Accounts
           </h2>
           <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>Passwords are stored as bcrypt hashes.</div>
         </div>
-        <button onClick={openAdd} style={{ display: "inline-flex", gap: 8, alignItems: "center", border: "none", background: BRAND, color: "#fff", padding: "0.55rem 0.9rem", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "'Poppins', sans-serif", boxShadow: "0 4px 12px rgba(10,76,134,0.25)" }}>
-          <Plus size={16} /> ADD ACCOUNT
+        <button onClick={openAdd} style={{
+          display: "inline-flex", gap: 8, alignItems: "center", border: "none",
+          background: BRAND, color: "#fff", padding: "0.5rem 1rem", borderRadius: 10,
+          cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "'Poppins', sans-serif",
+          boxShadow: "0 4px 14px rgba(10,76,134,0.28)", transition: "filter 0.15s, transform 0.12s",
+        }}>
+          <Plus size={15} /> ADD ACCOUNT
         </button>
       </div>
 
-      {/* ── Pending approvals ─────────────────────────────────────────────── */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
-        <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600, letterSpacing: 1, color: BRAND }}>Pending approvals</div>
-          <div style={{ fontSize: 12, color: "#64748b" }}>{pendingLoading ? "Loading…" : `${pending.length} pending`}</div>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textTransform: "uppercase", fontSize: 12, letterSpacing: "0.04em", color: "#475569" }}>
-                {["Full name", "Username", "Email", "Requested", "Actions"].map(h => (
-                  <th key={h} style={{ padding: "0.7rem 1rem", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pendingLoading ? (
-                <tr><td colSpan={5} style={{ padding: "1.4rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
-              ) : pending.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: "1.4rem", textAlign: "center", color: "#94a3b8" }}>No pending requests.</td></tr>
-              ) : pending.map(r => (
-                <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                  <td style={{ padding: "0.75rem 1rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {/* Pending requests have no user id yet so initials only */}
-                      <Avatar name={r.full_name} avatarUrl={null} size={34} />
-                      <span style={{ fontWeight: 700 }}>{r.full_name}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "0.75rem 1rem", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>{r.username}</td>
-                  <td style={{ padding: "0.75rem 1rem" }}>{r.email}</td>
-                  <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                    {new Date(r.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                  </td>
-                  <td style={{ padding: "0.75rem 1rem" }}>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button onClick={() => approveRequest(r)} style={{ border: "none", background: "#16a34a", color: "#fff", padding: "0.45rem 0.75rem", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>Approve</button>
-                      <button onClick={() => rejectRequest(r)} style={{ border: "none", background: "#dc2626", color: "#fff", padding: "0.45rem 0.75rem", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>Reject</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* ── Users table ── */}
+      <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e8edf2", overflow: "hidden", boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}>
 
-      {/* ── Users table ───────────────────────────────────────────────────── */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden" }}>
-        <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ position: "relative", maxWidth: 380, width: "100%" }}>
+        {/* Search toolbar */}
+        <div style={{ padding: "1rem 1.2rem", borderBottom: "1px solid #e8edf2", background: "#fafcff" }}>
+          <div style={{ position: "relative", maxWidth: 320 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
-              style={{ width: "100%", padding: "0.55rem 0.7rem 0.55rem 32px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#f8fafc", outline: "none", fontSize: 13, fontFamily: "'Poppins', sans-serif" }} />
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search users…"
+              style={{ width: "100%", padding: "0.5rem 0.75rem 0.5rem 32px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc", outline: "none", fontSize: 13, fontFamily: "'Poppins', sans-serif", color: "#0f172a", boxSizing: "border-box" as const }}
+            />
           </div>
-          <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b" }}>Page {page}/{totalPages}</div>
         </div>
+
+        {/* Table */}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textTransform: "uppercase", fontSize: 12, letterSpacing: "0.04em", color: "#475569" }}>
-                {["User", "Username", "Role", "Status", "Actions"].map(h => (
-                  <th key={h} style={{ padding: "0.7rem 1rem", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
+              <tr style={{ background: "#f0f5fb", borderBottom: "1px solid #dde6f0" }}>
+                {[
+                  { label: "User",     field: "full_name" as SortField },
+                  { label: "Username", field: null },
+                  { label: "Role",     field: null },
+                  { label: "Status",   field: null },
+                  { label: "Created",  field: "created_at" as SortField },
+                  { label: "Actions",  field: null },
+                ].map(col => (
+                  <th
+                    key={col.label}
+                    onClick={() => col.field && toggleSort(col.field)}
+                    style={{
+                      padding: "0.7rem 1rem", textAlign: "left", fontWeight: 600,
+                      color: "#475569", fontSize: 12, letterSpacing: "0.04em",
+                      textTransform: "uppercase", whiteSpace: "nowrap",
+                      cursor: col.field ? "pointer" : "default", userSelect: "none",
+                    }}
+                  >
+                    {col.label}
+                    {col.field && <SortIcon field={col.field} />}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={5} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+                <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>No users.</td></tr>
+                <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No users found.</td></tr>
               ) : paginated.map(u => (
                 <tr key={u.id} className="ua-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
 
-                  {/* User — avatar + full name + email */}
+                  {/* User — avatar + name + email */}
                   <td style={{ padding: "0.75rem 1rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Avatar
-                        name={u.full_name}
-                        avatarUrl={getAvatarUrl(u.id, u.avatar_url)}
-                        size={38}
-                      />
+                      <Avatar name={u.full_name} avatarUrl={getAvatarUrl(u.id, u.avatar_url)} size={36} />
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>{u.full_name}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1}}>{u.email}</div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a" }}>{u.full_name}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{u.email}</div>
                       </div>
                     </div>
                   </td>
 
-                  <td style={{ padding: "0.75rem 1rem", fontWeight: 500, color: "#475569", fontFamily: "'Poppins', sans-serif" }}>
+                  <td style={{ padding: "0.75rem 1rem", color: "#475569", fontWeight: 500 }}>
                     @{u.username}
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem" }}>
                     <span style={{
                       display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 999,
-                      fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
+                      fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
                       background: u.role === "Administrator" ? "rgba(10,76,134,0.10)" : "rgba(124,58,237,0.09)",
                       color: u.role === "Administrator" ? "#0a4c86" : "#6d28d9",
                     }}>{u.role}</span>
@@ -617,22 +561,32 @@ export default function UserAccounts() {
                       border: "1px solid " + (u.is_active ? "#bbf7d0" : "#fecaca"),
                       background: u.is_active ? "#dcfce7" : "#fee2e2",
                       color: u.is_active ? "#166534" : "#b91c1c",
-                      padding: "0.2rem 0.55rem", borderRadius: 999, cursor: "pointer",
+                      padding: "2px 10px", borderRadius: 999, cursor: "pointer",
                       fontWeight: 700, fontSize: 11, letterSpacing: "0.06em",
                       textTransform: "uppercase", fontFamily: "'Poppins', sans-serif",
                     }}>{u.is_active ? "Active" : "Inactive"}</button>
                   </td>
 
+                  <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
+                    {fmtDate(u.created_at)}
+                  </td>
+
                   <td style={{ padding: "0.75rem 1rem" }}>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => openEdit(u)} title="Edit"
-                        style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10, width: 34, height: 34, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Pencil size={15} color={BRAND} />
-                      </button>
-                      <button onClick={() => setDeleteTarget(u)} title="Delete"
-                        style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10, width: 34, height: 34, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Trash2 size={15} color="#dc2626" />
-                      </button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[
+                        { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(u),        color: BRAND      },
+                        { icon: <Trash2 size={14} />, title: "Archive", fn: () => setDeleteTarget(u), color: "#dc2626" },
+                      ].map((btn, i) => (
+                        <button key={i} title={btn.title} className="icon-btn-ua" onClick={btn.fn}
+                          style={{
+                            width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2",
+                            background: "#fff", cursor: "pointer", display: "flex",
+                            alignItems: "center", justifyContent: "center", color: btn.color,
+                            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                          }}>
+                          {btn.icon}
+                        </button>
+                      ))}
                     </div>
                   </td>
                 </tr>
@@ -640,19 +594,32 @@ export default function UserAccounts() {
             </tbody>
           </table>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "0.9rem 1rem" }}>
-          <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}
-            style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10, padding: "0.45rem 0.8rem", cursor: page === 1 ? "not-allowed" : "pointer", color: page === 1 ? "#cbd5e1" : "#475569", fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
-            Prev
-          </button>
-          <button disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10, padding: "0.45rem 0.8rem", cursor: page === totalPages ? "not-allowed" : "pointer", color: page === totalPages ? "#cbd5e1" : "#475569", fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
-            Next
-          </button>
+
+        {/* Pagination */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.2rem", borderTop: "1px solid #f1f5f9" }}>
+          <span style={{ fontSize: 12, color: "#64748b" }}>
+            Showing {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
+              <ChevronLeft size={14} />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+              <button key={n} onClick={() => setPage(n)}
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: n === page ? BRAND : "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", color: n === page ? "#fff" : "#475569", fontWeight: n === page ? 600 : 400, cursor: "pointer", fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>
+                {n}
+              </button>
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
+      {/* ── Add / Edit Modal ── */}
       {(modalMode === "add" || modalMode === "edit") && (
         <div className="ua-modal-overlay">
           <div className="ua-modal-box">
@@ -660,11 +627,7 @@ export default function UserAccounts() {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 42, height: 42, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
                   {modalMode === "edit" && selected ? (
-                    <Avatar
-                      name={selected.full_name}
-                      avatarUrl={getAvatarUrl(selected.id, selected.avatar_url)}
-                      size={42}
-                    />
+                    <Avatar name={selected.full_name} avatarUrl={getAvatarUrl(selected.id, selected.avatar_url)} size={42} />
                   ) : (
                     <div style={{ width: 42, height: 42, background: BRAND, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <User size={18} color="#fff" />
@@ -672,7 +635,7 @@ export default function UserAccounts() {
                   )}
                 </div>
                 <div>
-                  <div style={{fontSize: 16, fontWeight: 700, margin: 0, color: BRAND}}>
+                  <div style={{ fontSize: 16, fontWeight: 700, margin: 0, color: BRAND }}>
                     {modalMode === "add" ? "Add New User" : "Edit User"}
                   </div>
                   <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>
@@ -784,7 +747,7 @@ export default function UserAccounts() {
                 Cancel
               </button>
               <button disabled={submitting} onClick={submit}
-                style={{ border: "none", background: submitting ? "#94a3b8" : BRAND, color: "#fff", borderRadius: 10, padding: "0.55rem 1.2rem", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 500, fontSize: 13, fontFamily: "inherit", boxShadow: submitting ? "none" : "0 4px 14px rgba(10,76,134,0.28)", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+                style={{ border: "none", background: submitting ? "#94a3b8" : BRAND, color: "#fff", borderRadius: 10, padding: "0.55rem 1.2rem", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 500, fontSize: 13, fontFamily: "inherit", boxShadow: submitting ? "none" : "0 4px 12px rgba(10,76,134,0.25)", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
                 {submitting ? "Saving…" : (modalMode === "add" ? "Create User" : "Save Changes")}
               </button>
             </div>
@@ -792,7 +755,7 @@ export default function UserAccounts() {
         </div>
       )}
 
-      {/* ── Delete Modal ──────────────────────────────────────────────────── */}
+      {/* ── Delete / Archive Modal ── */}
       {deleteTarget && (
         <div className="ua-modal-overlay">
           <div className="ua-modal-box ua-modal-box--sm">
@@ -813,11 +776,7 @@ export default function UserAccounts() {
             </div>
             <div style={{ padding: "1.2rem 1.4rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0.75rem 1rem", borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", marginBottom: 12 }}>
-                <Avatar
-                  name={deleteTarget.full_name}
-                  avatarUrl={getAvatarUrl(deleteTarget.id, deleteTarget.avatar_url)}
-                  size={40}
-                />
+                <Avatar name={deleteTarget.full_name} avatarUrl={getAvatarUrl(deleteTarget.id, deleteTarget.avatar_url)} size={40} />
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{deleteTarget.full_name}</div>
                   <div style={{ fontSize: 11, color: "#94a3b8" }}>@{deleteTarget.username} · {deleteTarget.email}</div>
@@ -829,12 +788,12 @@ export default function UserAccounts() {
             </div>
             <div className="ua-modal-footer">
               <button className="ua-btn-cancel" onClick={closeModal}
-                style={{padding: "0.5rem 1.1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif"  }}>
+                style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>
                 Cancel
               </button>
               <button onClick={confirmDelete}
-                style={{padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", letterSpacing: 0.50}}>
-               Archive User
+                style={{ padding: "0.5rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", letterSpacing: 0.5 }}>
+                Archive User
               </button>
             </div>
           </div>

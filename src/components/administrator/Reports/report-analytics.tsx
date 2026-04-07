@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   BarChart2,
   TrendingUp,
@@ -7,10 +7,11 @@ import {
   Download,
   Calendar,
   Loader,
+  ChevronDown,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 
-const brandBlue = "#0a4c86";
+const brandBlue = "#0D518C";
 
 function hashDeptColor(name: string): string {
   let hash = 0;
@@ -34,13 +35,15 @@ const raStyles = `
   .ra-root {
     font-family: 'Poppins', sans-serif;
     color: #0f172a;
+    padding-top: 2rem;
   }
 
   .ra-stat-card {
     background: #ffffff;
     border-radius: 18px;
     padding: 1.25rem 1.4rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e8edf2;
+    box-shadow: 0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04);
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
@@ -50,7 +53,8 @@ const raStyles = `
     background: #ffffff;
     border-radius: 18px;
     padding: 1.3rem 1.4rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e8edf2;
+    box-shadow: 0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04);
   }
 
   .ra-panel-title {
@@ -111,23 +115,104 @@ const raStyles = `
     text-transform: uppercase;
   }
 
-  .ra-tab {
-    padding: 0.38rem 0.85rem;
+  /* Period Dropdown */
+  .ra-period-dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .ra-period-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.42rem 0.9rem;
     border-radius: 8px;
     border: 1.5px solid #e2e8f0;
-    background: transparent;
+    background: #ffffff;
     font-family: 'Poppins', sans-serif;
     font-size: 12px;
     font-weight: 500;
-    color: #64748b;
+    color: #374151;
     cursor: pointer;
     transition: all 0.16s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    white-space: nowrap;
+    min-width: 150px;
+    justify-content: space-between;
   }
-  .ra-tab:hover { background: #f8fafc; }
-  .ra-tab.active {
-    background: ${brandBlue};
+  .ra-period-btn:hover {
     border-color: ${brandBlue};
-    color: #ffffff;
+    color: ${brandBlue};
+    background: #f0f6ff;
+  }
+  .ra-period-btn.open {
+    border-color: ${brandBlue};
+    color: ${brandBlue};
+    background: #f0f6ff;
+    box-shadow: 0 0 0 3px rgba(13,81,140,0.08);
+  }
+  .ra-period-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 220px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(10,76,134,0.13), 0 2px 8px rgba(0,0,0,0.06);
+    z-index: 100;
+    overflow: hidden;
+    padding: 0.3rem;
+  }
+  .ra-period-group-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    padding: 0.5rem 0.75rem 0.25rem;
+    font-family: 'Poppins', sans-serif;
+  }
+  .ra-period-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.42rem 0.75rem;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    font-family: 'Poppins', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+    gap: 0.5rem;
+  }
+  .ra-period-option:hover {
+    background: #f0f6ff;
+    color: ${brandBlue};
+  }
+  .ra-period-option.selected {
+    background: rgba(13,81,140,0.08);
+    color: ${brandBlue};
+    font-weight: 600;
+  }
+  .ra-period-option .ra-period-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: ${brandBlue};
+    opacity: 0;
+    flex-shrink: 0;
+  }
+  .ra-period-option.selected .ra-period-dot {
+    opacity: 1;
+  }
+  .ra-period-divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 0.3rem 0.5rem;
   }
 
   .ra-export-btn {
@@ -143,26 +228,48 @@ const raStyles = `
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.16s, color 0.16s;
+    transition: background 0.15s, color 0.15s, transform 0.12s;
   }
   .ra-export-btn:hover {
     background: ${brandBlue};
     color: #ffffff;
   }
 
+  .ra-table-card {
+    background: #fff;
+    border-radius: 18px;
+    border: 1px solid #e8edf2;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .ra-table-toolbar {
+    padding: 0.9rem 1.2rem;
+    border-bottom: 1px solid #e8edf2;
+    background: #fafcff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+  }
+
   .ra-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ra-table thead tr {
+    background: #f0f5fb;
+    border-bottom: 1px solid #dde6f0;
+  }
   .ra-table th {
     text-align: left;
-    padding: 0.5rem 0.5rem;
+    padding: 0.5rem 1.2rem;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #94a3b8;
-    border-bottom: 1px solid #e5e7eb;
   }
   .ra-table td {
-    padding: 0.6rem 0.5rem;
+    padding: 0.6rem 1.2rem;
     border-bottom: 1px solid #f3f4f6;
     color: #374151;
     vertical-align: middle;
@@ -203,30 +310,116 @@ const raStyles = `
     .ra-stat-grid { grid-template-columns: 1fr !important; }
     .ra-bar-label { width: 80px; font-size: 10px; }
   }
+  @keyframes spin { to { transform: rotate(360deg); } }
 `;
 
-type PeriodTab = "This Week" | "This Month" | "This Quarter" | "This Year";
+// ─── Period config ────────────────────────────────────────────────────────────
 
-function getPeriodRange(tab: PeriodTab): { start: Date; end: Date } {
+type PeriodOption = {
+  label: string;
+  key: string;
+  group: string;
+};
+
+const PERIOD_OPTIONS: PeriodOption[] = [
+  // Current
+  { key: "today", label: "Today", group: "Current" },
+  { key: "this_week", label: "This Week", group: "Current" },
+  { key: "this_month", label: "This Month", group: "Current" },
+  { key: "this_quarter", label: "This Quarter", group: "Current" },
+  { key: "this_year", label: "This Year", group: "Current" },
+  // Past
+  { key: "yesterday", label: "Yesterday", group: "Past" },
+  { key: "last_7_days", label: "Last 7 Days", group: "Past" },
+  { key: "last_30_days", label: "Last 30 Days", group: "Past" },
+  { key: "last_90_days", label: "Last 90 Days", group: "Past" },
+  { key: "last_month", label: "Last Month", group: "Past" },
+  { key: "last_quarter", label: "Last Quarter", group: "Past" },
+  { key: "last_year", label: "Last Year", group: "Past" },
+  // All time
+  { key: "all_time", label: "All Time", group: "All" },
+];
+
+function getPeriodRange(key: string): { start: Date; end: Date } {
+  const now = new Date();
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   const start = new Date();
 
-  if (tab === "This Week") {
-    const day = start.getDay();
-    const diff = start.getDate() - day + (day === 0 ? -6 : 1);
-    start.setDate(diff);
-    start.setHours(0, 0, 0, 0);
-  } else if (tab === "This Month") {
-    start.setDate(1);
-    start.setHours(0, 0, 0, 0);
-  } else if (tab === "This Quarter") {
-    const q = Math.floor(start.getMonth() / 3);
-    start.setMonth(q * 3, 1);
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start.setMonth(0, 1);
-    start.setHours(0, 0, 0, 0);
+  switch (key) {
+    case "today":
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "yesterday": {
+      start.setDate(now.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      end.setDate(now.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "this_week": {
+      const day = start.getDay();
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+      start.setDate(diff);
+      start.setHours(0, 0, 0, 0);
+      break;
+    }
+    case "last_7_days":
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "last_30_days":
+      start.setDate(now.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "last_90_days":
+      start.setDate(now.getDate() - 89);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "this_month":
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "last_month": {
+      start.setMonth(now.getMonth() - 1, 1);
+      start.setHours(0, 0, 0, 0);
+      end.setDate(0); // last day of previous month
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "this_quarter": {
+      const q = Math.floor(start.getMonth() / 3);
+      start.setMonth(q * 3, 1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    }
+    case "last_quarter": {
+      const q = Math.floor(now.getMonth() / 3);
+      const prevQ = q === 0 ? 3 : q - 1;
+      const yr = q === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      start.setFullYear(yr, prevQ * 3, 1);
+      start.setHours(0, 0, 0, 0);
+      end.setFullYear(yr, prevQ * 3 + 3, 0);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "this_year":
+      start.setMonth(0, 1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "last_year":
+      start.setFullYear(now.getFullYear() - 1, 0, 1);
+      start.setHours(0, 0, 0, 0);
+      end.setFullYear(now.getFullYear() - 1, 11, 31);
+      end.setHours(23, 59, 59, 999);
+      break;
+    case "all_time":
+      start.setFullYear(2000, 0, 1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    default:
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
   }
 
   return { start, end };
@@ -277,24 +470,14 @@ type DonutSeg = { label: string; value: number; color: string };
 
 const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
   const total = segments.reduce((s, d) => s + d.value, 0);
-  const cx = 60,
-    cy = 60,
-    r = 48,
-    strokeW = 14;
+  const cx = 60, cy = 60, r = 48, strokeW = 14;
   const circ = 2 * Math.PI * r;
 
   if (total === 0) {
     return (
       <svg width={120} height={120} viewBox="0 0 120 120">
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={strokeW} />
-        <text
-          x={cx}
-          y={cy + 4}
-          textAnchor="middle"
-          fontSize={12}
-          fill="#94a3b8"
-          fontFamily="Poppins,sans-serif"
-        >
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize={12} fill="#94a3b8" fontFamily="Poppins,sans-serif">
           No data
         </text>
       </svg>
@@ -304,14 +487,11 @@ const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
   const circles = segments.map((seg, i) => {
     const dash = (seg.value / total) * circ;
     const gap = circ - dash;
-    const offset =
-      segments.slice(0, i).reduce((sum, s) => sum + (s.value / total) * circ + 1.5, 0);
+    const offset = segments.slice(0, i).reduce((sum, s) => sum + (s.value / total) * circ + 1.5, 0);
     return (
       <circle
         key={seg.label + i}
-        cx={cx}
-        cy={cy}
-        r={r}
+        cx={cx} cy={cy} r={r}
         fill="none"
         stroke={seg.color}
         strokeWidth={strokeW}
@@ -328,96 +508,127 @@ const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
     <svg width={120} height={120} viewBox="0 0 120 120">
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={strokeW} />
       {circles}
-      <text
-        x={cx}
-        y={cy - 6}
-        textAnchor="middle"
-        fontSize={18}
-        fontWeight={700}
-        fill="#111827"
-        fontFamily="Poppins,sans-serif"
-      >
+      <text x={cx} y={cy - 6} textAnchor="middle" fontSize={18} fontWeight={700} fill="#111827" fontFamily="Poppins,sans-serif">
         {total}
       </text>
-      <text
-        x={cx}
-        y={cy + 10}
-        textAnchor="middle"
-        fontSize={9}
-        fill="#94a3b8"
-        fontFamily="Poppins,sans-serif"
-        letterSpacing="0.08em"
-      >
+      <text x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fill="#94a3b8" fontFamily="Poppins,sans-serif" letterSpacing="0.08em">
         TOTAL
       </text>
     </svg>
   );
 };
 
+// ─── Period Dropdown ──────────────────────────────────────────────────────────
+
+const PeriodDropdown: React.FC<{
+  value: string;
+  onChange: (key: string) => void;
+}> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = PERIOD_OPTIONS.find(o => o.key === value);
+  const groups = Array.from(new Set(PERIOD_OPTIONS.map(o => o.group)));
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="ra-period-dropdown" ref={ref}>
+      <button
+        type="button"
+        className={`ra-period-btn${open ? " open" : ""}`}
+        onClick={() => setOpen(v => !v)}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <Calendar size={12} strokeWidth={2.2} />
+          {selected?.label ?? "Select period"}
+        </span>
+        <ChevronDown size={13} strokeWidth={2.2} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+      </button>
+
+      {open && (
+        <div className="ra-period-menu">
+          {groups.map((group, gi) => (
+            <div key={group}>
+              {gi > 0 && <div className="ra-period-divider" />}
+              <div className="ra-period-group-label">{group}</div>
+              {PERIOD_OPTIONS.filter(o => o.group === group).map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`ra-period-option${value === opt.key ? " selected" : ""}`}
+                  onClick={() => { onChange(opt.key); setOpen(false); }}
+                >
+                  <span className="ra-period-dot" />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 const ReportAnalytics: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<PeriodTab>("This Month");
+  const [activePeriod, setActivePeriod] = useState<string>("this_month");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tickets, setTickets] = useState<FileReportRow[]>([]);
   const [deptNameById, setDeptNameById] = useState<Record<string, string>>({});
 
-  const tabs: PeriodTab[] = ["This Week", "This Month", "This Quarter", "This Year"];
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
-    const { start, end } = getPeriodRange(activeTab);
-    const startISO = toISO(start);
-    const endISO = toISO(end);
+    const { start, end } = getPeriodRange(activePeriod);
+
+    const isAllTime = activePeriod === "all_time";
+
+    const reportsQuery = supabase
+      .from("file_reports")
+      .select("id, ticket_number, title, status, department_id, issue_type, date_submitted, created_at")
+      .order("date_submitted", { ascending: false });
+
+    if (!isAllTime) {
+      reportsQuery
+        .gte("date_submitted", toISO(start))
+        .lte("date_submitted", toISO(end));
+    }
 
     const [{ data: depts, error: deptErr }, { data: reports, error: repErr }] = await Promise.all([
       supabase.from("departments").select("id, name").order("name"),
-      supabase
-        .from("file_reports")
-        .select(
-          "id, ticket_number, title, status, department_id, issue_type, date_submitted, created_at"
-        )
-        .gte("date_submitted", startISO)
-        .lte("date_submitted", endISO)
-        .order("date_submitted", { ascending: false }),
+      reportsQuery,
     ]);
 
-    if (deptErr) {
-      setLoadError(deptErr.message);
-      setTickets([]);
-      setLoading(false);
-      return;
-    }
-    if (repErr) {
-      setLoadError(repErr.message);
-      setTickets([]);
-      setLoading(false);
-      return;
-    }
+    if (deptErr) { setLoadError(deptErr.message); setTickets([]); setLoading(false); return; }
+    if (repErr) { setLoadError(repErr.message); setTickets([]); setLoading(false); return; }
 
     const map: Record<string, string> = {};
-    (depts ?? []).forEach((d: { id: string; name: string }) => {
-      map[d.id] = d.name;
-    });
+    (depts ?? []).forEach((d: { id: string; name: string }) => { map[d.id] = d.name; });
     setDeptNameById(map);
     setTickets((reports ?? []) as FileReportRow[]);
     setLoading(false);
-  }, [activeTab]);
+  }, [activePeriod]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
     const channel = supabase
-      .channel(`report_analytics_sync_${activeTab.replace(/\s+/g, "_").toLowerCase()}`)
+      .channel(`report_analytics_sync_${activePeriod}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchData(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchData(); })
       .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [activeTab, fetchData]);
+    return () => { void supabase.removeChannel(channel); };
+  }, [activePeriod, fetchData]);
 
   const stats = useMemo(() => {
     const total = tickets.length;
@@ -428,6 +639,8 @@ const ReportAnalytics: React.FC = () => {
     return { total, resolved, pending, inProgress, resolutionPct };
   }, [tickets]);
 
+  const selectedLabel = PERIOD_OPTIONS.find(o => o.key === activePeriod)?.label ?? "Period";
+
   const statCards = useMemo(
     () => [
       {
@@ -435,7 +648,7 @@ const ReportAnalytics: React.FC = () => {
         value: stats.total,
         accent: brandBlue,
         icon: BarChart2,
-        delta: `In ${activeTab.toLowerCase()}`,
+        delta: `In ${selectedLabel.toLowerCase()}`,
       },
       {
         label: "Resolved",
@@ -459,7 +672,7 @@ const ReportAnalytics: React.FC = () => {
         delta: "Actively assigned",
       },
     ],
-    [stats, activeTab]
+    [stats, selectedLabel]
   );
 
   const deptTickets = useMemo(() => {
@@ -468,19 +681,15 @@ const ReportAnalytics: React.FC = () => {
       const id = t.department_id || "unknown";
       counts[id] = (counts[id] ?? 0) + 1;
     });
-    const rows = Object.entries(counts)
+    return Object.entries(counts)
       .map(([id, count]) => ({
         id,
         name: deptNameById[id] ?? (id === "unknown" ? "Unassigned" : "Unknown dept"),
         count,
       }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-   return rows.map((row) => ({
-        name: row.name,
-        count: row.count,
-        color: hashDeptColor(row.name),
-      }));
+      .slice(0, 8)
+      .map(row => ({ name: row.name, count: row.count, color: hashDeptColor(row.name) }));
   }, [tickets, deptNameById]);
 
   const maxDept = Math.max(1, ...deptTickets.map(d => d.count));
@@ -493,11 +702,7 @@ const ReportAnalytics: React.FC = () => {
       else bucket.Others += 1;
     });
     return (["Hardware", "Software", "Internet", "Others"] as const)
-      .map(label => ({
-        label,
-        value: bucket[label],
-        color: ISSUE_DONUT_COLORS[label] ?? "#ca8a04",
-      }))
+      .map(label => ({ label, value: bucket[label], color: ISSUE_DONUT_COLORS[label] ?? "#ca8a04" }))
       .filter(s => s.value > 0);
   }, [tickets]);
 
@@ -517,42 +722,24 @@ const ReportAnalytics: React.FC = () => {
   return (
     <>
       <style>{raStyles}</style>
-      <div
-        className="ra-root"
-        style={{ display: "flex", flexDirection: "column", gap: "1.2rem", paddingRight: "1rem" }}
-      >
+      <div className="ra-root" style={{ display: "flex", flexDirection: "column", gap: "1.2rem", paddingRight: "1rem" }}>
+        {/* Top Bar */}
         <div
           className="ra-top-bar"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-          }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}
         >
           <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", color: brandBlue }}>
+              <TrendingUp size={20} color={brandBlue} />
               Reports & Analytics
-            </h1>
+            </h2>
             <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 0", fontWeight: 400 }}>
               IT Helpdesk ticket metrics by period (live data).
             </p>
           </div>
 
           <div className="ra-tabs-wrap" style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-              {tabs.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`ra-tab${activeTab === t ? " active" : ""}`}
-                  onClick={() => setActiveTab(t)}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            <PeriodDropdown value={activePeriod} onChange={setActivePeriod} />
             <button type="button" className="ra-export-btn">
               <Download size={13} strokeWidth={2.2} />
               Export PDF
@@ -560,39 +747,21 @@ const ReportAnalytics: React.FC = () => {
           </div>
         </div>
 
+        {/* Error */}
         {loadError && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              borderRadius: 10,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              color: "#b91c1c",
-              fontSize: 13,
-            }}
-          >
+          <div style={{ padding: "0.75rem 1rem", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
             Could not load reports: {loadError}
           </div>
         )}
 
         {loading ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              padding: "3rem",
-              color: "#94a3b8",
-              fontSize: 14,
-            }}
-          >
-            <Loader size={22} className="ra-spin" style={{ animation: "spin 0.9s linear infinite" }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "3rem", color: "#94a3b8", fontSize: 14 }}>
+            <Loader size={22} style={{ animation: "spin 0.9s linear infinite" }} />
             Loading analytics…
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         ) : (
           <>
+            {/* Stat Cards */}
             <div
               className="ra-stat-grid"
               style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: "0.9rem" }}
@@ -600,28 +769,10 @@ const ReportAnalytics: React.FC = () => {
               {statCards.map(({ label, value, accent, icon: Icon, delta }) => (
                 <div key={label} className="ra-stat-card">
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                        fontWeight: 600,
-                      }}
-                    >
+                    <span style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#64748b", fontWeight: 600 }}>
                       {label}
                     </span>
-                    <div
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 8,
-                        background: `${accent}18`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <Icon size={15} strokeWidth={2} color={accent} />
                     </div>
                   </div>
@@ -631,6 +782,7 @@ const ReportAnalytics: React.FC = () => {
               ))}
             </div>
 
+            {/* Middle Row */}
             <div className="ra-middle-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1.1rem" }}>
               <div className="ra-panel">
                 <div className="ra-panel-title">
@@ -644,13 +796,7 @@ const ReportAnalytics: React.FC = () => {
                     <div key={dept.name} className="ra-bar-row">
                       <span className="ra-bar-label">{dept.name}</span>
                       <div className="ra-bar-track">
-                        <div
-                          className="ra-bar-fill"
-                          style={{
-                            width: `${(dept.count / maxDept) * 100}%`,
-                            background: dept.color,
-                          }}
-                        />
+                        <div className="ra-bar-fill" style={{ width: `${(dept.count / maxDept) * 100}%`, background: dept.color }} />
                       </div>
                       <span className="ra-bar-value">{dept.count}</span>
                     </div>
@@ -661,7 +807,7 @@ const ReportAnalytics: React.FC = () => {
               <div className="ra-panel" style={{ display: "flex", flexDirection: "column" }}>
                 <div className="ra-panel-title">
                   <BarChart2 size={15} color={brandBlue} strokeWidth={2.2} />
-                  Issue type
+                  Issue Type
                 </div>
                 <div style={{ display: "flex", justifyContent: "center", marginTop: "0.25rem" }}>
                   <DonutChart segments={donutData} />
@@ -679,8 +825,7 @@ const ReportAnalytics: React.FC = () => {
                         <span style={{ fontWeight: 600, color: "#111827" }}>
                           {seg.value}
                           <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 11 }}>
-                            {" "}
-                            ({Math.round((seg.value / donutTotal) * 100)}%)
+                            {" "}({Math.round((seg.value / donutTotal) * 100)}%)
                           </span>
                         </span>
                       </div>
@@ -690,49 +835,47 @@ const ReportAnalytics: React.FC = () => {
               </div>
             </div>
 
-            <div className="ra-panel">
-              <div className="ra-panel-title" style={{ marginBottom: "0.5rem" }}>
+            {/* Recent Tickets Table */}
+            <div className="ra-table-card">
+              <div className="ra-table-toolbar">
                 <Calendar size={15} color={brandBlue} strokeWidth={2.2} />
                 Recent Tickets
               </div>
-              <table className="ra-table">
-                <thead>
-                  <tr>
-                    {["Ticket ID", "Title", "Department", "Status", "Date"].map(h => (
-                      <th key={h}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTickets.length === 0 ? (
+              <div style={{ padding: "0" }}>
+                <table className="ra-table">
+                  <thead>
                     <tr>
-                      <td colSpan={6} style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>
-                        No tickets in this period.
-                      </td>
+                      {["Ticket ID", "Title", "Department", "Status", "Date"].map(h => (
+                        <th key={h}>{h}</th>
+                      ))}
                     </tr>
-                  ) : (
-                    recentTickets.map(t => {
-                      const { bg, color } = statusColors[t.status] ?? {
-                        bg: "#f1f5f9",
-                        color: "#64748b",
-                      };
-                      return (
-                        <tr key={t.rowId}>
-                          <td style={{ fontWeight: 600, color: brandBlue }}>{t.id}</td>
-                          <td style={{ maxWidth: 160 }}>{t.title}</td>
-                          <td style={{ color: "#6b7280" }}>{t.dept}</td>
-                          <td>
-                            <span className="ra-badge" style={{ background: bg, color }}>
-                              {t.status}
-                            </span>
-                          </td>
-                          <td style={{ color: "#94a3b8", fontSize: 12 }}>{t.date}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recentTickets.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>
+                          No tickets in this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      recentTickets.map(t => {
+                        const { bg, color } = statusColors[t.status] ?? { bg: "#f1f5f9", color: "#64748b" };
+                        return (
+                          <tr key={t.rowId}>
+                            <td style={{ fontWeight: 600, color: brandBlue }}>{t.id}</td>
+                            <td style={{ maxWidth: 160 }}>{t.title}</td>
+                            <td style={{ color: "#6b7280" }}>{t.dept}</td>
+                            <td>
+                              <span className="ra-badge" style={{ background: bg, color }}>{t.status}</span>
+                            </td>
+                            <td style={{ color: "#94a3b8", fontSize: 12 }}>{t.date}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}
