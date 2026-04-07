@@ -51,7 +51,7 @@ type FormState = {
 
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
-const BRAND     = "#0a4c86";
+const BRAND     = "#0D518C";
 const GREEN     = "#16a34a";
 const PAGE_SIZE = 10;
 

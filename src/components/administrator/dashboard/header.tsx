@@ -725,7 +725,7 @@ const Header: React.FC<HeaderProps> = ({
           <img
             src="/masaya-sa-tarlac-city-logo.png"
             alt="Masaya sa Tarlac City"
-            style={{ height: 70, width: "auto", objectFit: "contain", flexShrink: 0 }}
+            style={{ height: 64, width: "auto", objectFit: "contain", flexShrink: 0 }}
           />
 
           {/* Divider */}
