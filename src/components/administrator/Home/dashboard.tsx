@@ -14,6 +14,7 @@ import Repairs from "../repairs/repairs";
 import TechnicianDashboardHome from "../../technician/technician-dashboard-home";
 import MyTickets from "../../technician/my-tickets";
 import ActivityLogPanel from "../../technician/activity-log-panel";
+import UserShell from "../../user/UserShell.tsx";
 import WorkHistory from "../../technician/work-history";
 import {
   Ticket, Clock, CheckCircle, CircleArrowDown,
@@ -493,11 +494,12 @@ const Dashboard: React.FC = () => {
   const userId          = localStorage.getItem("session_user_id")        || "";
   const isAdmin         = userRole === "Administrator";
   const isTechnician    = userRole === "IT Technician";
+  const isEmployee      = userRole === "Employee";
 
   useEffect(() => {
     const token  = localStorage.getItem("session_token");
     const role   = localStorage.getItem("session_user_role") || "";
-    const roleOk = role === "Administrator" || role === "IT Technician";
+    const roleOk = role === "Administrator" || role === "IT Technician" || role === "Employee";
     if (!token || !roleOk) {
       ["session_token", "session_user_id", "session_user_full_name", "session_user_role", "session_expires_at"].forEach(k => localStorage.removeItem(k));
       navigate("/");
@@ -512,6 +514,11 @@ const Dashboard: React.FC = () => {
     };
     void loadHeaderAvatar();
   }, [userId]);
+
+  // ── Employee: render dedicated user portal shell ─────────────────────────────
+  if (isEmployee) {
+    return <UserShell />;
+  }
 
   const dashHomeNode = useRef<React.ReactNode>(
     isTechnician ? <TechnicianDashboardHome /> : <DashboardHome onNavigate={setActiveLabel} />
