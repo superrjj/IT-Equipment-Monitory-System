@@ -5,8 +5,6 @@ import type { UserNavLabel } from "./UserBottomNav";
 import UserDashboardHome from "./UserDashboardHome";
 import UserSubmitTicket from "./userSubmitTicket";
 import MyTicketsUser from "./MyTicketsUser";
-import UserProfile from "./UserProfile";
-import UserNotifications from "./UserNotifications";
 import { supabase } from "../../lib/supabaseClient";
 
 const UserShell: React.FC = () => {
@@ -46,19 +44,14 @@ const UserShell: React.FC = () => {
           <UserDashboardHome
             onNavigateSubmit={() => setActiveLabel("Submit Ticket")}
             onNavigateMyTickets={() => setActiveLabel("My Tickets")}
-            onNavigateNotifications={() => setActiveLabel("Notifications")}
           />
         );
       case "Submit Ticket":
         return <UserSubmitTicket />;
       case "My Tickets":
         return <MyTicketsUser />;
-      case "Notifications":
-        return <UserNotifications />;
-      case "My Profile":
-        return <UserProfile />;
       default:
-        return null;
+        return <UserDashboardHome onNavigateSubmit={() => setActiveLabel("Submit Ticket")} onNavigateMyTickets={() => setActiveLabel("My Tickets")} />;
     }
   };
 
@@ -103,10 +96,10 @@ const UserShell: React.FC = () => {
                 localStorage.setItem("focus_ticket_id", entityId);
                 setActiveLabel("My Tickets");
               } else {
-                setActiveLabel("Notifications");
+                setActiveLabel("My Tickets");
               }
             }}
-            onOpenProfile={() => setActiveLabel("My Profile")}
+            onOpenProfile={() => setActiveLabel("Dashboard")}
           />
         </div>
 

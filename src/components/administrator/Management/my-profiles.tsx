@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import bcrypt from "bcryptjs";
 import {
   X, Camera, KeyRound, Save, UserCircle2,
-  Eye, EyeOff, Check, AlertCircle, Loader2,
+  Eye, EyeOff, AlertCircle, Loader2,
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 const BUCKET = "profile-avatar";
 const Blue = "#0a4c86";
@@ -251,19 +252,6 @@ const css = `
   .pm-account-row { grid-template-columns: 1fr; }
 }
 
-.pm-toast {
-  position: fixed; bottom: 24px; right: 24px; z-index: 1600;
-  display: flex; align-items: center; gap: 8px;
-  padding: .7rem 1.1rem; border-radius: 12px;
-  font-size: 13px; font-family: 'Poppins', sans-serif; font-weight: 600;
-  box-shadow: 0 8px 24px rgba(0,0,0,.12);
-  animation: pmToastIn .25s cubic-bezier(.16,1,.3,1) both;
-}
-@keyframes pmToastIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 `;
 
 export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange }) => {
@@ -503,17 +491,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     <>
       <style>{css}</style>
 
-      {/* Toast */}
-      {toast && (
-        <div className="pm-toast" style={{
-          background: toast.type === "success" ? "#ecfdf5" : "#fef2f2",
-          color: toast.type === "success" ? "#15803d" : "#b91c1c",
-          border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
-        }}>
-          {toast.type === "success" ? <Check size={14} strokeWidth={2.5} /> : <AlertCircle size={14} />}
-          {toast.msg}
-        </div>
-      )}
+      <CrudAlertToast toast={toast} placement="bottom" />
 
       {/* Overlay */}
       <div

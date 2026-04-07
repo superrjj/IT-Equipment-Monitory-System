@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { KeyRound, Plus, Pencil, Trash2, Search, X, User, Mail, Shield, Lock, AlertTriangle, ChevronDown, User2Icon, Archive } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 type Role = "Administrator" | "IT Technician";
 type ModalMode = "add" | "edit" | null;
@@ -487,16 +488,7 @@ export default function UserAccounts() {
       `}</style>
 
       {/* Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: 20, right: 24, zIndex: 9999,
-          padding: "0.65rem 1rem", borderRadius: 12, fontSize: 13, fontWeight: 600,
-          background: toast.type === "success" ? "#dcfce7" : "#fee2e2",
-          color: toast.type === "success" ? "#166534" : "#b91c1c",
-          border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
-        }}>{toast.msg}</div>
-      )}
+      <CrudAlertToast toast={toast} />
 
       {(pendingError || usersError) && (
         <div style={{ marginBottom: 14, padding: "0.75rem 0.9rem", borderRadius: 14, border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: 12, fontWeight: 700, lineHeight: 1.5 }}>

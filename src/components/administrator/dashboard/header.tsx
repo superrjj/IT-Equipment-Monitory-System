@@ -317,6 +317,7 @@ function formatNotifType(type: string): string {
   const map: Record<string, string> = {
     ticket_assigned:              "Ticket Assigned",
     ticket_status_changed_admin:  "Status Updated",
+    ticket_status_requester:      "Your Ticket",
     repair_assigned:              "Repair Assigned",
     repair_status_changed_admin:  "Repair Status Updated",
     signup_request:               "Account Request",
@@ -484,41 +485,71 @@ const Header: React.FC<HeaderProps> = ({
     refreshUnread();
     const onEvt = () => refreshUnread();
     window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onEvt);
-    const t   = setInterval(refreshUnread, 30000);
-    const uid = localStorage.getItem("session_user_id");
-    const channel = supabase
-      .channel("notif-badge-header")
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "app_notifications",
-        filter: `user_id=eq.${uid}`,
-      }, () => { refreshUnread(); })
-      .subscribe();
+    const t = setInterval(refreshUnread, 30000);
+    const uid = localStorage.getItem("session_user_id")?.trim();
+    const channel = uid
+      ? supabase
+          .channel("notif-badge-header")
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "app_notifications",
+              filter: `user_id=eq.${uid}`,
+            },
+            () => {
+              refreshUnread();
+            }
+          )
+          .subscribe()
+      : null;
     return () => {
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onEvt);
       clearInterval(t);
-      supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [refreshUnread]);
 
   // ── Fetch notifications (with actor join) ──────────────────────────────────
   const fetchNotifications = useCallback(async () => {
-    const uid = localStorage.getItem("session_user_id");
-    if (!uid) { setNotifs([]); return; }
+    const uid = localStorage.getItem("session_user_id")?.trim();
+    if (!uid) {
+      setNotifs([]);
+      return;
+    }
     setNotifLoading(true);
-    const { data } = await supabase
+    const withActor = `
+      id, type, title, body, entity_type, entity_id, read_at, created_at,
+      actor:user_accounts!app_notifications_actor_user_id_fkey (
+        id, full_name, avatar_url, updated_at
+      )
+    `;
+    const withActorRes = await supabase
       .from("app_notifications")
-      .select(`
-        id, type, title, body, entity_type, entity_id, read_at, created_at,
-        actor:actor_user_id (
-          id, full_name, avatar_url, updated_at
-        )
-      `)
+      .select(withActor)
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(40);
+    const data = withActorRes.error
+      ? (
+          await supabase
+            .from("app_notifications")
+            .select(
+              "id, type, title, body, entity_type, entity_id, read_at, created_at"
+            )
+            .eq("user_id", uid)
+            .order("created_at", { ascending: false })
+            .limit(40)
+        ).data
+      : withActorRes.data;
     const normalized: NotificationRow[] = (data ?? []).map((row: any) => ({
       ...row,
-      actor: Array.isArray(row.actor) ? (row.actor[0] ?? null) : (row.actor ?? null),
+      actor: row.actor
+        ? Array.isArray(row.actor)
+          ? row.actor[0] ?? null
+          : row.actor
+        : null,
     }));
     setNotifs(normalized);
     setNotifLoading(false);

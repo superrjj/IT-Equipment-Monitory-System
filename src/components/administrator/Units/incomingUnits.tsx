@@ -12,6 +12,7 @@ import {
   exportIncomingUnitsToWord,
 } from "../../../utils/exportIncomingUnits";
 import { supabase } from "../../../lib/supabaseClient";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 type SortField = "date_received" | "unit_name" | "reported_by";
 type SortDir   = "asc" | "desc";
@@ -527,16 +528,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
       <div className="iu-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
-        {toast && (
-          <div style={{
-            position: "fixed", top: 20, right: 24, zIndex: 9999,
-            padding: "0.65rem 1.1rem", borderRadius: 10, fontSize: 13, fontWeight: 500,
-            background: toast.type === "success" ? "#dcfce7" : "#fee2e2",
-            color:      toast.type === "success" ? "#15803d" : "#b91c1c",
-            border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.10)", maxWidth: 380,
-          }}>{toast.msg}</div>
-        )}
+        <CrudAlertToast toast={toast} />
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>

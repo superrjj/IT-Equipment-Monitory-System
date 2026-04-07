@@ -1,48 +1,131 @@
-import React, { useState } from "react";
-import { Ticket, Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import {
+  Ticket,
+  AlertCircle,
+  CheckCircle2,
+  Building2,
+  User,
+  Cpu,
+  Monitor,
+  Wifi,
+  ListOrdered,
+  Lightbulb,
+  ShieldCheck,
+} from "lucide-react";
+import { supabase } from "../../lib/supabaseClient";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const BRAND = "#0a4c86";
 
-type Priority = "Low" | "Medium" | "High" | "Critical";
+type IssueType = "Hardware" | "Software" | "Internet";
+type ProfileInfo = {
+  full_name: string;
+  department_id: string;
+};
 
-const priorities: { value: Priority; label: string; desc: string }[] = [
-  { value: "Low",      label: "Low",      desc: "Minor inconvenience" },
-  { value: "Medium",   label: "Medium",   desc: "Work slowed down" },
-  { value: "High",     label: "High",     desc: "Unable to continue work" },
-  { value: "Critical", label: "Critical", desc: "Urgent / affects many users" },
-];
+const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
+
+const ISSUE_TYPE_CONFIG: Record<
+  IssueType,
+  { icon: React.ReactNode; activeClass: string }
+> = {
+  Hardware: { icon: <Cpu size={14} />, activeClass: "ust-pill--hw" },
+  Software: { icon: <Monitor size={14} />, activeClass: "ust-pill--sw" },
+  Internet: { icon: <Wifi size={14} />, activeClass: "ust-pill--net" },
+};
 
 const UserSubmitTicket: React.FC = () => {
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState<Priority>("Medium");
-  const [details, setDetails] = useState("");
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [issueType, setIssueType] = useState<IssueType>("Hardware");
+  const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [departmentName, setDepartmentName] = useState("");
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      const userId = localStorage.getItem("session_user_id");
+      if (!userId) {
+        setError("Session missing. Please sign in again.");
+        setLoadingProfile(false);
+        return;
+      }
+
+      const { data, error: userErr } = await supabase
+        .from("user_accounts")
+        .select("full_name, department_id")
+        .eq("id", userId)
+        .single();
+
+      if (userErr || !data) {
+        setError("Unable to load your account details. Please try again.");
+        setLoadingProfile(false);
+        return;
+      }
+
+      setProfile({
+        full_name: data.full_name,
+        department_id: data.department_id,
+      });
+
+      if (data.department_id) {
+        const { data: dept } = await supabase
+          .from("departments")
+          .select("name")
+          .eq("id", data.department_id)
+          .single();
+        setDepartmentName(dept?.name ?? "");
+      }
+
+      setLoadingProfile(false);
+    };
+
+    void loadProfile();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    if (!title.trim() || !category.trim() || !details.trim()) {
-      setError("Please fill in the required fields before submitting.");
+    if (!profile?.full_name || !profile.department_id) {
+      setError("Your account is missing employee or department information.");
+      return;
+    }
+
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setError("Please enter the issue/problem before submitting.");
+      return;
+    }
+    if (cleanTitle.length < 5 || cleanTitle.length > 150) {
+      setError("Problem must be 5 to 150 characters.");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // Backend wiring will be added later.
-      await new Promise(resolve => setTimeout(resolve, 750));
+      const payload = {
+        employee_name: profile.full_name,
+        department_id: profile.department_id,
+        issue_type: issueType,
+        title: cleanTitle,
+        status: "Pending",
+        date_submitted: new Date().toISOString(),
+        assigned_to: [] as string[],
+      };
+
+      const { error: insertError } = await supabase
+        .from("file_reports")
+        .insert(payload);
+
+      if (insertError) throw insertError;
 
       setTitle("");
-      setCategory("");
-      setPriority("Medium");
-      setDetails("");
-      setFiles(null);
+      setIssueType("Hardware");
       setSuccess("Your ticket has been recorded. IT will review it shortly.");
     } catch {
       setError("Something went wrong while submitting your ticket. Please try again.");
@@ -51,304 +134,454 @@ const UserSubmitTicket: React.FC = () => {
     }
   };
 
+  const labelStyle: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#475569",
+    marginBottom: 4,
+    display: "block",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "0.5rem 0.75rem",
+    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+    fontSize: 13,
+    fontFamily: "'Poppins', sans-serif",
+    outline: "none",
+    color: "#0f172a",
+    background: "#f8fafc",
+    boxSizing: "border-box",
+  };
+
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .ust-root { font-family: 'Poppins', sans-serif; color: #0f172a; }
-        .ust-label {
-          font-size: 12px;
-          font-weight: 600;
-          color: #475569;
-          margin-bottom: 4px;
+        .ust-page {
+          min-height: min(70vh, 640px);
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding: 0 0 1rem;
         }
-        .ust-required { color: #ef4444; margin-left: 2px; }
-        .ust-input, .ust-textarea, .ust-select {
+        .ust-backdrop {
           width: 100%;
-          border-radius: 10px;
-          border: 1.5px solid #e2e8f0;
-          background: #f8fafc;
-          padding: 0.6rem 0.75rem;
-          font-size: 13px;
-          outline: none;
-          transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+          max-width: 980px;
+          border-radius: 20px;
+          background: linear-gradient(145deg, rgba(10,76,134,0.06) 0%, rgba(15,23,42,0.04) 100%);
+          padding: 1rem;
+          box-sizing: border-box;
         }
-        .ust-input:focus,
-        .ust-textarea:focus,
-        .ust-select:focus {
-          border-color: ${BRAND};
+        .ust-modal {
           background: #ffffff;
-          box-shadow: 0 0 0 3px ${BRAND}1f;
+          border-radius: 18px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 8px 24px rgba(15,23,42,0.07), 0 1px 4px rgba(15,23,42,0.04);
+          overflow: hidden;
+          display: flex;
+          flex-wrap: wrap;
+          animation: ustModalIn 0.22s ease both;
         }
-        .ust-textarea {
-          resize: vertical;
-          min-height: 120px;
+        @keyframes ustModalIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .ust-modal-left {
+          flex: 1 1 420px;
+          min-width: 0;
+          padding: 1.5rem 1.6rem 1.4rem;
+          border-right: 1px solid #f1f5f9;
+        }
+        .ust-modal-right {
+          flex: 0 1 300px;
+          min-width: 260px;
+          background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+          padding: 1.5rem 1.35rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        .ust-modal-head {
+          margin-bottom: 1.15rem;
+        }
+        .ust-modal-title {
+          font-size: 16px;
+          font-weight: 700;
+          margin: 0;
+          letter-spacing: 0.06em;
+          color: ${BRAND};
+          text-transform: uppercase;
+        }
+        .ust-modal-sub {
+          font-size: 12px;
+          color: #64748b;
+          margin: 6px 0 0;
           line-height: 1.5;
         }
-        .ust-priority-pill {
+        .ust-issue-pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .ust-issue-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
           border-radius: 999px;
+          border: 1.5px solid #e2e8f0;
+          background: #f8fafc;
+          cursor: pointer;
+          font-size: 12px;
+          font-family: 'Poppins', sans-serif;
+          font-weight: 600;
+          color: #64748b;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+        .ust-issue-pill:hover {
+          border-color: #94a3b8;
+          background: #f1f5f9;
+        }
+        .ust-pill--hw.ust-issue-pill--active {
+          border-color: #0a4c86;
+          background: rgba(10,76,134,0.08);
+          color: #0a4c86;
+        }
+        .ust-pill--sw.ust-issue-pill--active {
+          border-color: #7c3aed;
+          background: rgba(124,58,237,0.08);
+          color: #7c3aed;
+        }
+        .ust-pill--net.ust-issue-pill--active {
+          border-color: #0891b2;
+          background: rgba(6,182,212,0.08);
+          color: #0891b2;
+        }
+        .ust-readonly {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0.5rem 0.75rem;
+          border-radius: 8px;
           border: 1px solid #e2e8f0;
-          padding: 0.45rem 0.7rem;
+          background: #f1f5f9;
+          font-size: 13px;
+          color: #475569;
+        }
+        .ust-footer {
+          display: flex;
+          gap: 8px;
+          justify-content: flex-end;
+          margin-top: 1.15rem;
+          padding-top: 1rem;
+          border-top: 1px solid #f1f5f9;
+          flex-wrap: wrap;
+        }
+        .ust-btn-secondary {
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          font-family: 'Poppins', sans-serif;
+        }
+        .ust-btn-primary {
+          padding: 0.5rem 1.2rem;
+          border-radius: 8px;
+          border: none;
+          background: ${BRAND};
+          color: #fff;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: 'Poppins', sans-serif;
+          opacity: 1;
+        }
+        .ust-btn-primary:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+        .ust-right-card {
+          background: #fff;
+          border-radius: 14px;
+          border: 1px solid #e2e8f0;
+          padding: 1rem;
+          box-shadow: 0 2px 10px rgba(15,23,42,0.04);
+        }
+        .ust-right-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: #0f172a;
           display: flex;
           align-items: center;
           gap: 6px;
+          margin-bottom: 10px;
+        }
+        .ust-step {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 10px;
+          font-size: 12px;
+          color: #475569;
+          line-height: 1.45;
+        }
+        .ust-step-num {
+          flex-shrink: 0;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: ${BRAND};
+          color: #fff;
           font-size: 11px;
-          cursor: pointer;
-          background: #ffffff;
-          transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
-        .ust-priority-pill span {
-          font-weight: 600;
+        .ust-tip {
+          font-size: 11px;
+          color: #64748b;
+          line-height: 1.55;
+          padding-left: 2px;
         }
-        .ust-priority-pill small {
-          color: #6b7280;
-        }
-        .ust-priority-pill--active {
-          border-color: ${BRAND};
-          background: #eff6ff;
-          box-shadow: 0 4px 14px rgba(15,23,42,0.08);
+        @media (max-width: 860px) {
+          .ust-modal-left {
+            border-right: none;
+            border-bottom: 1px solid #f1f5f9;
+          }
+          .ust-modal-right {
+            flex: 1 1 100%;
+            min-width: 0;
+          }
         }
       `}</style>
 
       <div className="ust-root">
-        <div style={{ marginBottom: "1rem" }}>
-          <h2
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              margin: 0,
-            }}
-          >
-            <Ticket size={20} color={BRAND} />
-            Submit a ticket
-          </h2>
-          <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-            Tell us what&apos;s going on so IT can help you as quickly as possible.
-          </p>
-        </div>
-
         {error && (
-          <div
-            style={{
-              marginBottom: "0.75rem",
-              borderRadius: 10,
-              border: "1px solid #fecaca",
-              background: "#fef2f2",
-              padding: "0.55rem 0.75rem",
-              fontSize: 12,
-              color: "#b91c1c",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <AlertTriangle size={14} />
-            {error}
+          <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
+            <Alert variant="destructive">
+              <AlertCircle size={16} strokeWidth={2} aria-hidden />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           </div>
         )}
 
         {success && (
-          <div
-            style={{
-              marginBottom: "0.75rem",
-              borderRadius: 10,
-              border: "1px solid #bbf7d0",
-              background: "#dcfce7",
-              padding: "0.55rem 0.75rem",
-              fontSize: 12,
-              color: "#166534",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <CheckCircle2 size={14} />
-            {success}
+          <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
+            <Alert>
+              <CheckCircle2 size={16} strokeWidth={2} aria-hidden />
+              <AlertTitle>Success</AlertTitle>
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
           </div>
         )}
 
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            background: "#ffffff",
-            borderRadius: 18,
-            border: "1px solid #e2e8f0",
-            padding: "1rem 1.1rem 1.1rem",
-            boxShadow: "0 2px 10px rgba(15,23,42,0.04)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.8rem",
-          }}
-        >
-          {/* Title */}
-          <div>
-            <label className="ust-label">
-              Short title
-              <span className="ust-required">*</span>
-            </label>
-            <input
-              className="ust-input"
-              type="text"
-              placeholder="Example: Computer cannot connect to Wi‑Fi"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              disabled={submitting}
-            />
-          </div>
+        <div className="ust-page">
+          <div className="ust-backdrop">
+            <div className="ust-modal">
+              <div className="ust-modal-left">
+                <div className="ust-modal-head">
+                  <h2 className="ust-modal-title">Submit New Ticket</h2>
+                  <p className="ust-modal-sub">
+                    Same flow as IT admin — pick issue type, describe the problem. Your name and
+                    office are filled from your account.
+                  </p>
+                </div>
 
-          {/* Category & priority */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1.2fr)",
-              gap: "0.8rem",
-            }}
-          >
-            <div>
-              <label className="ust-label">
-                Category
-                <span className="ust-required">*</span>
-              </label>
-              <select
-                className="ust-select"
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-                disabled={submitting}
-              >
-                <option value="">Select a category…</option>
-                <option value="Hardware">Hardware (desktop, laptop, printer, etc.)</option>
-                <option value="Software">Software / application issue</option>
-                <option value="Network">Network / Internet / Wi‑Fi</option>
-                <option value="Account">Account / login / password</option>
-                <option value="Request">Access / installation request</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
+                <form onSubmit={handleSubmit}>
+                  <div style={{ marginBottom: "0.85rem" }}>
+                    <label style={labelStyle}>
+                      Issue type <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <div className="ust-issue-pills">
+                      {ISSUE_TYPES.map(type => {
+                        const cfg = ISSUE_TYPE_CONFIG[type];
+                        const active = issueType === type;
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            className={`ust-issue-pill ${cfg.activeClass}${active ? " ust-issue-pill--active" : ""}`}
+                            onClick={() => setIssueType(type)}
+                            disabled={submitting}
+                          >
+                            {cfg.icon}
+                            {type}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-            <div>
-              <label className="ust-label">Priority</label>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 6,
-                }}
-              >
-                {priorities.map(p => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    className={
-                      "ust-priority-pill" +
-                      (priority === p.value ? " ust-priority-pill--active" : "")
-                    }
-                    onClick={() => setPriority(p.value)}
-                    disabled={submitting}
+                  <div style={{ marginBottom: "0.85rem" }}>
+                    <label style={labelStyle}>
+                      Problem <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <input
+                      value={title}
+                      onChange={e => setTitle(e.target.value)}
+                      placeholder="Brief description of the issue"
+                      maxLength={150}
+                      disabled={submitting}
+                      style={{
+                        ...inputStyle,
+                        borderColor: error && error.includes("Problem") ? "#fca5a5" : "#e2e8f0",
+                      }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                      <span style={{ fontSize: 11, color: "#94a3b8" }}>{title.length}/150</span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "0 0.9rem",
+                    }}
                   >
-                    <span>{p.label}</span>
-                    <small>{p.desc}</small>
-                  </button>
-                ))}
+                    <div style={{ gridColumn: "span 2" }}>
+                      <label style={labelStyle}>Employee name</label>
+                      <div className="ust-readonly">
+                        <User size={14} color={BRAND} />
+                        {loadingProfile ? "Loading…" : profile?.full_name || "—"}
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: "span 2" }}>
+                      <label style={labelStyle}>Department / Office</label>
+                      <div className="ust-readonly">
+                        <Building2 size={14} color={BRAND} />
+                        {loadingProfile ? "Loading…" : departmentName || "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="ust-footer">
+                    <button
+                      type="button"
+                      className="ust-btn-secondary"
+                      onClick={() => {
+                        setTitle("");
+                        setIssueType("Hardware");
+                        setError(null);
+                        setSuccess(null);
+                      }}
+                      disabled={submitting}
+                    >
+                      Clear
+                    </button>
+                    <button type="submit" className="ust-btn-primary" disabled={submitting}>
+                      {submitting ? "Saving…" : "Submit Ticket"}
+                    </button>
+                  </div>
+                </form>
               </div>
+
+              <aside className="ust-modal-right" aria-label="Help and next steps">
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 2,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      background: `${BRAND}14`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: BRAND,
+                    }}
+                  >
+                    <Ticket size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                      IT Helpdesk
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>City Government</div>
+                  </div>
+                </div>
+
+                <div className="ust-right-card">
+                  <div className="ust-right-title">
+                    <ListOrdered size={15} color={BRAND} />
+                    What happens next
+                  </div>
+                  <div className="ust-step">
+                    <span className="ust-step-num">1</span>
+                    <span>
+                      Your request is <strong>queued</strong> as <em>Pending</em>. You’ll get a
+                      ticket number after submit.
+                    </span>
+                  </div>
+                  <div className="ust-step">
+                    <span className="ust-step-num">2</span>
+                    <span>
+                      IT may set the ticket to <strong>In Progress</strong> and add notes in{" "}
+                      <em>Technician update</em>.
+                    </span>
+                  </div>
+                  <div className="ust-step" style={{ marginBottom: 0 }}>
+                    <span className="ust-step-num">3</span>
+                    <span>
+                      When resolved, status becomes <strong>Resolved</strong>. Track everything
+                      under <em>My tickets</em>.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="ust-right-card">
+                  <div className="ust-right-title">
+                    <Lightbulb size={15} color="#d97706" />
+                    Tips for faster help
+                  </div>
+                  <p className="ust-tip">
+                    Include the exact error text, when it started, and what you already tried
+                    (restart, another PC, etc.).
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "auto",
+                    padding: "0.75rem",
+                    borderRadius: 12,
+                    background: "linear-gradient(135deg, rgba(10,76,134,0.08) 0%, rgba(11,95,165,0.06) 100%)",
+                    border: `1px solid ${BRAND}22`,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 8,
+                  }}
+                >
+                  <ShieldCheck size={18} color={BRAND} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.55 }}>
+                    <strong style={{ color: "#0f172a" }}>Privacy</strong>
+                    <br />
+                    Only use this form for official work issues. Do not share passwords in the
+                    description — IT will contact you securely if needed.
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
-
-          {/* Details */}
-          <div>
-            <label className="ust-label">
-              Details
-              <span className="ust-required">*</span>
-            </label>
-            <textarea
-              className="ust-textarea"
-              placeholder="Describe the problem or request. Include any steps you already tried, specific error messages, or when it started."
-              value={details}
-              onChange={e => setDetails(e.target.value)}
-              disabled={submitting}
-            />
-          </div>
-
-          {/* Attachments */}
-          <div>
-            <label className="ust-label">Attachments (optional)</label>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                borderRadius: 12,
-                border: "1px dashed #cbd5e1",
-                background: "#f8fafc",
-                padding: "0.6rem 0.75rem",
-                fontSize: 12,
-                color: "#64748b",
-                cursor: submitting ? "not-allowed" : "pointer",
-              }}
-            >
-              <Upload size={16} color={BRAND} />
-              <span>
-                Drag and drop screenshots or click to choose files (max 3, JPG/PNG/PDF).
-              </span>
-              <input
-                type="file"
-                multiple
-                accept=".png,.jpg,.jpeg,.pdf"
-                style={{ display: "none" }}
-                onChange={e => setFiles(e.target.files)}
-                disabled={submitting}
-              />
-            </label>
-            {files && files.length > 0 && (
-              <div style={{ marginTop: 4, fontSize: 11, color: "#6b7280" }}>
-                {Array.from(files)
-                  .slice(0, 3)
-                  .map(f => f.name)
-                  .join(", ")}
-                {files.length > 3 && ` (+${files.length - 3} more)`}
-              </div>
-            )}
-          </div>
-
-          {/* Submit */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "0.4rem",
-            }}
-          >
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{
-                borderRadius: 999,
-                border: "none",
-                background: `linear-gradient(120deg, ${BRAND}, #0b5fa5)`,
-                color: "#ffffff",
-                padding: "0.6rem 1.4rem",
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: submitting ? "not-allowed" : "pointer",
-                boxShadow: "0 10px 26px rgba(15,23,42,0.30)",
-                opacity: submitting ? 0.8 : 1,
-              }}
-            >
-              {submitting ? "Submitting…" : "Submit ticket"}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </>
   );
 };
 
 export default UserSubmitTicket;
-

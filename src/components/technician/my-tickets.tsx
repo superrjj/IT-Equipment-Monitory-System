@@ -7,8 +7,10 @@ import {
   getSessionUserId,
   insertActivityLog,
   notifyAdminsTicketStatusChanged,
+  notifyTicketRequesterStatusChanged,
 } from "../../lib/audit-notifications";
 import { supabase } from "../../lib/supabaseClient";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 type Status = "In Progress" | "Resolved";
 
@@ -267,6 +269,15 @@ const MyTickets: React.FC = () => {
       ticketNumber: r.ticket_number ?? null, status: "In Progress",
       actorUserId: localStorage.getItem("session_user_id"),
     });
+    await notifyTicketRequesterStatusChanged(supabase, {
+      ticketId: r.id,
+      ticketTitle: r.title,
+      ticketNumber: r.ticket_number ?? null,
+      status: "In Progress",
+      employeeName: r.employee_name,
+      departmentId: r.department_id,
+      actorUserId: localStorage.getItem("session_user_id"),
+    });
     showToast("Ticket marked as In Progress.", "success");
     setSavingQuickId(null);
     fetchAll();
@@ -300,6 +311,15 @@ const MyTickets: React.FC = () => {
     await notifyAdminsTicketStatusChanged(supabase, {
       ticketId: selected.id, ticketTitle: selected.title,
       ticketNumber: selected.ticket_number ?? null, status: form.status,
+      actorUserId: localStorage.getItem("session_user_id"),
+    });
+    await notifyTicketRequesterStatusChanged(supabase, {
+      ticketId: selected.id,
+      ticketTitle: selected.title,
+      ticketNumber: selected.ticket_number ?? null,
+      status: form.status,
+      employeeName: selected.employee_name,
+      departmentId: selected.department_id,
       actorUserId: localStorage.getItem("session_user_id"),
     });
     showToast("Ticket updated successfully.", "success");
@@ -387,21 +407,7 @@ const MyTickets: React.FC = () => {
 
       <div style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
-        {/* ── Toast ── */}
-        {toast && (
-          <div style={{
-            position: "fixed", top: 20, right: 24, zIndex: 9999,
-            padding: "0.7rem 1.2rem", borderRadius: 12, fontSize: 13, fontWeight: 500,
-            background: toast.type === "success" ? "#dcfce7" : "#fee2e2",
-            color:      toast.type === "success" ? "#15803d" : "#b91c1c",
-            border:     `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            {toast.type === "success" ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-            {toast.msg}
-          </div>
-        )}
+        <CrudAlertToast toast={toast} />
 
         {/* ── Page header ── */}
         <div style={{ marginBottom: "1rem" }}>

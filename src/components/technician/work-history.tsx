@@ -14,6 +14,7 @@ import {
   type DeptMap,
 } from "../../utils/exportWorkHistory";
 import { supabase } from "../../lib/supabaseClient";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 const BRAND = "#0a4c86";
 const GREEN = "#16a34a";
@@ -174,17 +175,7 @@ const WorkHistory: React.FC = () => {
 
       <div style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
-        {/* Toast */}
-        {toast && (
-          <div style={{
-            position: "fixed", top: 20, right: 24, zIndex: 9999,
-            padding: "0.65rem 1.1rem", borderRadius: 10, fontSize: 13,
-            background: toast.type === "success" ? "#dcfce7" : "#fee2e2",
-            color:      toast.type === "success" ? "#15803d" : "#b91c1c",
-            border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-          }}>{toast.msg}</div>
-        )}
+        <CrudAlertToast toast={toast} />
 
         {/* ── Page header ─────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: 8 }}>

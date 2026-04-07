@@ -6,6 +6,7 @@ import {
   getSessionUserId,
 } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
@@ -632,12 +633,7 @@ const SubmitTicket: React.FC = () => {
 
       <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
 
-        {/* Toast */}
-        {toast && (
-          <div style={{ position: "fixed", top: 20, right: 24, zIndex: 9999, padding: "0.65rem 1.1rem", borderRadius: 10, fontSize: 13, fontWeight: 500, background: toast.type === "success" ? "#dcfce7" : "#fee2e2", color: toast.type === "success" ? "#15803d" : "#b91c1c", border: `1px solid ${toast.type === "success" ? "#bbf7d0" : "#fecaca"}`, boxShadow: "0 4px 16px rgba(0,0,0,0.10)", maxWidth: 380 }}>
-            {toast.msg}
-          </div>
-        )}
+        <CrudAlertToast toast={toast} />
 
         {/* Header */}
         <div className="ticket-header-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>

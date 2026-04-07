@@ -158,6 +158,45 @@ export async function notifyAdminsTicketStatusChanged(
   dispatchNotificationsChanged();
 }
 
+/** Notify the employee who submitted the ticket when IT updates status. */
+export async function notifyTicketRequesterStatusChanged(
+  supabase: Db,
+  ctx: {
+    ticketId: string;
+    ticketTitle: string;
+    ticketNumber?: string | null;
+    status: string;
+    employeeName: string;
+    departmentId: string;
+    actorUserId?: string | null;
+  }
+): Promise<void> {
+  const name = ctx.employeeName?.trim();
+  const dept = ctx.departmentId?.trim();
+  if (!name || !dept) return;
+  const { data: requester } = await supabase
+    .from("user_accounts")
+    .select("id")
+    .eq("full_name", name)
+    .eq("department_id", dept)
+    .eq("role", "Employee")
+    .maybeSingle();
+  const requesterId = requester?.id ? String(requester.id) : null;
+  if (!requesterId) return;
+  if (ctx.actorUserId && requesterId === ctx.actorUserId) return;
+  const label = ctx.ticketNumber?.trim() || "Ticket";
+  await insertNotification(supabase, {
+    userId: requesterId,
+    type: "ticket_status_requester",
+    title: "Your ticket was updated",
+    body: `${label}: ${clip(ctx.ticketTitle, 180)} → ${clip(ctx.status, 80)}`,
+    entityType: "file_report",
+    entityId: ctx.ticketId,
+    actorUserId: ctx.actorUserId ?? null,
+  });
+  dispatchNotificationsChanged();
+}
+
 export async function notifyAdminsRepairStatusChanged(
   supabase: Db,
   ctx: {

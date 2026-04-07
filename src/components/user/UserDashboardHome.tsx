@@ -1,20 +1,91 @@
-import React from "react";
-import { Ticket, Clock, CheckCircle2, Bell, ArrowRight } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Ticket, Clock, CheckCircle2, ArrowRight } from "lucide-react";
+import { supabase } from "../../lib/supabaseClient";
 
 const BRAND = "#0a4c86";
 
 type Props = {
   onNavigateSubmit: () => void;
   onNavigateMyTickets: () => void;
-  onNavigateNotifications: () => void;
 };
+
+type TicketStatus = "Pending" | "In Progress" | "Resolved";
 
 const UserDashboardHome: React.FC<Props> = ({
   onNavigateSubmit,
   onNavigateMyTickets,
-  onNavigateNotifications,
 }) => {
   const fullName = localStorage.getItem("session_user_full_name") || "Employee";
+  const userId = localStorage.getItem("session_user_id") || "";
+  const nowPH = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" })
+  );
+  const phHour = nowPH.getHours();
+  const greeting =
+    phHour < 12 ? "Good Morning" : phHour < 18 ? "Good Afternoon" : "Good Evening";
+
+  const [openCount, setOpenCount] = useState<number | null>(null);
+  const [awaitingCount, setAwaitingCount] = useState<number | null>(null);
+  const [resolvedCount, setResolvedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!userId) {
+        setOpenCount(0);
+        setAwaitingCount(0);
+        setResolvedCount(0);
+        return;
+      }
+      const { data: userData } = await supabase
+        .from("user_accounts")
+        .select("department_id")
+        .eq("id", userId)
+        .single();
+      const departmentId = userData?.department_id ?? "";
+      if (!departmentId) {
+        if (!cancelled) {
+          setOpenCount(0);
+          setAwaitingCount(0);
+          setResolvedCount(0);
+        }
+        return;
+      }
+
+      const { data: rows, error } = await supabase
+        .from("file_reports")
+        .select("status")
+        .eq("employee_name", fullName)
+        .eq("department_id", departmentId);
+
+      if (cancelled) return;
+      if (error || !rows) {
+        setOpenCount(0);
+        setAwaitingCount(0);
+        setResolvedCount(0);
+        return;
+      }
+
+      let open = 0;
+      let awaiting = 0;
+      let resolved = 0;
+      for (const r of rows as { status: TicketStatus }[]) {
+        const s = r.status;
+        if (s === "Pending") awaiting += 1;
+        else if (s === "In Progress") open += 1;
+        else if (s === "Resolved") resolved += 1;
+      }
+      setOpenCount(open);
+      setAwaitingCount(awaiting);
+      setResolvedCount(resolved);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, fullName]);
+
+  const fmt = (n: number | null) => (n === null ? "—" : String(n));
 
   return (
     <>
@@ -27,7 +98,7 @@ const UserDashboardHome: React.FC<Props> = ({
           border-radius: 16px;
           padding: 1rem 1.1rem;
           border: 1px solid #e2e8f0;
-          box-shadow: 0 2px 10px rgba(15,23,42,0.05);
+          box-shadow: 0 1px 4px rgba(15,23,42,0.05);
           display: flex;
           flex-direction: column;
           gap: 0.45rem;
@@ -43,6 +114,7 @@ const UserDashboardHome: React.FC<Props> = ({
           font-size: 22px;
           font-weight: 800;
           letter-spacing: -0.4px;
+          font-variant-numeric: tabular-nums;
         }
         .udh-kpi-sub {
           font-size: 11px;
@@ -53,7 +125,7 @@ const UserDashboardHome: React.FC<Props> = ({
           border-radius: 18px;
           border: 1px solid #e2e8f0;
           padding: 1.1rem 1.2rem;
-          box-shadow: 0 2px 10px rgba(15,23,42,0.04);
+          box-shadow: 0 1px 4px rgba(15,23,42,0.04);
         }
         .udh-section-title {
           font-size: 14px;
@@ -87,7 +159,7 @@ const UserDashboardHome: React.FC<Props> = ({
         .udh-quick:hover {
           background: #f1f5f9;
           border-color: #cbd5e1;
-          box-shadow: 0 6px 18px rgba(15,23,42,0.12);
+          box-shadow: 0 4px 14px rgba(15,23,42,0.08);
           transform: translateY(-1px);
         }
         .udh-quick-label {
@@ -111,15 +183,14 @@ const UserDashboardHome: React.FC<Props> = ({
         {/* Welcome */}
         <div style={{ marginBottom: "1rem" }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.5px" }}>
-            Welcome back,{" "}
-            <span style={{ color: BRAND }}>{fullName.split(" ")[0] || fullName}</span>
+            {greeting},{" "}
+            <span style={{ color: BRAND }}>{fullName}</span>
           </div>
           <p style={{ fontSize: 12.5, color: "#64748b", marginTop: 4 }}>
             Quickly see what&apos;s happening with your IT helpdesk requests.
           </p>
         </div>
 
-        {/* Top KPIs – placeholders for now */}
         <div className="udh-grid-kpi" style={{ marginBottom: "1rem" }}>
           <div className="udh-kpi-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -127,31 +198,29 @@ const UserDashboardHome: React.FC<Props> = ({
                 <Ticket size={15} color={BRAND} />
               </div>
             </div>
-            <div className="udh-kpi-value">—</div>
-            <div className="udh-kpi-label">Open Requests</div>
-            <div className="udh-kpi-sub">Tickets still being worked on</div>
+            <div className="udh-kpi-value">{fmt(openCount)}</div>
+            <div className="udh-kpi-label">In progress</div>
+            <div className="udh-kpi-sub">IT is actively working these tickets</div>
           </div>
           <div className="udh-kpi-card">
             <div style={{ width: 30, height: 30, borderRadius: 9, background: "#f59e0b15", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Clock size={15} color="#b45309" />
             </div>
-            <div className="udh-kpi-value">—</div>
-            <div className="udh-kpi-label">Awaiting Response</div>
-            <div className="udh-kpi-sub">Tickets waiting for your reply</div>
+            <div className="udh-kpi-value">{fmt(awaitingCount)}</div>
+            <div className="udh-kpi-label">Pending</div>
+            <div className="udh-kpi-sub">Waiting in the queue for IT to pick up</div>
           </div>
           <div className="udh-kpi-card">
             <div style={{ width: 30, height: 30, borderRadius: 9, background: "#16a34a15", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <CheckCircle2 size={15} color="#15803d" />
             </div>
-            <div className="udh-kpi-value">—</div>
+            <div className="udh-kpi-value">{fmt(resolvedCount)}</div>
             <div className="udh-kpi-label">Resolved</div>
             <div className="udh-kpi-sub">Tickets successfully closed</div>
           </div>
         </div>
 
-        {/* Shortcuts & recent activity */}
         <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "0.9rem", marginBottom: "0.8rem" }}>
-          {/* Quick actions */}
           <div className="udh-section">
             <div className="udh-section-title">
               <Ticket size={16} color={BRAND} />
@@ -167,56 +236,12 @@ const UserDashboardHome: React.FC<Props> = ({
               </button>
               <button type="button" className="udh-quick" onClick={onNavigateMyTickets}>
                 <span className="udh-quick-label">View my tickets</span>
-                <span className="udh-quick-desc">Track status and re-open if needed.</span>
+                <span className="udh-quick-desc">Track status and updates.</span>
               </button>
-              <button type="button" className="udh-quick" onClick={onNavigateNotifications}>
-                <span className="udh-quick-label">Check notifications</span>
-                <span className="udh-quick-desc">See recent updates in one place.</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Notifications teaser */}
-          <div className="udh-section">
-            <div className="udh-section-title">
-              <Bell size={16} color={BRAND} />
-              Recent alerts
-            </div>
-            <div className="udh-section-sub">
-              A quick peek at the latest updates from IT.
-            </div>
-            <div
-              style={{
-                borderRadius: 12,
-                background: "#f8fafc",
-                border: "1px dashed #d1d5db",
-                padding: "0.8rem 0.85rem",
-                fontSize: 12,
-                color: "#6b7280",
-              }}
-            >
-              Live notifications will appear here once wired to the backend.
-              For now, you can open the full{" "}
-              <button
-                type="button"
-                onClick={onNavigateNotifications}
-                style={{
-                  border: "none",
-                  background: "none",
-                  color: BRAND,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                notifications page
-              </button>{" "}
-              to see all updates.
             </div>
           </div>
         </div>
 
-        {/* Helpful info */}
         <div className="udh-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div>
@@ -224,8 +249,8 @@ const UserDashboardHome: React.FC<Props> = ({
                 Need help with your ticket?
               </div>
               <div className="udh-section-sub" style={{ marginBottom: 0 }}>
-                You can always reply to an existing ticket instead of creating a new one
-                if your concern is related to the same issue.
+                You can always use <strong>My Tickets</strong> to see the latest technician notes
+                instead of opening a duplicate request for the same problem.
               </div>
             </div>
             <button
@@ -256,4 +281,3 @@ const UserDashboardHome: React.FC<Props> = ({
 };
 
 export default UserDashboardHome;
-
