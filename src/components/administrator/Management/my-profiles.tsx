@@ -16,6 +16,7 @@ type ProfileRow = {
   full_name: string;
   email: string;
   role: string;
+  department_id?: string | null;
   avatar_url: string | null;
   updated_at?: string | null;
   is_active: boolean;
@@ -261,6 +262,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const [tab, setTab] = useState<Tab>("account");
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [departmentName, setDepartmentName] = useState("");
   const [form, setForm] = useState({ username: "", full_name: "", email: "" });
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -287,12 +289,21 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     setLoading(true);
     const { data, error } = await supabase
       .from("user_accounts")
-      .select("id, username, full_name, email, role, avatar_url, updated_at, is_active")
+      .select("id, username, full_name, email, role, department_id, avatar_url, updated_at, is_active")
       .eq("id", userId)
       .single();
     if (error || !data) { showToast("Unable to load profile.", "error"); setLoading(false); return; }
     const row = data as ProfileRow;
     setProfile(row);
+    setDepartmentName("");
+    if (row.department_id) {
+      const { data: dept } = await supabase
+        .from("departments")
+        .select("name")
+        .eq("id", row.department_id)
+        .maybeSingle();
+      setDepartmentName(dept?.name?.trim() ?? "");
+    }
     setForm({
       username: row.username ?? "",
       full_name: row.full_name ?? "",
@@ -600,8 +611,24 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                       />
                     </div>
                     <div className="pm-account-cell">
-                      <span className="pm-label">Role</span>
-                      <input className="pm-input" value={profile?.role ?? ""} disabled />
+                      <span className="pm-label">
+                        {profile?.role === "Employee" ? "Department / office" : "Role"}
+                      </span>
+                      <input
+                        className="pm-input"
+                        value={
+                          profile?.role === "Employee"
+                            ? (departmentName || "—")
+                            : (profile?.role ?? "")
+                        }
+                        disabled
+                        readOnly
+                        title={
+                          profile?.role === "Employee"
+                            ? "Assigned by your administrator — not editable here."
+                            : undefined
+                        }
+                      />
                     </div>
                   </div>
 

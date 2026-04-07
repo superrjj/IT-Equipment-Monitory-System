@@ -201,6 +201,17 @@ const headerStyles = `
     text-transform: uppercase;
     white-space: nowrap;
   }
+  /* Department / office (employees) — readable casing, not role chips */
+  .hdr-user-dept-text {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    line-height: 1.25;
+    max-width: 200px;
+    white-space: normal;
+  }
   .hdr-user-chevron {
     color: #64748b;
     transition: transform 0.2s ease;
@@ -256,6 +267,8 @@ const headerStyles = `
 type HeaderProps = {
   currentUserName: string;
   userRole: string;
+  /** When set (e.g. employee office), shown under the name instead of `userRole`. Read-only. */
+  subtitleOverride?: string | null;
   avatarUrl?: string;
   onMenuClick?: () => void;
   onNotificationNavigate?: (entityType: string, entityId: string | null) => void;
@@ -421,6 +434,7 @@ const NotifItem: React.FC<{
 const Header: React.FC<HeaderProps> = ({
   currentUserName,
   userRole,
+  subtitleOverride = null,
   avatarUrl = "",
   onMenuClick,
   onNotificationNavigate,
@@ -626,6 +640,11 @@ const Header: React.FC<HeaderProps> = ({
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const subtitleLine =
+    subtitleOverride != null && String(subtitleOverride).trim() !== ""
+      ? String(subtitleOverride).trim()
+      : userRole;
 
   const initials = currentUserName
     .split(" ").map(p => p[0]?.toUpperCase()).join("").slice(0, 2);
@@ -861,7 +880,15 @@ const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="hdr-user-meta">
               <span className="hdr-user-name-text">{currentUserName}</span>
-              <span className="hdr-user-role-text">{userRole}</span>
+              <span
+                className={
+                  subtitleOverride != null && String(subtitleOverride).trim() !== ""
+                    ? "hdr-user-dept-text"
+                    : "hdr-user-role-text"
+                }
+              >
+                {subtitleLine}
+              </span>
             </div>
             <ChevronDown
               size={15} strokeWidth={2.4}
@@ -885,7 +912,19 @@ const Header: React.FC<HeaderProps> = ({
             >
               <div style={{ padding: "0.5rem 0.7rem 0.65rem", borderBottom: "1px solid #f1f5f9", marginBottom: "0.35rem" }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{currentUserName}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{userRole}</div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#64748b",
+                    marginTop: 2,
+                    textTransform: subtitleOverride != null && String(subtitleOverride).trim() !== "" ? "none" : "uppercase",
+                    letterSpacing: subtitleOverride != null && String(subtitleOverride).trim() !== "" ? "0.02em" : "0.06em",
+                    fontWeight: 600,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {subtitleLine}
+                </div>
               </div>
               <button
                 type="button"

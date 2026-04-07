@@ -5,10 +5,13 @@ import type { UserNavLabel } from "./UserBottomNav";
 import UserDashboardHome from "./UserDashboardHome";
 import UserSubmitTicket from "./userSubmitTicket";
 import MyTicketsUser from "./MyTicketsUser";
+import UserTicketFeedback from "./UserTicketFeedback";
+import ProfileModal from "../administrator/Management/my-profiles";
 import { supabase } from "../../lib/supabaseClient";
 
 const UserShell: React.FC = () => {
   const [activeLabel, setActiveLabel] = useState<UserNavLabel>("Dashboard");
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
 
   const currentUserName =
@@ -50,8 +53,15 @@ const UserShell: React.FC = () => {
         return <UserSubmitTicket />;
       case "My Tickets":
         return <MyTicketsUser />;
+      case "Feedback":
+        return <UserTicketFeedback />;
       default:
-        return <UserDashboardHome onNavigateSubmit={() => setActiveLabel("Submit Ticket")} onNavigateMyTickets={() => setActiveLabel("My Tickets")} />;
+        return (
+          <UserDashboardHome
+            onNavigateSubmit={() => setActiveLabel("Submit Ticket")}
+            onNavigateMyTickets={() => setActiveLabel("My Tickets")}
+          />
+        );
     }
   };
 
@@ -77,7 +87,6 @@ const UserShell: React.FC = () => {
           color: "#0f172a",
         }}
       >
-        {/* Header */}
         <div
           style={{
             flexShrink: 0,
@@ -90,6 +99,7 @@ const UserShell: React.FC = () => {
           <Header
             currentUserName={currentUserName}
             userRole="Employee"
+            subtitleOverride={null}
             avatarUrl={avatarUrl}
             onNotificationNavigate={(entityType, entityId) => {
               if (entityType === "file_report" && entityId) {
@@ -99,11 +109,10 @@ const UserShell: React.FC = () => {
                 setActiveLabel("My Tickets");
               }
             }}
-            onOpenProfile={() => setActiveLabel("Dashboard")}
+            onOpenProfile={() => setShowProfileModal(true)}
           />
         </div>
 
-        {/* Main content */}
         <div
           className="u-shell-scroll"
           style={{
@@ -116,12 +125,16 @@ const UserShell: React.FC = () => {
           {getPage(activeLabel)}
         </div>
 
-        {/* Bottom nav */}
         <UserBottomNav activeLabel={activeLabel} onNavigate={setActiveLabel} />
       </div>
+
+      <ProfileModal
+        open={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        onAvatarChange={url => setAvatarUrl(url)}
+      />
     </>
   );
 };
 
 export default UserShell;
-
