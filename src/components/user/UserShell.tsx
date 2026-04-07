@@ -53,8 +53,6 @@ const UserShell: React.FC = () => {
         return <UserSubmitTicket />;
       case "My Tickets":
         return <MyTicketsUser />;
-      case "Feedback":
-        return <UserTicketFeedback />;
       default:
         return (
           <UserDashboardHome
