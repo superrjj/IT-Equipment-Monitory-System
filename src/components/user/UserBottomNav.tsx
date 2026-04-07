@@ -5,7 +5,6 @@ import {
   ListChecks,
 } from "lucide-react";
 
-const baseBlue = "#0a4c86";
 
 type UserNavLabel =
   | "Dashboard"
@@ -31,15 +30,16 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
 
         .ubnav-bar {
           position: fixed;
-          bottom: 16px;
+          bottom: 18px;
           left: 50%;
           transform: translateX(-50%);
           z-index: 900;
           display: flex;
           align-items: center;
           gap: 4px;
-          background: #ffffff;
-          border: 1.5px solid #e2e8f0;
+          background: #0D518C;
+          border: 1.5px solid rgba(255,255,255,0.15);
+          box-shadow: 0 4px 24px rgba(0,0,0,0.25), 0 1px 6px rgba(0,0,0,0.15);
           border-radius: 999px;
           padding: 6px 8px;
           box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06);
@@ -62,18 +62,18 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
           transition: background 0.18s, color 0.18s;
           min-width: 78px;
           font-family: 'Poppins', sans-serif;
-          color: #94a3b8;
+          color: rgba(255,255,255,0.55);
         }
 
         .ubnav-item:hover:not(.ubnav-active) {
-          background: #f1f5f9;
-          color: #475569;
+          background: rgba(255,255,255,0.12);
+          color: rgba(255,255,255,0.85);
         }
 
         .ubnav-item.ubnav-active {
-          background: ${baseBlue};
-          color: #ffffff;
-          box-shadow: 0 4px 14px rgba(10,76,134,0.28);
+          background: #ffffff;
+          color: #0D518C;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.18);
         }
 
         .ubnav-label {
@@ -108,7 +108,7 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
               <Icon
                 size={18}
                 strokeWidth={active ? 2.2 : 1.8}
-                color={active ? "#ffffff" : "#94a3b8"}
+                color={active ? "#0D518C" : "rgba(255,255,255,0.55)"}
               />
               <span className="ubnav-label">{label}</span>
             </button>

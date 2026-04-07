@@ -64,7 +64,7 @@ type FormErrors = {
   assigned_to?:    string;
 };
 
-const BRAND     = "#0a4c86";
+const BRAND     = "#0D518C";
 const PAGE_SIZE = 10;
 const MAX_ACTIVE_TICKETS = 1;
 
@@ -610,6 +610,8 @@ const SubmitTicket: React.FC = () => {
         .ticket-root, .ticket-root * { box-sizing: border-box; }
         .ticket-row:hover { background: #f8fafc !important; }
         .icon-btn-ticket:hover { background: #f1f5f9 !important; }
+        .icon-btn-ticket { transition: box-shadow 0.15s, transform 0.12s !important; }
+        .icon-btn-ticket:hover { background: #f1f5f9 !important; box-shadow: 0 3px 8px rgba(0,0,0,0.10) !important; transform: translateY(-1px); }
         .icon-btn-ticket-disabled { opacity: 0.90; cursor: not-allowed !important; }
         .icon-btn-ticket-disabled:hover { background: #fff !important; }
         .modal-overlay-ticket { animation: ticketFadeIn 0.15s ease; }
@@ -631,7 +633,7 @@ const SubmitTicket: React.FC = () => {
         @media (max-width: 480px) { .ticket-stat-cards { grid-template-columns: 1fr !important; } .ticket-header-row { flex-direction: column; align-items: flex-start !important; } }
       `}</style>
 
-      <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+      <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
 
         <CrudAlertToast toast={toast} />
 
@@ -658,7 +660,7 @@ const SubmitTicket: React.FC = () => {
             { label: "In Progress",   value: counts.inProgress, color: "#a16207", icon: <Loader size={16} /> },
             { label: "Resolved",      value: counts.resolved,   color: "#15803d", icon: <CheckCircle size={16} /> },
           ].map(c => (
-            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: `${c.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color }}>
                   {c.icon}
@@ -671,10 +673,10 @@ const SubmitTicket: React.FC = () => {
         </div>
 
         {/* Table card */}
-        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e8edf2", overflow: "hidden", boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}>
 
           {/* Toolbar */}
-          <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
+          <div style={{  padding: "0.9rem 1.2rem", borderBottom: "1px solid #e8edf2", background: "#fafcff", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 300 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tickets…" style={{ ...inputStyle, paddingLeft: 32 }} />
@@ -696,7 +698,7 @@ const SubmitTicket: React.FC = () => {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <tr style={{ background: "#f0f5fb", borderBottom: "1px solid #dde6f0" }}>
                   {([
                     { label: "Problem",     field: "title"          as SortField },
                     { label: "Issue Type",  field: "issue_type"     as SortField },
@@ -741,18 +743,18 @@ const SubmitTicket: React.FC = () => {
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button title="View" className="icon-btn-ticket" onClick={() => openView(r)}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: BRAND, transition: "background 0.15s" }}>
+                            style={{  width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", color: BRAND, transition: "background 0.15s" }}>
                             <Eye size={14} />
                           </button>
                           <button
                             title={isResolved ? "Cannot edit a resolved ticket" : "Edit"}
                             className={`icon-btn-ticket${isResolved ? " icon-btn-ticket-disabled" : ""}`}
                             onClick={() => !isResolved && openEdit(r)}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: isResolved ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: isResolved ? "#cbd5e1" : BRAND, transition: "background 0.15s" }}>
+                            style={{  width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", color: isResolved ? "#cbd5e1" : BRAND, transition: "background 0.15s" }}>
                             <Pencil size={14} />
                           </button>
                           <button title="Delete" className="icon-btn-ticket" onClick={() => setDeleteTarget(r)}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", transition: "background 0.15s" }}>
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", transition: "background 0.15s" }}>
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -771,17 +773,17 @@ const SubmitTicket: React.FC = () => {
             </span>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
                 <ChevronLeft size={14} />
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
                 <button key={n} onClick={() => setPage(n)}
-                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: n === page ? BRAND : "#fff", color: n === page ? "#fff" : "#475569", fontWeight: n === page ? 600 : 400, cursor: "pointer", fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>
+                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: n === page ? BRAND : "#fff", color: n === page ? "#fff" : "#475569", fontWeight: n === page ? 600 : 400, cursor: "pointer", fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>
                   {n}
                 </button>
               ))}
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -791,7 +793,7 @@ const SubmitTicket: React.FC = () => {
         {/* ══ Add / Edit Modal ══ */}
         {(modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-ticket" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-            <div className="modal-box-ticket" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <div className="modal-box-ticket" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 620, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1, color: BRAND }}>
                   {modalMode === "add" ? "Submit New Ticket" : "Edit Ticket"}
@@ -877,7 +879,7 @@ const SubmitTicket: React.FC = () => {
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.2rem" }}>
                 <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Cancel</button>
-                <button onClick={handleSubmit} disabled={submitting} style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1 }}>
+                <button onClick={handleSubmit} disabled={submitting} style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", boxShadow: "0 4px 12px rgba(10,76,134,0.25)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif", transition: "filter 0.15s, transform 0.12s" }}>
                   {submitting ? "Saving…" : modalMode === "add" ? "Submit Ticket" : "Save Changes"}
                 </button>
               </div>
@@ -891,7 +893,7 @@ const SubmitTicket: React.FC = () => {
             <div className="modal-box-ticket" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.2rem" }}>
                 <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8 }}>{selected.title}</h2>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8, color: BRAND, letterSpacing: 1, fontFamily: "'Poppins', sans-serif" }}>{selected.title}</h2>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <IssueTypeBadge type={selected.issue_type} />
                     <StatusBadge status={selected.status} />

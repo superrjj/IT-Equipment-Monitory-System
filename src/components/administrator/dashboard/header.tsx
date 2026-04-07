@@ -4,7 +4,7 @@ import { LogOut, Menu, Bell, Settings, ChevronDown, CheckCheck } from "lucide-re
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
 
-const brandBlue = "#0a4c86";
+const brandBlue = "#0D518C";
 
 const headerStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -158,7 +158,7 @@ const headerStyles = `
     align-items: center; justify-content: center;
     width: 40px; height: 40px;
     border-radius: 10px; border: none;
-    background: #f1f5f9; color: #475569;
+    background: rgba(255,255,255,0.15); color: #ffffff;
     cursor: pointer; flex-shrink: 0;
   }
   @keyframes hdrMenuDrop {
@@ -178,12 +178,12 @@ const headerStyles = `
     font-family: 'Poppins', sans-serif;
     transition: background 0.15s ease;
   }
-  .hdr-user-trigger:hover { background: #f1f5f9; }
+  .hdr-user-trigger:hover { background: rgba(255,255,255,0.15); }
 
   .hdr-user-name-text {
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: #ffffff;
     white-space: nowrap;
   }
   .hdr-user-meta {
@@ -196,7 +196,7 @@ const headerStyles = `
   .hdr-user-role-text {
     font-size: 10px;
     font-weight: 700;
-    color: #64748b;
+    color:rgba(255,255,255,0.7);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     white-space: nowrap;
@@ -205,7 +205,7 @@ const headerStyles = `
   .hdr-user-dept-text {
     font-size: 10px;
     font-weight: 600;
-    color: #64748b;
+    color: rgba(255,255,255,0.7);
     letter-spacing: 0.02em;
     text-transform: none;
     line-height: 1.25;
@@ -213,7 +213,7 @@ const headerStyles = `
     white-space: normal;
   }
   .hdr-user-chevron {
-    color: #64748b;
+    color: rgba(255,255,255,0.7);
     transition: transform 0.2s ease;
     flex-shrink: 0;
   }
@@ -710,7 +710,7 @@ const Header: React.FC<HeaderProps> = ({
           flexWrap: "wrap", gap: "0.75rem",
           padding: "1rem 2rem",          // add padding here instead of wrapper
           minHeight: "60px",             // increase height
-          background: "#ffffff",
+          background: "#0D518C",
         }}
       >
         {/* Left: logo + clock */}
@@ -723,18 +723,18 @@ const Header: React.FC<HeaderProps> = ({
           
           {/* ── City Logo ── */}
           <img
-            src="/masaya-sa-tarlac-city.png"
+            src="/masaya-sa-tarlac-city-logo.png"
             alt="Masaya sa Tarlac City"
-            style={{ height: 64, width: "auto", objectFit: "contain", flexShrink: 0 }}
+            style={{ height: 70, width: "auto", objectFit: "contain", flexShrink: 0 }}
           />
 
           {/* Divider */}
-          <div style={{ width: 1, height: 60, background: "#e2e8f0", flexShrink: 0 }} />
+          <div style={{ width: 1, height: 60, background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
 
           {/* Clock */}
           <div className="hdr-datetime">
-            <div style={{ fontSize: 18, fontWeight: 700, color: brandBlue, letterSpacing: "0.02em" }}>{timeStr}</div>
-            <div className="hdr-date" style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>{dateStr}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#ffffff", letterSpacing: "0.02em" }}>{timeStr}</div>
+            <div className="hdr-date" style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{dateStr}</div>
           </div>
         </div>
         {/* Right: bell + user */}
@@ -750,8 +750,8 @@ const Header: React.FC<HeaderProps> = ({
               style={{
                 position: "relative", width: 40, height: 40,
                 borderRadius: 12, border: "none",
-                background: showNotifPanel ? "#eff6ff" : "transparent",
-                color: brandBlue, cursor: "pointer",
+                background: showNotifPanel ? "rgba(255,255,255,0.18)" : "transparent",
+                color: "#ffffff", cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "background 0.15s",
               }}
