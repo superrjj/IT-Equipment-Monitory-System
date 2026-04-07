@@ -532,7 +532,7 @@ const ReportAnalytics: React.FC = () => {
           }}
         >
           <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1, color: brandBlue }}>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1  }}>
               Reports & Analytics
             </h1>
             <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 0", fontWeight: 400 }}>

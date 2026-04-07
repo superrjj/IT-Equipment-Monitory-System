@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import bcrypt from "bcryptjs";
 import { supabase } from "../lib/supabaseClient";
@@ -15,30 +15,25 @@ import {
   AtSign,
   X,
   CheckCircle2,
-  Clock,  
+  Building2,
+  ChevronDown,
+  Check,
 } from "lucide-react";
-import { notifyAdminsSignupRequest } from "../lib/audit-notifications";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const COUNTDOWN_KEY      = "signup_countdown_until";
-const PENDING_USER_KEY   = "signup_pending_username";
-const COUNTDOWN_SECS     = 120;
-const BRAND              = "#0a4c86";
+const BRAND = "#0a4c86";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const getSecondsLeft = () => {
-  const until = Number(localStorage.getItem(COUNTDOWN_KEY) ?? 0);
-  return Math.max(0, Math.round((until - Date.now()) / 1000));
-};
-
-const fmtTime = (s: number) => {
-  const m   = Math.floor(s / 60).toString().padStart(2, "0");
-  const sec = (s % 60).toString().padStart(2, "0");
-  return `${m}:${sec}`;
-};
+// ── Password Requirements ─────────────────────────────────────────────────────
+const PW_RULES = [
+  { id: "len",   label: "At least 8 characters",           test: (p: string) => p.length >= 8 },
+  { id: "upper", label: "One uppercase letter (A–Z)",       test: (p: string) => /[A-Z]/.test(p) },
+  { id: "lower", label: "One lowercase letter (a–z)",       test: (p: string) => /[a-z]/.test(p) },
+  { id: "num",   label: "One number (0–9)",                 test: (p: string) => /[0-9]/.test(p) },
+  { id: "sym",   label: "One special character (!@#$…)",    test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+];
 
 const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Poppins:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Poppins:wght@400;500;600;700;800&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -56,15 +51,15 @@ const styles = `
   }
   .lp-bg-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.38); z-index: 1;
+    background: rgba(0,0,0,0.42); z-index: 1;
   }
 
   .lp-card {
     position: relative; z-index: 10;
     width: 100%; max-width: 460px; margin: 3rem;
-    background: #ffffff; border-radius: 16px;
+    background: #ffffff; border-radius: 20px;
     padding: 2.5rem 2.75rem 2.25rem;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.15);
     animation: cardIn 0.65s cubic-bezier(0.16,1,0.3,1) both;
   }
   @keyframes cardIn {
@@ -93,21 +88,15 @@ const styles = `
     background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px;
     color: #0f172a; font-family: 'Poppins', sans-serif;
     font-size: 13px; font-weight: 400;
-    padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+    padding: 0.62rem 0.75rem 0.62rem 2.25rem;
     outline: none; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; width: 100%;
   }
-  .lp-input::placeholder {
-    color: #b0b8c4;
-    font-family: 'Poppins', sans-serif;
-    font-size: 13px;
-  }
+  .lp-input::placeholder { color: #b0b8c4; font-family: 'Poppins', sans-serif; font-size: 13px; }
   .lp-input:hover  { border-color: #b8c2ce; background: #f2f4f7; }
   .lp-input:focus  { border-color: #0a4c86 !important; background: #fff; box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important; outline: none; }
   .lp-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
 
-  .lp-pw-row {
-    display: flex; justify-content: space-between; align-items: center;
-  }
+  .lp-pw-row { display: flex; justify-content: space-between; align-items: center; }
   .lp-forgot {
     font-family: 'Poppins', sans-serif;
     font-size: 0.7rem; color: #0a4c86; background: none; border: none;
@@ -124,7 +113,7 @@ const styles = `
 
   .lp-btn {
     margin-top: 0.25rem; padding: 0.78rem;
-    border: none; border-radius: 8px;
+    border: none; border-radius: 10px;
     background: linear-gradient(120deg, #0b5fa5, #0a4c86); color: #fff;
     font-family: 'Poppins', sans-serif; font-size: 0.78rem; font-weight: 600;
     letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
@@ -151,77 +140,8 @@ const styles = `
     animation: spin 0.85s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .lp-loading-text {
-    color: #ffffff; font-family: 'Poppins', sans-serif;
-    font-size: 0.9rem; font-weight: 500; letter-spacing: 0.08em; opacity: 0.9;
-  }
-  .lp-loading-sub {
-    color: rgba(255,255,255,0.55); font-family: 'Poppins', sans-serif;
-    font-size: 0.74rem; margin-top: -0.65rem;
-  }
-
-  /* ── UA-style Modal ── */
-  .ua-modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 1000; padding: 16px;
-    animation: fadeIn 0.15s ease;
-  }
-  .ua-modal-box {
-    width: min(580px, calc(100vw - 32px));
-    max-height: calc(100vh - 32px);
-    overflow-y: auto; overflow-x: hidden;
-    background: #fff; border-radius: 20px;
-    box-shadow: 0 32px 80px rgba(10,20,60,0.22), 0 0 0 1px rgba(10,76,134,0.07);
-    animation: slideUp 0.2s ease;
-    font-family: 'Poppins', sans-serif;
-  }
-  .ua-modal-header {
-    padding: 1.3rem 1.4rem 1rem;
-    border-bottom: 1px solid #f1f5f9;
-    background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%);
-    border-radius: 20px 20px 0 0;
-    display: flex; justify-content: space-between; align-items: flex-start;
-  }
-  .ua-modal-body {
-    padding: 1.2rem 1.4rem;
-    display: flex; flex-direction: column; gap: 14px;
-  }
-  .ua-modal-footer {
-    padding: 1rem 1.4rem;
-    border-top: 1px solid #f1f5f9;
-    background: #fafbfc;
-    border-radius: 0 0 20px 20px;
-    display: flex; justify-content: flex-end; gap: 10px;
-  }
-  .ua-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .ua-span2 { grid-column: span 2; }
-
-  .ua-field-label {
-    font-size: 11px; font-weight: 700; color: #64748b;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    margin-bottom: 5px; display: block;
-  }
-  .ua-input {
-    width: 100%;
-    padding: 0.6rem 0.75rem 0.6rem 2.25rem;
-    border-radius: 10px; border: 1.5px solid #e2e8f0;
-    background: #f8fafc; font-size: 13px; color: #0f172a;
-    outline: none; box-sizing: border-box;
-    font-family: 'Poppins', sans-serif;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  .ua-input:focus {
-    border-color: #0a4c86 !important;
-    box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important;
-    outline: none;
-  }
-  .ua-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
-
-  .ua-btn-close:hover  { background: #f1f5f9 !important; }
-  .ua-btn-cancel:hover { background: #f8fafc !important; }
-  .ua-btn-save:hover   { opacity: 0.92; }
+  .lp-loading-text { color: #ffffff; font-family: 'Poppins', sans-serif; font-size: 0.9rem; font-weight: 500; letter-spacing: 0.08em; opacity: 0.9; }
+  .lp-loading-sub  { color: rgba(255,255,255,0.55); font-family: 'Poppins', sans-serif; font-size: 0.74rem; margin-top: -0.65rem; }
 
   /* Forgot modal */
   .lp-modal-overlay {
@@ -233,7 +153,7 @@ const styles = `
   }
   @keyframes modalOverlayIn { from { opacity: 0; } to { opacity: 1; } }
   .lp-modal {
-    background: #ffffff; border-radius: 14px;
+    background: #ffffff; border-radius: 16px;
     width: 100%; max-width: 420px;
     max-height: 90vh; overflow-y: auto;
     box-shadow: 0 24px 60px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08);
@@ -245,35 +165,20 @@ const styles = `
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  .lp-modal-header {
-    display: flex; align-items: center; gap: 0.75rem;
-    padding: 1.1rem 1.3rem 1rem;
-    border-bottom: 1px solid #f0f2f5;
-  }
-  .lp-modal-header-icon {
-    width: 36px; height: 36px; border-radius: 9px;
-    background: #eef3fa;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; color: #0a4c86;
-  }
+  .lp-modal-header { display: flex; align-items: center; gap: 0.75rem; padding: 1.1rem 1.3rem 1rem; border-bottom: 1px solid #f0f2f5; }
+  .lp-modal-header-icon { width: 36px; height: 36px; border-radius: 9px; background: #eef3fa; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #0a4c86; }
   .lp-modal-header-text { display: flex; flex-direction: column; gap: 1px; }
   .lp-modal-title   { font-size: 0.88rem; font-weight: 700; color: #1a2e4a; line-height: 1.2; }
   .lp-modal-subtitle { font-size: 0.7rem; color: #94a3b8; font-weight: 400; }
   .lp-modal-close {
     position: absolute; top: 0.9rem; right: 0.9rem;
     background: #f2f4f7; border: none; border-radius: 50%;
-    width: 28px; height: 28px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: #6b7685;
-    transition: background 0.2s, color 0.2s;
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: #6b7685; transition: background 0.2s, color 0.2s;
   }
   .lp-modal-close:hover { background: #e2e6ed; color: #1a2e4a; }
   .lp-modal-body   { padding: 1.15rem 1.3rem; }
-  .lp-modal-footer {
-    display: flex; align-items: center; justify-content: flex-end;
-    gap: 0.55rem; padding: 0.85rem 1.3rem 1.1rem;
-    border-top: 1px solid #f0f2f5;
-  }
+  .lp-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.55rem; padding: 0.85rem 1.3rem 1.1rem; border-top: 1px solid #f0f2f5; }
   .lp-modal-btn-submit {
     padding: 0.48rem 1.2rem; border-radius: 7px; border: none;
     background: #0a4c86; color: #fff;
@@ -294,30 +199,156 @@ const styles = `
   .lp-admin-notice-title { font-size: 0.78rem; font-weight: 700; color: #1a2e4a; }
   .lp-admin-notice-desc  { font-size: 0.72rem; color: #4a5568; line-height: 1.55; }
 
-  .lp-keep-row {
-    display: flex; align-items: center; margin-bottom: 1rem;
-  }
-  .lp-keep-checkbox {
-    display: flex; align-items: center; gap: 0.4rem;
-    font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #4a5568;
-    cursor: pointer;
-  }
+  .lp-keep-row   { display: flex; align-items: center; margin-bottom: 1rem; }
+  .lp-keep-checkbox { display: flex; align-items: center; gap: 0.4rem; font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #4a5568; cursor: pointer; }
   .lp-keep-checkbox input { width: 13px; height: 13px; cursor: pointer; }
-  .lp-create-link {
-    font-family: 'Poppins', sans-serif;
-    font-size: 0.72rem; color: #0b5fa5; background: none; border: none;
-    cursor: pointer; font-weight: 600; text-decoration: underline;
-    text-underline-offset: 3px;
-  }
+  .lp-create-link { font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #0b5fa5; background: none; border: none; cursor: pointer; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
   .lp-create-link:hover { color: #083766; }
-  .lp-bottom-row {
-    margin-top: 1rem; display: flex; justify-content: center;
-    gap: 0.3rem; font-family: 'Poppins', sans-serif;
-    font-size: 0.72rem; color: #6b7280;
+  .lp-bottom-row { margin-top: 1rem; display: flex; justify-content: center; gap: 0.3rem; font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #6b7280; }
+
+  /* ── Create Account Modal ── */
+  .ua-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 16px;
+    animation: fadeIn 0.15s ease;
+  }
+  .ua-modal-box {
+    width: min(600px, calc(100vw - 32px));
+    height: min(680px, calc(100vh - 32px));
+    overflow: hidden;
+    background: #fff; border-radius: 22px;
+    box-shadow: 0 40px 100px rgba(10,20,60,0.28), 0 0 0 1px rgba(10,76,134,0.07);
+    animation: slideUp 0.22s cubic-bezier(0.16,1,0.3,1);
+    font-family: 'Poppins', sans-serif;
+    display: flex; flex-direction: column;
+  }
+  .ua-modal-header {
+    padding: 1.4rem 1.5rem 1.1rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: linear-gradient(135deg, #f0f6ff 0%, #e8f0ff 100%);
+    border-radius: 22px 22px 0 0;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+  }
+  .ua-modal-body {
+    padding: 1.4rem 1.5rem;
+    display: flex; flex-direction: column; gap: 0;
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+  }
+  .ua-modal-body::-webkit-scrollbar { width: 5px; }
+  .ua-modal-body::-webkit-scrollbar-track { background: transparent; }
+  .ua-modal-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+  .ua-modal-body::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  .ua-modal-footer {
+    padding: 1rem 1.5rem 1.2rem;
+    border-top: 1px solid #f1f5f9;
+    background: #fafbfc;
+    border-radius: 0 0 22px 22px;
+    display: flex; justify-content: flex-end; gap: 10px;
+    flex-shrink: 0;
   }
 
+  .ua-grid       { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .ua-span2      { grid-column: span 2; }
+  .ua-field      { display: flex; flex-direction: column; }
+
+  .ua-field-label {
+    font-size: 11px; font-weight: 700; color: #64748b;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 5px; display: block;
+  }
+  .ua-input {
+    width: 100%;
+    padding: 0.62rem 0.75rem 0.62rem 2.25rem;
+    border-radius: 10px; border: 1.5px solid #e2e8f0;
+    background: #f8fafc; font-size: 13px; color: #0f172a;
+    outline: none; box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  }
+  .ua-input:hover  { border-color: #b8c2ce; background: #f2f4f7; }
+  .ua-input:focus  { border-color: #0a4c86 !important; box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important; background: #fff; outline: none; }
+  .ua-input--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
+
+  /* Password requirements checklist */
+  .pw-req-box {
+    background: #f8fafc; border: 1.5px solid #e2e8f0;
+    border-radius: 10px; padding: 0.7rem 0.85rem;
+    display: flex; flex-direction: column; gap: 5px;
+    margin-top: 4px;
+  }
+  .pw-req-title {
+    font-size: 10px; font-weight: 700; color: #64748b;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .pw-req-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; font-weight: 500;
+    transition: color 0.2s;
+  }
+  .pw-req-item.met   { color: #16a34a; }
+  .pw-req-item.unmet { color: #94a3b8; }
+  .pw-req-icon {
+    width: 15px; height: 15px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 9px; font-weight: 800;
+    transition: background 0.2s, color 0.2s;
+  }
+  .pw-req-item.met   .pw-req-icon { background: #dcfce7; color: #16a34a; }
+  .pw-req-item.unmet .pw-req-icon { background: #f1f5f9; color: #94a3b8; }
+
+  /* Select dropdown styled */
+  .ua-select {
+    width: 100%;
+    padding: 0.62rem 2rem 0.62rem 2.25rem;
+    border-radius: 10px; border: 1.5px solid #e2e8f0;
+    background: #f8fafc; font-size: 13px; color: #0f172a;
+    outline: none; box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+  }
+  .ua-select:hover  { border-color: #b8c2ce; background: #f2f4f7; }
+  .ua-select:focus  { border-color: #0a4c86 !important; box-shadow: 0 0 0 3px rgba(10,76,134,0.10) !important; background: #fff; outline: none; }
+  .ua-select--error { border-color: #fca5a5 !important; background: #fff8f8 !important; }
+  .ua-select-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; display: flex; }
+
+  .ua-btn-close:hover  { background: #f1f5f9 !important; }
+  .ua-btn-cancel:hover { background: #f0f4f8 !important; }
+  .ua-btn-save:hover   { filter: brightness(1.07); transform: translateY(-1px); }
+
+  /* Success state */
+  .ua-success-box {
+    text-align: center; padding: 2rem 1rem;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .ua-success-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: #dcfce7; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 4px;
+  }
+
+  .ua-field-error {
+    min-height: 17px; margin-top: 2px; font-size: 11px; font-weight: 500;
+    color: #dc2626; display: flex; align-items: center; gap: 4px;
+    visibility: visible;
+  }
+  .ua-field-error--hidden { visibility: hidden; }
+
+  /* Live check status badge */
+  .live-status {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; margin-top: 3px; min-height: 17px;
+  }
+  .live-status.checking { color: #94a3b8; }
+  .live-status.available { color: #16a34a; }
+  .live-status.taken { color: #dc2626; }
+
   @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: translateY(0) } }
 
   @media (max-width: 680px) {
     .ua-grid  { grid-template-columns: 1fr; }
@@ -326,12 +357,49 @@ const styles = `
   @media (max-width: 600px) {
     .lp-card      { margin: 1rem; padding: 2rem 1.5rem 1.75rem; }
     .lp-city-logo { width: 180px; }
-    .ua-modal-box { border-radius: 16px; }
+    .ua-modal-box { border-radius: 18px; }
   }
 `;
 
-// ── Field error components ────────────────────────────────────────────────────
-const UAFieldError = ({ msg }: { msg?: string }) => (
+// ── Small helpers ─────────────────────────────────────────────────────────────
+const FieldError = ({ msg }: { msg?: string }) => (
+  <div className={`ua-field-error${msg ? "" : " ua-field-error--hidden"}`}
+    style={{ minHeight: 17, marginTop: 2, fontSize: 11, fontWeight: 500, color: "#dc2626", display: "flex", alignItems: "center", gap: 4 }}>
+    {msg && <><AlertTriangle size={10} />{msg}</>}
+    {!msg && <span style={{ opacity: 0 }}>x</span>}
+  </div>
+);
+
+type LiveStatusType = "idle" | "checking" | "taken" | "available";
+const LiveStatus = ({ status, error, label = "field" }: { status: LiveStatusType; error?: string; label?: string }) => {
+  // If there's a form-submit error, show that instead
+  if (error) return (
+    <div style={{ minHeight: 17, marginTop: 3, fontSize: 11, fontWeight: 500, color: "#dc2626", display: "flex", alignItems: "center", gap: 4 }}>
+      <AlertTriangle size={10} />{error}
+    </div>
+  );
+  if (status === "idle") return <div style={{ minHeight: 17, marginTop: 3 }} />;
+  if (status === "checking") return (
+    <div className="live-status checking">
+      <svg width="10" height="10" viewBox="0 0 10 10" style={{ animation: "spin 0.8s linear infinite" }}>
+        <circle cx="5" cy="5" r="4" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="18" strokeDashoffset="6" />
+      </svg>
+      Checking availability…
+    </div>
+  );
+  if (status === "available") return (
+    <div className="live-status available">
+      <Check size={11} strokeWidth={3} /> {label} is available
+    </div>
+  );
+  return (
+    <div className="live-status taken">
+      <X size={11} strokeWidth={3} /> {label} is already taken
+    </div>
+  );
+};
+
+const LoginFieldError = ({ msg }: { msg?: string }) => (
   <div style={{
     minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
     color: "#dc2626", display: "flex", alignItems: "center", gap: 4,
@@ -342,17 +410,16 @@ const UAFieldError = ({ msg }: { msg?: string }) => (
   </div>
 );
 
-function UAInputField({
-  label, icon, required, error, children,
+function UAField({
+  label, icon, required, error, children, className,
 }: {
   label: string; icon?: React.ReactNode; required?: boolean;
-  error?: string; children: React.ReactNode;
+  error?: string; children: React.ReactNode; className?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div className={`ua-field${className ? " " + className : ""}`}>
       <label className="ua-field-label">
-        {label}
-        {required && <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>}
+        {label}{required && <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>}
       </label>
       <div style={{ position: "relative" }}>
         {icon && (
@@ -365,68 +432,44 @@ function UAInputField({
         )}
         {children}
       </div>
-      <UAFieldError msg={error} />
+      <FieldError msg={error} />
     </div>
   );
 }
 
-const FieldError = ({ msg }: { msg?: string }) => (
-  <div style={{
-    minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
-    color: "#dc2626", display: "flex", alignItems: "center", gap: 4,
-    visibility: msg ? "visible" : "hidden",
-  }}>
-    <AlertTriangle size={10} />
-    {msg ?? "placeholder"}
-  </div>
-);
-
-// ── Countdown ring ────────────────────────────────────────────────────────────
-const CountdownRing: React.FC<{ seconds: number }> = ({ seconds }) => {
-  const r         = 34;
-  const circ      = 2 * Math.PI * r;
-  const pct       = seconds / COUNTDOWN_SECS;
-  const dashOffset = circ * (1 - pct);
-  const ringColor  = seconds > 30 ? "#0a4c86" : seconds > 10 ? "#f59e0b" : "#ef4444";
-
+// ── Password Requirements Component ──────────────────────────────────────────
+const PasswordRequirements = ({ password }: { password: string }) => {
+  if (!password) return null;
   return (
-    <div style={{ position: "relative", width: 80, height: 80, margin: "0 auto 12px" }}>
-      <svg width="80" height="80" viewBox="0 0 80 80">
-        <circle cx="40" cy="40" r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
-        <circle
-          cx="40" cy="40" r={r} fill="none"
-          stroke={ringColor} strokeWidth="6" strokeLinecap="round"
-          strokeDasharray={`${circ}`}
-          strokeDashoffset={`${dashOffset}`}
-          transform="rotate(-90 40 40)"
-          style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s" }}
-        />
-      </svg>
-      <div style={{
-        position: "absolute", inset: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 16, fontWeight: 800, color: ringColor,
-        fontFamily: "'Poppins', sans-serif",
-      }}>
-        {fmtTime(seconds)}
-      </div>
+    <div className="pw-req-box">
+      <div className="pw-req-title">Password Requirements</div>
+      {PW_RULES.map(rule => {
+        const met = rule.test(password);
+        return (
+          <div key={rule.id} className={`pw-req-item ${met ? "met" : "unmet"}`}>
+            <span className="pw-req-icon">
+              {met ? <Check size={9} strokeWidth={3.5} /> : <X size={9} strokeWidth={3.5} />}
+            </span>
+            {rule.label}
+          </div>
+        );
+      })}
     </div>
   );
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function LoginPage() {
-  const [identifier,    setIdentifier]    = useState("");
-  const [password,      setPassword]      = useState("");
-  const [showPassword,  setShowPassword]  = useState(false);
-  const [showForgot,    setShowForgot]    = useState(false);
-  const [loading,       setLoading]       = useState(false);
-  const [showCreate,    setShowCreate]    = useState(false);
-  const [creating,      setCreating]      = useState(false);
-  const [createSent,    setCreateSent]    = useState(false);
-  const [keepSignedIn,  setKeepSignedIn]  = useState(true);
-  const [secondsLeft,   setSecondsLeft]   = useState(getSecondsLeft);
-  const [approved,      setApproved]      = useState(false);
+  const [identifier,   setIdentifier]   = useState("");
+  const [password,     setPassword]     = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgot,   setShowForgot]   = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [creating,     setCreating]     = useState(false);
+  const [createDone,   setCreateDone]   = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
+  const [departments,  setDepartments]  = useState<{ id: string; name: string }[]>([]);
 
   const navigate = useNavigate();
 
@@ -436,47 +479,54 @@ export default function LoginPage() {
 
   const [createErrors, setCreateErrors] = useState<{
     full_name?: string; username?: string; email?: string;
-    password?: string; confirmPassword?: string;
+    password?: string; confirmPassword?: string; department_id?: string;
   }>({});
 
+  const [showCreatePassword,  setShowCreatePassword]  = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [create, setCreate] = useState({
-    full_name: "", username: "", email: "", password: "", confirmPassword: "",
+    full_name: "", username: "", email: "",
+    password: "", confirmPassword: "", department_id: "",
   });
 
-  // ── Restore pending state on mount (survives page refresh) ────────────────
+  // live uniqueness: "idle" | "checking" | "taken" | "available"
+  const [usernameStatus, setUsernameStatus] = useState<"idle"|"checking"|"taken"|"available">("idle");
+  const [emailStatus,    setEmailStatus]    = useState<"idle"|"checking"|"taken"|"available">("idle");
+  const usernameTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emailTimer    = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkUsername = (val: string) => {
+    if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    const u = val.trim();
+    if (!u || u.length < 3 || !/^[A-Za-z0-9_]+$/.test(u)) { setUsernameStatus("idle"); return; }
+    setUsernameStatus("checking");
+    usernameTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from("user_accounts").select("id").ilike("username", u).limit(1);
+      setUsernameStatus(data && data.length > 0 ? "taken" : "available");
+    }, 500);
+  };
+
+  const checkEmail = (val: string) => {
+    if (emailTimer.current) clearTimeout(emailTimer.current);
+    const e = val.trim();
+    if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { setEmailStatus("idle"); return; }
+    setEmailStatus("checking");
+    emailTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from("user_accounts").select("id").ilike("email", e).limit(1);
+      setEmailStatus(data && data.length > 0 ? "taken" : "available");
+    }, 500);
+  };
+
+  // ── Fetch departments on mount ────────────────────────────────────────────
   useEffect(() => {
-    if (getSecondsLeft() > 0) {
-      setCreateSent(true);
-      setShowCreate(true);
-    }
+    supabase
+      .from("departments")
+      .select("id, name")
+      .eq("is_archived", false)
+      .order("name")
+      .then(({ data }) => { if (data) setDepartments(data); });
   }, []);
-
-  // ── Countdown tick + approval polling ────────────────────────────────────
-  useEffect(() => {
-    if (!createSent || approved) return;
-
-    const tick = setInterval(async () => {
-      setSecondsLeft(getSecondsLeft());
-
-      const pending = localStorage.getItem(PENDING_USER_KEY);
-      if (!pending) return;
-
-      const { data } = await supabase
-        .from("signup_requests")
-        .select("status")
-        .ilike("username", pending)
-        .single();
-
-      if (data?.status === "approved") {
-        setApproved(true);
-        localStorage.removeItem(COUNTDOWN_KEY);
-        localStorage.removeItem(PENDING_USER_KEY);
-        clearInterval(tick);
-      }
-    }, 1000);
-
-    return () => clearInterval(tick);
-  }, [createSent, approved]);
 
   // ── Login ─────────────────────────────────────────────────────────────────
   const performLogin = async () => {
@@ -515,13 +565,13 @@ export default function LoginPage() {
       }
       const ttlMs     = keepSignedIn ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-      localStorage.setItem("session_token",           crypto.randomUUID());
-      localStorage.setItem("session_user_id",         user.id);
-      localStorage.setItem("session_user_full_name",  user.full_name);
-      localStorage.setItem("session_user_role",       user.role);
-      localStorage.setItem("session_expires_at",      expiresAt);
+      localStorage.setItem("session_token",          crypto.randomUUID());
+      localStorage.setItem("session_user_id",        user.id);
+      localStorage.setItem("session_user_full_name", user.full_name);
+      localStorage.setItem("session_user_role",      user.role);
+      localStorage.setItem("session_expires_at",     expiresAt);
       setTimeout(() => { navigate("/dashboard", { replace: true }); }, 3000);
-    } catch (ex: any) {
+    } catch {
       setLoginErrors({ general: "Something went wrong. Please try again." });
       setLoading(false);
     }
@@ -535,15 +585,14 @@ export default function LoginPage() {
   const closeCreate = () => {
     setShowCreate(false);
     setTimeout(() => {
+      setCreateDone(false);
       setCreating(false);
-      if (approved) {
-        setCreateSent(false);
-        setApproved(false);
-        localStorage.removeItem(COUNTDOWN_KEY);
-        localStorage.removeItem(PENDING_USER_KEY);
-      }
       setCreateErrors({});
-      setCreate({ full_name: "", username: "", email: "", password: "", confirmPassword: "" });
+      setShowCreatePassword(false);
+      setShowConfirmPassword(false);
+      setUsernameStatus("idle");
+      setEmailStatus("idle");
+      setCreate({ full_name: "", username: "", email: "", password: "", confirmPassword: "", department_id: "" });
     }, 300);
   };
 
@@ -552,21 +601,31 @@ export default function LoginPage() {
     e.preventDefault();
     const errors: typeof createErrors = {};
 
-    if (!create.full_name.trim()) errors.full_name = "Full name is required.";
+    const fn = create.full_name.trim();
+    if (!fn)                                   errors.full_name = "Full name is required.";
+    else if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/.test(fn)) errors.full_name = "Full name must contain letters only.";
 
     const u = create.username.trim();
-    if (!u)                                errors.username = "Username is required.";
-    else if (u.length < 3)                 errors.username = "Must be at least 3 characters.";
-    else if (u.length > 32)                errors.username = "Must be 32 characters or less.";
-    else if (!/^[A-Za-z0-9_]+$/.test(u))  errors.username = "Letters, numbers, and underscore only.";
+    if (!u)                               errors.username = "Username is required.";
+    else if (u.length < 3)               errors.username = "Must be at least 3 characters.";
+    else if (u.length > 32)              errors.username = "Must be 32 characters or less.";
+    else if (!/^[A-Za-z0-9_]+$/.test(u)) errors.username = "Letters, numbers, and underscore only.";
+    else if (usernameStatus === "taken")  errors.username = "Username is already taken.";
+    else if (usernameStatus === "checking") errors.username = "Still checking username availability…";
 
     const email = create.email.trim();
     if (!email)                                          errors.email = "Email is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email address.";
+    else if (emailStatus === "taken")    errors.email = "Email address is already taken.";
+    else if (emailStatus === "checking") errors.email = "Still checking email availability…";
+
+    if (!create.department_id) errors.department_id = "Please select your department.";
 
     if (!create.password)                errors.password = "Password is required.";
     else if (create.password.length < 8) errors.password = "Must be at least 8 characters.";
     else if (create.password.length > 72) errors.password = "Password is too long (max 72 chars).";
+    else if (!PW_RULES.every(r => r.test(create.password)))
+      errors.password = "Password does not meet all requirements.";
 
     if (!create.confirmPassword)
       errors.confirmPassword = "Please confirm your password.";
@@ -578,81 +637,31 @@ export default function LoginPage() {
     setCreating(true);
     setCreateErrors({});
 
-    const { data: uData } = await supabase
-      .from("user_accounts").select("id").ilike("username", u).limit(1);
-    if (uData && uData.length > 0) {
-      setCreateErrors({ username: "That username is already taken." });
-      setCreating(false);
-      return;
-    }
-
-    const { data: eData } = await supabase
-      .from("user_accounts").select("id").ilike("email", email).limit(1);
-    if (eData && eData.length > 0) {
-      setCreateErrors({ email: "An account with this email already exists." });
-      setCreating(false);
-      return;
-    }
-
-    const { data: reqU } = await supabase
-      .from("signup_requests").select("id").ilike("username", u).eq("status", "pending").limit(1);
-    if (reqU && reqU.length > 0) {
-      setCreateErrors({ username: "A pending request already exists for this username." });
-      setCreating(false);
-      return;
-    }
-
-    const { data: reqE } = await supabase
-      .from("signup_requests").select("id").ilike("email", email).eq("status", "pending").limit(1);
-    if (reqE && reqE.length > 0) {
-      setCreateErrors({ email: "A pending request already exists for this email." });
-      setCreating(false);
-      return;
-    }
-
     try {
       const password_hash = await bcrypt.hash(create.password, 10);
-      const { error: insertError } = await supabase.from("signup_requests").insert({
-        full_name: create.full_name.trim(),
-        username: u,
+
+      const { error: insertError } = await supabase.from("user_accounts").insert({
+        full_name:     fn,
+        username:      u,
         email,
         password_hash,
+        role:          "Employee",
+        department_id: create.department_id,
+        is_active:     true,
       });
+
       if (insertError) throw new Error(insertError.message);
 
-      // Fetch the new request id to link the notification
-      const { data: newReq } = await supabase
-        .from("signup_requests")
-        .select("id")
-        .ilike("username", u)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (newReq?.id) {
-        await notifyAdminsSignupRequest(supabase, {
-          requestId: newReq.id,
-          fullName:  create.full_name.trim(),
-          username:  u,
-          actorUserId: null,
-        });
-      }
-
-      // Persist countdown across page refreshes
-      localStorage.setItem(COUNTDOWN_KEY,    String(Date.now() + COUNTDOWN_SECS * 1000));
-      localStorage.setItem(PENDING_USER_KEY, u);
-      setSecondsLeft(COUNTDOWN_SECS);
-      setCreateSent(true);
+      setCreateDone(true);
 
     } catch (ex: any) {
       const msg = (ex?.message ?? "").toLowerCase();
       if (msg.includes("duplicate") || msg.includes("unique")) {
         setCreateErrors({ username: "That username or email is already in use." });
       } else if (msg.includes("network") || msg.includes("fetch")) {
-        setCreateErrors({ full_name: "Network error. Please check your connection and try again." });
+        setCreateErrors({ full_name: "Network error. Check your connection and try again." });
       } else {
-        setCreateErrors({ full_name: "Something went wrong. Please try again in a moment." });
+        setCreateErrors({ full_name: "Something went wrong. Please try again." });
       }
     } finally {
       setCreating(false);
@@ -702,7 +711,7 @@ export default function LoginPage() {
                   disabled={loading}
                 />
               </div>
-              <FieldError msg={loginErrors.identifier} />
+              <LoginFieldError msg={loginErrors.identifier} />
             </div>
 
             {/* Password */}
@@ -732,13 +741,13 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={14} strokeWidth={2} /> : <Eye size={14} strokeWidth={2} />}
                 </button>
               </div>
-              <FieldError msg={loginErrors.password} />
+              <LoginFieldError msg={loginErrors.password} />
             </div>
 
             {/* General error */}
             {loginErrors.general && (
               <div style={{
-                padding: "0.5rem 0.75rem", borderRadius: 7, marginTop: 4,
+                padding: "0.5rem 0.75rem", borderRadius: 8, marginTop: 4,
                 backgroundColor: "#fef2f2", border: "1px solid #fecaca",
                 color: "#b91c1c", fontFamily: "'Poppins', sans-serif", fontSize: "0.71rem",
                 display: "flex", alignItems: "center", gap: 6,
@@ -747,7 +756,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="lp-keep-row">
+            <div className="lp-keep-row" style={{ marginTop: "0.5rem" }}>
               <label className="lp-keep-checkbox">
                 <input
                   type="checkbox"
@@ -812,16 +821,17 @@ export default function LoginPage() {
 
               {/* Header */}
               <div className="ua-modal-header">
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{
-                    width: 36, height: 36, borderRadius: 10, background: BRAND,
+                    width: 40, height: 40, borderRadius: 12, background: BRAND,
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                    boxShadow: "0 4px 12px rgba(10,76,134,0.3)",
                   }}>
-                    <UserPlus size={17} color="#fff" />
+                    <UserPlus size={18} color="#fff" />
                   </div>
                   <div>
-                    <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>Request an Account</div>
-                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>Requires admin approval</div>
+                    <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>Create an Account</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>Fill in your details to get started</div>
                   </div>
                 </div>
                 <button
@@ -829,8 +839,8 @@ export default function LoginPage() {
                   onClick={closeCreate}
                   aria-label="Close"
                   style={{
-                    border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10,
-                    width: 32, height: 32, cursor: "pointer", display: "flex",
+                    border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10,
+                    width: 34, height: 34, cursor: "pointer", display: "flex",
                     alignItems: "center", justifyContent: "center",
                     color: "#94a3b8", flexShrink: 0, transition: "background 0.15s",
                   }}
@@ -839,115 +849,28 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* ── State: form ── */}
-              {!createSent && (
+              {/* ── State: success ── */}
+              {createDone && (
                 <>
                   <div className="ua-modal-body">
-                    <div className="ua-grid">
-                      <div className="ua-span2">
-                        <UAInputField label="Full Name" icon={<User size={13} />} required error={createErrors.full_name}>
-                          <input
-                            className={`ua-input${createErrors.full_name ? " ua-input--error" : ""}`}
-                            type="text" placeholder="e.g. Juan Dela Cruz"
-                            value={create.full_name}
-                            onChange={e => { setCreate(c => ({ ...c, full_name: e.target.value })); setCreateErrors(p => ({ ...p, full_name: undefined })); }}
-                          />
-                        </UAInputField>
+                    <div className="ua-success-box">
+                      <div className="ua-success-icon">
+                        <CheckCircle2 size={34} color="#16a34a" />
                       </div>
-
-                      <UAInputField label="Username" icon={<AtSign size={13} />} required error={createErrors.username}>
-                        <input
-                          className={`ua-input${createErrors.username ? " ua-input--error" : ""}`}
-                          type="text" placeholder="e.g. juan_dc"
-                          value={create.username}
-                          onChange={e => { setCreate(c => ({ ...c, username: e.target.value })); setCreateErrors(p => ({ ...p, username: undefined })); }}
-                        />
-                      </UAInputField>
-
-                      <UAInputField label="Email Address" icon={<Mail size={13} />} required error={createErrors.email}>
-                        <input
-                          className={`ua-input${createErrors.email ? " ua-input--error" : ""}`}
-                          type="email" placeholder="you@example.com"
-                          value={create.email}
-                          onChange={e => { setCreate(c => ({ ...c, email: e.target.value })); setCreateErrors(p => ({ ...p, email: undefined })); }}
-                        />
-                      </UAInputField>
-
-                      <UAInputField label="Password" icon={<Lock size={13} />} required error={createErrors.password}>
-                        <input
-                          className={`ua-input${createErrors.password ? " ua-input--error" : ""}`}
-                          type="password" placeholder="Min. 8 characters"
-                          value={create.password}
-                          onChange={e => { setCreate(c => ({ ...c, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })); }}
-                        />
-                      </UAInputField>
-
-                      <UAInputField label="Confirm Password" icon={<Lock size={13} />} required error={createErrors.confirmPassword}>
-                        <input
-                          className={`ua-input${createErrors.confirmPassword ? " ua-input--error" : ""}`}
-                          type="password" placeholder="Repeat password"
-                          value={create.confirmPassword}
-                          onChange={e => { setCreate(c => ({ ...c, confirmPassword: e.target.value })); setCreateErrors(p => ({ ...p, confirmPassword: undefined })); }}
-                        />
-                      </UAInputField>
-                    </div>
-                  </div>
-                  <div className="ua-modal-footer">
-                    <button
-                      className="ua-btn-cancel" type="button" onClick={closeCreate}
-                      style={{
-                        border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10,
-                        padding: "0.55rem 1rem", cursor: "pointer", fontWeight: 700,
-                        fontSize: 13, color: "#475569", fontFamily: "'Poppins', sans-serif",
-                        transition: "background 0.15s",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="ua-btn-save" type="button" disabled={creating}
-                      onClick={handleCreateAccount as any}
-                      style={{
-                        border: "none", background: creating ? "#94a3b8" : BRAND,
-                        color: "#fff", borderRadius: 10, padding: "0.55rem 1.2rem",
-                        cursor: creating ? "not-allowed" : "pointer",
-                        fontWeight: 800, fontSize: 13, fontFamily: "'Poppins', sans-serif",
-                        boxShadow: creating ? "none" : "0 4px 14px rgba(10,76,134,0.28)",
-                        transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6,
-                      }}
-                    >
-                      {creating ? "Checking…" : "Submit Request"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* ── State: approved ── */}
-              {createSent && approved && (
-                <>
-                  <div className="ua-modal-body">
-                    <div style={{
-                      textAlign: "center", padding: "1.5rem 1rem",
-                      background: "#f0fdf4", border: "1px solid #86efac",
-                      borderRadius: 12, fontFamily: "'Poppins', sans-serif",
-                    }}>
-                      <CheckCircle2 size={40} color="#16a34a" style={{ marginBottom: 10 }} />
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "#166534", marginBottom: 6 }}>
-                        Account approved!
-                      </div>
-                      <div style={{ fontSize: 12, color: "#4ade80" }}>
-                        You can now sign in with your credentials.
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "#166534" }}>Account Created!</div>
+                      <div style={{ fontSize: 12.5, color: "#4b5563", maxWidth: 300, lineHeight: 1.65, textAlign: "center" }}>
+                        Your account has been successfully created. You can now sign in with your username and password.
                       </div>
                     </div>
                   </div>
-                  <div className="ua-modal-footer">
+                  <div className="ua-modal-footer" style={{ justifyContent: "center" }}>
                     <button
                       type="button" onClick={closeCreate}
                       style={{
                         border: "none", background: BRAND, color: "#fff",
-                        borderRadius: 10, padding: "0.55rem 1.2rem", cursor: "pointer",
+                        borderRadius: 10, padding: "0.6rem 1.6rem", cursor: "pointer",
                         fontWeight: 800, fontSize: 13, fontFamily: "'Poppins', sans-serif",
-                        boxShadow: "0 4px 14px rgba(10,76,134,0.28)",
+                        boxShadow: "0 4px 16px rgba(10,76,134,0.3)",
                       }}
                     >
                       Sign in now
@@ -956,51 +879,166 @@ export default function LoginPage() {
                 </>
               )}
 
-              {/* ── State: waiting (countdown) ── */}
-              {createSent && !approved && (
+              {/* ── State: form ── */}
+              {!createDone && (
                 <>
                   <div className="ua-modal-body">
-                    <div style={{
-                      textAlign: "center", padding: "1.5rem 1rem",
-                      background: "#f8faff", border: "1px solid #bfdbfe",
-                      borderRadius: 12, fontFamily: "'Poppins', sans-serif",
-                    }}>
-                      <Clock size={36} color="#3b82f6" style={{ marginBottom: 10 }} />
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>
-                        Request submitted!
-                      </div>
-                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
-                        Waiting for admin approval…
+                    <div className="ua-grid">
+
+                      {/* Full Name – full width */}
+                      <UAField label="Full Name" icon={<User size={13} />} required error={createErrors.full_name} className="ua-span2">
+                        <input
+                          className={`ua-input${createErrors.full_name ? " ua-input--error" : ""}`}
+                          type="text" placeholder="e.g. Juan Dela Cruz"
+                          value={create.full_name}
+                          onChange={e => {
+                            const val = e.target.value;
+                            // Allow only letters, spaces, hyphens, apostrophes
+                            if (val && !/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]*$/.test(val)) return;
+                            setCreate(c => ({ ...c, full_name: val }));
+                            setCreateErrors(p => ({ ...p, full_name: undefined }));
+                          }}
+                        />
+                      </UAField>
+
+                      {/* Username */}
+                      <div className="ua-field">
+                        <label className="ua-field-label">Username<span style={{ color: "#ef4444", marginLeft: 2 }}>*</span></label>
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none", display: "flex", zIndex: 1 }}><AtSign size={13} /></span>
+                          <input
+                            className={`ua-input${(createErrors.username || usernameStatus === "taken") ? " ua-input--error" : usernameStatus === "available" ? " ua-input--ok" : ""}`}
+                            style={{ borderColor: usernameStatus === "available" && !createErrors.username ? "#86efac" : undefined }}
+                            type="text" placeholder="e.g. juan_dc"
+                            value={create.username}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setCreate(c => ({ ...c, username: val }));
+                              setCreateErrors(p => ({ ...p, username: undefined }));
+                              setUsernameStatus("idle");
+                              checkUsername(val);
+                            }}
+                          />
+                        </div>
+                        <LiveStatus status={usernameStatus} error={createErrors.username} label="Username" />
                       </div>
 
-                      <CountdownRing seconds={secondsLeft} />
+                      {/* Email */}
+                      <div className="ua-field">
+                        <label className="ua-field-label">Email Address<span style={{ color: "#ef4444", marginLeft: 2 }}>*</span></label>
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none", display: "flex", zIndex: 1 }}><Mail size={13} /></span>
+                          <input
+                            className={`ua-input${(createErrors.email || emailStatus === "taken") ? " ua-input--error" : ""}`}
+                            style={{ borderColor: emailStatus === "available" && !createErrors.email ? "#86efac" : undefined }}
+                            type="email" placeholder="you@example.com"
+                            value={create.email}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setCreate(c => ({ ...c, email: val }));
+                              setCreateErrors(p => ({ ...p, email: undefined }));
+                              setEmailStatus("idle");
+                              checkEmail(val);
+                            }}
+                          />
+                        </div>
+                        <LiveStatus status={emailStatus} error={createErrors.email} label="Email address" />
+                      </div>
 
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
-                        {secondsLeft > 0
-                          ? "Estimated wait time"
-                          : "Still waiting… the admin will approve shortly."}
+                      {/* Department – full width */}
+                      <UAField label="Department" icon={<Building2 size={13} />} required error={createErrors.department_id} className="ua-span2">
+                        <select
+                          className={`ua-select${createErrors.department_id ? " ua-select--error" : ""}`}
+                          value={create.department_id}
+                          onChange={e => { setCreate(c => ({ ...c, department_id: e.target.value })); setCreateErrors(p => ({ ...p, department_id: undefined })); }}
+                        >
+                          <option value="">Select your department…</option>
+                          {departments.map(d => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                        <span className="ua-select-chevron"><ChevronDown size={13} /></span>
+                      </UAField>
+
+                      {/* Password */}
+                      <div className="ua-field ua-span2">
+                        <label className="ua-field-label">
+                          Password<span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>
+                        </label>
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none", display: "flex", zIndex: 1 }}>
+                            <Lock size={13} />
+                          </span>
+                          <input
+                            className={`ua-input${createErrors.password ? " ua-input--error" : ""}`}
+                            type={showCreatePassword ? "text" : "password"}
+                            placeholder="Create a strong password"
+                            style={{ paddingRight: "2.4rem" }}
+                            value={create.password}
+                            onChange={e => { setCreate(c => ({ ...c, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })); }}
+                          />
+                          <button
+                            type="button"
+                            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", padding: 0 }}
+                            onClick={() => setShowCreatePassword(v => !v)}
+                          >
+                            {showCreatePassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                        {/* Requirements – shown while typing */}
+                        {create.password && <PasswordRequirements password={create.password} />}
+                        <FieldError msg={createErrors.password} />
                       </div>
-                      <div style={{
-                        marginTop: 14, padding: "0.6rem 0.8rem",
-                        background: "#eff6ff", borderRadius: 8,
-                        fontSize: 11, color: "#3b82f6", lineHeight: 1.6,
-                      }}>
-                        You can close this window — your request is saved.<br />
-                        This page will update automatically when approved.
-                      </div>
+
+                      {/* Confirm Password */}
+                      <UAField label="Confirm Password" icon={<Lock size={13} />} required error={createErrors.confirmPassword} className="ua-span2">
+                        <input
+                          className={`ua-input${createErrors.confirmPassword ? " ua-input--error" : ""}`}
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="Repeat your password"
+                          style={{ paddingRight: "2.4rem" }}
+                          value={create.confirmPassword}
+                          onChange={e => { setCreate(c => ({ ...c, confirmPassword: e.target.value })); setCreateErrors(p => ({ ...p, confirmPassword: undefined })); }}
+                        />
+                        <button
+                          type="button"
+                          style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", padding: 0 }}
+                          onClick={() => setShowConfirmPassword(v => !v)}
+                        >
+                          {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </UAField>
+
                     </div>
                   </div>
-                  <div className="ua-modal-footer" style={{ justifyContent: "center" }}>
+
+                  <div className="ua-modal-footer">
                     <button
-                      type="button" onClick={closeCreate}
+                      className="ua-btn-cancel" type="button" onClick={closeCreate}
                       style={{
                         border: "1.5px solid #e2e8f0", background: "#fff", borderRadius: 10,
-                        padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 600,
+                        padding: "0.58rem 1.1rem", cursor: "pointer", fontWeight: 700,
                         fontSize: 13, color: "#475569", fontFamily: "'Poppins', sans-serif",
                         transition: "background 0.15s",
                       }}
                     >
-                      Close for now
+                      Cancel
+                    </button>
+                    <button
+                      className="ua-btn-save" type="button"
+                      disabled={creating}
+                      onClick={handleCreateAccount as any}
+                      style={{
+                        border: "none",
+                        background: creating ? "#94a3b8" : BRAND,
+                        color: "#fff", borderRadius: 10, padding: "0.58rem 1.3rem",
+                        cursor: creating ? "not-allowed" : "pointer",
+                        fontWeight: 800, fontSize: 13, fontFamily: "'Poppins', sans-serif",
+                        boxShadow: creating ? "none" : "0 4px 16px rgba(10,76,134,0.3)",
+                        transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      {creating ? "Creating account…" : "Create Account"}
                     </button>
                   </div>
                 </>
