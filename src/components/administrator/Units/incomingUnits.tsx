@@ -512,6 +512,8 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .iu-root, .iu-root * { box-sizing: border-box; }
         .iu-row:hover          { background: #f8fafc !important; }
+        .icon-btn-iu { transition: box-shadow 0.15s, transform 0.12s !important; }
+        .icon-btn-iu:hover { background: #f1f5f9 !important; box-shadow: 0 3px 8px rgba(0,0,0,0.10) !important; transform: translateY(-1px); }
         .icon-btn-iu:hover     { background: #f1f5f9 !important; }
         .iu-export-item:hover  { background: #f1f5f9 !important; }
         .modal-overlay-iu      { animation: iuFadeIn 0.15s ease; }
@@ -526,7 +528,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         .iu-export-btn:hover:not(:disabled) { background: #15803d !important; border-color: #15803d !important; }
       `}</style>
 
-      <div className="iu-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+      <div className="iu-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem"}}>
 
         <CrudAlertToast toast={toast} />
 
@@ -561,7 +563,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                   cursor: exporting || rows.length === 0 ? "not-allowed" : "pointer",
                   fontFamily: "'Poppins', sans-serif",
                   opacity: exporting || rows.length === 0 ? 0.6 : 1,
-                  transition: "background 0.15s, opacity 0.15s",
+                  transition: "background 0.15s, opacity 0.15s, transform 0.12s", boxShadow: "0 4px 14px rgba(22,163,74,0.28)",
                 }}
               >
                 {exporting
@@ -576,7 +578,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 <div style={{
                   position: "absolute", top: "calc(100% + 6px)", right: 0,
                   background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
-                  boxShadow: "0 8px 28px rgba(15,23,42,0.13)", zIndex: 200,
+                  boxShadow: "0 8px 32px rgba(10,76,134,0.13), 0 2px 8px rgba(0,0,0,0.06)", zIndex: 200,
                   minWidth: 248, overflow: "hidden",
                 }}>
                   <div style={{
@@ -655,7 +657,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             { label: "Total logged",         value: rows.length,     color: BRAND,     icon: <Package size={16} /> },
             { label: "This list (filtered)", value: filtered.length, color: "#475569", icon: <Search  size={16} /> },
           ].map(c => (
-            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div key={c.label} style={{  background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: `${c.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color }}>{c.icon}</div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: c.color }}>{c.value}</div>
@@ -666,8 +668,8 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         </div>
 
         {/* Table */}
-        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-          <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
+        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e8edf2", overflow: "hidden", boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}>
+          <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #e8edf2", background: "#fafcff", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 320 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input
@@ -684,7 +686,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <tr style={{ background: "#f0f5fb", borderBottom: "1px solid #dde6f0" }}>
                   {([
                     { label: "Date",             field: "date_received" as SortField },
                     { label: "Unit",             field: "unit_name"     as SortField },
@@ -725,7 +727,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                             ]
                         ).map((btn, i) => (
                           <button key={i} title={btn.title} className="icon-btn-iu" onClick={btn.fn}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, transition: "background 0.15s" }}>
+                            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, transition: "background 0.15s" }}>
                             {btn.icon}
                           </button>
                         ))}
@@ -744,7 +746,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             </span>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
                 <ChevronLeft size={14} />
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
@@ -754,7 +756,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
                 </button>
               ))}
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -764,7 +766,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         {/* Add / Edit Modal */}
         {!readOnly && (modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay-iu" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-            <div className="modal-box-iu" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 580, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <div className="modal-box-iu" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 580, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", letterSpacing: 1, color: BRAND }}>
                   {modalMode === "add" ? "Log incoming unit" : "Edit incoming unit"}
@@ -855,7 +857,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.4rem" }}>
                 <button onClick={closeModal} style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Poppins', sans-serif" }}>Cancel</button>
                 <button onClick={handleSubmit} disabled={submitting}
-                  style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1 }}>
+                  style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", boxShadow: "0 4px 12px rgba(10,76,134,0.25)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Poppins', sans-serif" , transition: "filter 0.15s, transform 0.12s" }}>
                   {submitting ? "Saving…" : modalMode === "add" ? "Save record" : "Save changes"}
                 </button>
               </div>
@@ -869,7 +871,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             <div className="modal-box-iu" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 520, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.2rem" }}>
                 <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8 }}>{selected.unit_name}</h2>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8, color: BRAND, letterSpacing: 1, fontFamily: "'Poppins', sans-serif"  }}>{selected.unit_name}</h2>
                   <span style={{ fontSize: 11, fontWeight: 600, color: BRAND, background: `${BRAND}12`, padding: "2px 10px", borderRadius: 999 }}>Incoming unit</span>
                 </div>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", flexShrink: 0 }}><X size={18} /></button>
