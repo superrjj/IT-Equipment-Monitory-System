@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   TicketIcon,
   ListChecks,
-  MessageSquareText,
 } from "lucide-react";
 
 const baseBlue = "#0a4c86";
@@ -11,8 +10,7 @@ const baseBlue = "#0a4c86";
 type UserNavLabel =
   | "Dashboard"
   | "Submit Ticket"
-  | "My Tickets"
-  | "Feedback";
+  | "My Tickets";
 
 type BottomNavProps = {
   activeLabel: UserNavLabel;
@@ -23,7 +21,6 @@ const items: { label: UserNavLabel; icon: React.ElementType }[] = [
   { label: "Dashboard",      icon: LayoutDashboard },
   { label: "Submit Ticket",  icon: TicketIcon },
   { label: "My Tickets",     icon: ListChecks },
-  { label: "Feedback",       icon: MessageSquareText },
 ];
 
 const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) => {
@@ -124,4 +121,3 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
 
 export type { UserNavLabel };
 export default UserBottomNav;
-
