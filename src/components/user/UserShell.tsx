@@ -5,7 +5,6 @@ import type { UserNavLabel } from "./UserBottomNav";
 import UserDashboardHome from "./UserDashboardHome";
 import UserSubmitTicket from "./userSubmitTicket";
 import MyTicketsUser from "./MyTicketsUser";
-import UserTicketFeedback from "./UserTicketFeedback";
 import ProfileModal from "../administrator/Management/my-profiles";
 import { supabase } from "../../lib/supabaseClient";
 
