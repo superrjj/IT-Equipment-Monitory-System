@@ -880,7 +880,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
             <div className="modal-box-ou" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.2rem" }}>
                 <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8}}>{selected.unit_name}</h2>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8, color: BRAND, letterSpacing: 1, fontFamily: "'Poppins', sans-serif"}}>{selected.unit_name}</h2>
                   <span style={{ fontSize: 11, fontWeight: 600, color: BRAND, background: `${BRAND}12`, padding: "2px 10px", borderRadius: 999 }}>Outgoing unit</span>
                 </div>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", flexShrink: 0 }}><X size={18} /></button>

@@ -40,7 +40,7 @@ type DeptFormErrors = {
   location?: string;
 };
 
-const brandBlue = "#0a4c86";
+const brandBlue = "#0D518C";
 const PAGE_SIZE = 8;
 
 // ── Status badge ───────────────────────────────────────────────────────────────
@@ -366,6 +366,8 @@ const Departments: React.FC = () => {
         .departments-root, .departments-root * { box-sizing: border-box; }
         .dept-row:hover { background: #f8fafc !important; }
         .icon-btn:hover { background: #f1f5f9 !important; }
+        .icon-btn-ou { transition: box-shadow 0.15s, transform 0.12s !important; }
+        .icon-btn-ou:hover { background: #f1f5f9 !important; box-shadow: 0 3px 8px rgba(0,0,0,0.10) !important; transform: translateY(-1px) !important; }
         .modal-overlay { animation: fadeIn 0.15s ease; }
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         .modal-box { animation: slideUp 0.18s ease; }
@@ -376,7 +378,7 @@ const Departments: React.FC = () => {
         }
       `}</style>
 
-      <div className="departments-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+      <div className="departments-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
 
         <CrudAlertToast toast={toast} />
 
@@ -395,6 +397,7 @@ const Departments: React.FC = () => {
               padding: "0.5rem 1rem", borderRadius: 10, border: "none",
               background: brandBlue, color: "#fff", fontSize: 13, fontWeight: 600,
               cursor: "pointer", fontFamily: "'Poppins', sans-serif",
+              boxShadow: "0 4px 14px rgba(10,76,134,0.28)", transition: "filter 0.15s, transform 0.12s",
             }}
           >
             <Plus size={15} /> ADD DEPARTMENT
@@ -402,10 +405,10 @@ const Departments: React.FC = () => {
         </div>
 
         {/* ── Table card ── */}
-        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e8edf2", overflow: "hidden", boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}>
 
           {/* Search bar */}
-          <div style={{ padding: "1rem 1.2rem", borderBottom: "1px solid #f1f5f9" }}>
+          <div style={{ padding: "1rem 1.2rem", borderBottom: "1px solid #e8edf2", background: "#fafcff" }}>
             <div style={{ position: "relative", maxWidth: 320 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input
@@ -421,7 +424,7 @@ const Departments: React.FC = () => {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <tr style={{ background: "#f0f5fb", borderBottom: "1px solid #dde6f0" }}>
                   {[
                     { label: "Department Name", field: "name" as SortField },
                     { label: "Description",     field: null },
@@ -479,12 +482,12 @@ const Departments: React.FC = () => {
                           { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(d),     color: brandBlue  },
                           { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(d), color: "#dc2626" },
                         ].map((btn, i) => (
-                          <button key={i} title={btn.title} className="icon-btn" onClick={btn.fn}
+                          <button key={i} title={btn.title} className="icon-btn icon-btn-ou" onClick={btn.fn}
                             style={{
-                              width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0",
+                              width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2",
                               background: "#fff", cursor: "pointer", display: "flex",
                               alignItems: "center", justifyContent: "center", color: btn.color,
-                              transition: "background 0.15s",
+                              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
                             }}>
                             {btn.icon}
                           </button>
@@ -504,17 +507,17 @@ const Departments: React.FC = () => {
             </span>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === 1 ? "#cbd5e1" : "#475569" }}>
                 <ChevronLeft size={14} />
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
                 <button key={n} onClick={() => setPage(n)}
-                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: n === page ? brandBlue : "#fff", color: n === page ? "#fff" : "#475569", fontWeight: n === page ? 600 : 400, cursor: "pointer", fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>
+                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: n === page ? brandBlue : "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", color: n === page ? "#fff" : "#475569", fontWeight: n === page ? 600 : 400, cursor: "pointer", fontSize: 12, fontFamily: "'Poppins', sans-serif" }}>
                   {n}
                 </button>
               ))}
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: page === totalPages ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: page === totalPages ? "#cbd5e1" : "#475569" }}>
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -524,7 +527,7 @@ const Departments: React.FC = () => {
         {/* ── Add / Edit Modal ── */}
         {(modalMode === "add" || modalMode === "edit") && (
           <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-            <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 440, boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 440, boxShadow: "0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem", }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: brandBlue }}>
                   {modalMode === "add" ? "Add Department" : "Edit Department"}
@@ -589,7 +592,7 @@ const Departments: React.FC = () => {
                   Cancel
                 </button>
                 <button onClick={handleSubmit} disabled={submitting}
-                  style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: brandBlue, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1 }}>
+                  style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: brandBlue, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1, boxShadow: "0 4px 12px rgba(10,76,134,0.25)" }}>
                   {submitting ? "Saving…" : modalMode === "add" ? "Add Department" : "Save Changes"}
                 </button>
               </div>
@@ -600,12 +603,12 @@ const Departments: React.FC = () => {
         {/* ── View Tickets Modal ── */}
         {modalMode === "view" && selected && (
           <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-            <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 760, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 760, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}>
 
               {/* Modal header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                 <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{selected.name}</h2>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8, color: brandBlue, letterSpacing: 1, fontFamily: "'Poppins', sans-serif" }}>{selected.name}</h2>
                   <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>Support tickets from this department</p>
                 </div>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
@@ -674,7 +677,7 @@ const Departments: React.FC = () => {
         {/* ── Delete Confirm Modal ── */}
         {deleteTarget && (
           <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-            <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(15,23,42,0.2)", textAlign: "center" }}>
+            <div className="modal-box" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08)", textAlign: "center" }}>
               <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
                 <Archive size={22} color="#dc2626" />
               </div>

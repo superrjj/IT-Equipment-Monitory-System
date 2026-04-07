@@ -16,7 +16,7 @@ import {
 import { supabase } from "../../lib/supabaseClient";
 import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
-const BRAND = "#0a4c86";
+const BRAND = "#0D518C";
 const GREEN = "#16a34a";
 
 const WorkHistory: React.FC = () => {
@@ -415,7 +415,7 @@ const WorkHistory: React.FC = () => {
               boxShadow: "0 24px 60px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08)",
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{selected.title}</h3>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 8, color: BRAND, letterSpacing: 1, fontFamily: "'Poppins', sans-serif" }}>{selected.title}</h2>
                 <button type="button" onClick={() => setSelected(null)}
                   style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8" }}>
                   <X size={18} />
