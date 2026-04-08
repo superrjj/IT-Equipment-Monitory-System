@@ -279,8 +279,8 @@ const MyTicketsUser: React.FC = () => {
         .mtu-shell { width: 100%; }
         .mtu-topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 1rem; }
         .mtu-search-wrap { position: relative; max-width: 360px; width: 100%; }
-        .mtu-ticket-card { border-radius: 14px; border: 1px solid #e2e8f0; background: #ffffff; box-shadow: 0 1px 4px rgba(15,23,42,0.05); overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
-        .mtu-ticket-card:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(15,23,42,0.08); border-color: #cbd5e1; }
+        .mtu-ticket-card { border-radius: 14px; border: 1px solid #e2e8f0; background: #ffffff; box-shadow: 0 1px 6px rgba(15,23,42,0.08); overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
+        .mtu-ticket-card:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,23,42,0.12); border-color: #cbd5e1; }
         .mtu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.75rem; }
         .mtu-action-btn { border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0.42rem 0.65rem; font-size: 11.5px; font-weight: 600; transition: background 0.15s, border-color 0.15s; font-family: 'Poppins', sans-serif; }
         .mtu-action-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
@@ -306,7 +306,7 @@ const MyTicketsUser: React.FC = () => {
         </div>
 
         {/* Card wrapper */}
-        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+        <div style={{ background: "#ffffff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 8px 24px rgba(15,23,42,0.08)" }}>
           {/* Search */}
           <div style={{ padding: "1.1rem 1.2rem", borderBottom: "1px solid #f1f5f9" }}>
             <div className="mtu-search-wrap">
