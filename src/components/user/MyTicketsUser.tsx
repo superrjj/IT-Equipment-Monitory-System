@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Ticket, Search, Eye, X, Clock, Star, MessageSquare } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
+import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 
 const BRAND = "#0a4c86";
 
@@ -269,6 +270,7 @@ const MyTicketsUser: React.FC = () => {
 
   return (
     <>
+      <ShimmerKeyframes />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .mtu-root { font-family: 'Poppins', sans-serif; color: #0f172a; }
@@ -321,8 +323,34 @@ const MyTicketsUser: React.FC = () => {
           {/* Grid */}
           <div style={{ padding: "1.1rem 1.2rem" }}>
             {loading ? (
-              <div style={{ padding: "1.3rem 0.2rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-                Loading tickets...
+              <div className="mtu-grid">
+                {[0, 1, 2, 3, 4, 5].map(i => (
+                  <div
+                    key={i}
+                    className="mtu-ticket-card"
+                    style={{ border: "1px solid #e2e8f0", background: "#ffffff", overflow: "hidden" }}
+                  >
+                    <div style={{
+                      padding: "0.65rem 0.8rem", background: "#f8fafc",
+                      borderBottom: "1px solid #eef2f7",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    }}>
+                      <Skeleton width={100} height={12} radius={4} />
+                      <Skeleton width={88} height={22} radius={999} />
+                    </div>
+                    <div style={{ padding: "0.8rem" }}>
+                      <Skeleton width="92%" height={16} radius={5} style={{ marginBottom: 8 }} />
+                      <Skeleton width="70%" height={14} radius={4} style={{ marginBottom: 10 }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <Skeleton width={72} height={20} radius={999} />
+                        <Skeleton width={96} height={12} radius={4} />
+                      </div>
+                      <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                        <Skeleton width={88} height={32} radius={9} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filtered.length === 0 ? (
               <div style={{ padding: "1.3rem 0.2rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>

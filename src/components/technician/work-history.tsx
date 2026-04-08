@@ -15,6 +15,7 @@ import {
 } from "../../utils/exportWorkHistory";
 import { supabase } from "../../lib/supabaseClient";
 import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
+import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 
 const BRAND = "#0D518C";
 const GREEN = "#16a34a";
@@ -150,6 +151,7 @@ const WorkHistory: React.FC = () => {
 
   return (
     <>
+      <ShimmerKeyframes />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .wh-root, .wh-root * { box-sizing: border-box; }
@@ -352,12 +354,19 @@ const WorkHistory: React.FC = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>
-                      <Loader size={20} style={{ verticalAlign: "middle", marginRight: 8 }} />
-                      Loading…
-                    </td>
-                  </tr>
+                  Array.from({ length: 7 }).map((_, rowIdx) => (
+                    <tr key={rowIdx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      {[0, 1, 2, 3, 4, 5, 6].map(col => (
+                        <td key={col} style={{ padding: "0.75rem 1rem" }}>
+                          <Skeleton
+                            height={12}
+                            radius={4}
+                            width={col === 0 ? 88 : col === 4 ? 72 : col === 5 ? 100 : "90%"}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#94a3b8" }}>

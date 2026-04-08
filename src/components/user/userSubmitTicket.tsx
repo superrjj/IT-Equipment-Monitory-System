@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 
 const BRAND = "#0a4c86";
 
@@ -364,29 +365,98 @@ const UserSubmitTicket: React.FC = () => {
       `}</style>
 
       <div className="ust-root">
-        {error && (
-          <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
-            <Alert variant="destructive">
-              <AlertCircle size={16} strokeWidth={2} aria-hidden />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          </div>
-        )}
+        {loadingProfile ? (
+          <>
+            <ShimmerKeyframes />
+            <div className="ust-page">
+              <div className="ust-backdrop">
+                <div className="ust-modal">
+                  <div className="ust-modal-left">
+                    <div className="ust-modal-head">
+                      <Skeleton width={200} height={16} radius={6} />
+                      <Skeleton width="100%" height={12} radius={4} style={{ marginTop: 10 }} />
+                      <Skeleton width="88%" height={12} radius={4} style={{ marginTop: 8 }} />
+                    </div>
+                    <div style={{ marginBottom: "0.85rem" }}>
+                      <Skeleton width={72} height={12} radius={4} style={{ marginBottom: 8 }} />
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        <Skeleton width={108} height={38} radius={999} />
+                        <Skeleton width={108} height={38} radius={999} />
+                        <Skeleton width={108} height={38} radius={999} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: "0.85rem" }}>
+                      <Skeleton width={64} height={12} radius={4} style={{ marginBottom: 8 }} />
+                      <Skeleton width="100%" height={40} radius={8} />
+                      <Skeleton width={48} height={10} radius={4} style={{ marginTop: 8, marginLeft: "auto" }} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.9rem" }}>
+                      <div style={{ gridColumn: "span 2" }}>
+                        <Skeleton width={96} height={12} radius={4} style={{ marginBottom: 8 }} />
+                        <Skeleton width="100%" height={40} radius={8} />
+                      </div>
+                      <div style={{ gridColumn: "span 2" }}>
+                        <Skeleton width={120} height={12} radius={4} style={{ marginBottom: 8 }} />
+                        <Skeleton width="100%" height={40} radius={8} />
+                      </div>
+                    </div>
+                    <div className="ust-footer">
+                      <Skeleton width={72} height={36} radius={8} />
+                      <Skeleton width={110} height={36} radius={8} />
+                    </div>
+                  </div>
+                  <aside className="ust-modal-right" aria-hidden>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <Skeleton width={36} height={36} radius={12} />
+                      <div>
+                        <Skeleton width={100} height={14} radius={4} style={{ marginBottom: 6 }} />
+                        <Skeleton width={72} height={11} radius={4} />
+                      </div>
+                    </div>
+                    <div className="ust-right-card">
+                      <Skeleton width={140} height={13} radius={4} style={{ marginBottom: 12 }} />
+                      {[0, 1, 2].map(i => (
+                        <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < 2 ? 10 : 0 }}>
+                          <Skeleton width={22} height={22} radius={11} />
+                          <Skeleton width="100%" height={36} radius={4} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="ust-right-card">
+                      <Skeleton width={160} height={13} radius={4} style={{ marginBottom: 10 }} />
+                      <Skeleton width="100%" height={40} radius={8} />
+                    </div>
+                    <Skeleton width="100%" height={72} radius={12} />
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {error && (
+              <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
+                <Alert variant="destructive">
+                  <AlertCircle size={16} strokeWidth={2} aria-hidden />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              </div>
+            )}
 
-        {success && (
-          <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
-            <Alert>
-              <CheckCircle2 size={16} strokeWidth={2} aria-hidden />
-              <AlertTitle>Success</AlertTitle>
-              <AlertDescription>{success}</AlertDescription>
-            </Alert>
-          </div>
-        )}
+            {success && (
+              <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
+                <Alert>
+                  <CheckCircle2 size={16} strokeWidth={2} aria-hidden />
+                  <AlertTitle>Success</AlertTitle>
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              </div>
+            )}
 
-        <div className="ust-page">
-          <div className="ust-backdrop">
-            <div className="ust-modal">
+            <div className="ust-page">
+              <div className="ust-backdrop">
+                <div className="ust-modal">
               <div className="ust-modal-left">
                 <div className="ust-modal-head">
                   <h2 className="ust-modal-title">Submit New Ticket</h2>
@@ -452,14 +522,14 @@ const UserSubmitTicket: React.FC = () => {
                       <label style={labelStyle}>Employee name</label>
                       <div className="ust-readonly">
                         <User size={14} color={BRAND} />
-                        {loadingProfile ? "Loading…" : profile?.full_name || "—"}
+                        {profile?.full_name || "—"}
                       </div>
                     </div>
                     <div style={{ gridColumn: "span 2" }}>
                       <label style={labelStyle}>Department / Office</label>
                       <div className="ust-readonly">
                         <Building2 size={14} color={BRAND} />
-                        {loadingProfile ? "Loading…" : departmentName || "—"}
+                        {departmentName || "—"}
                       </div>
                     </div>
                   </div>
@@ -579,6 +649,8 @@ const UserSubmitTicket: React.FC = () => {
             </div>
           </div>
         </div>
+          </>
+        )}
       </div>
     </>
   );

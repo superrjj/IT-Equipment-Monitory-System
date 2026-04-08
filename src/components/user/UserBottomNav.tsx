@@ -5,6 +5,8 @@ import {
   ListChecks,
 } from "lucide-react";
 
+/** Matches administrator `BottomNav` (`baseBlue`). */
+const baseBlue = "#0a4c86";
 
 type UserNavLabel =
   | "Dashboard"
@@ -30,22 +32,21 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
 
         .ubnav-bar {
           position: fixed;
-          bottom: 18px;
+          bottom: 16px;
           left: 50%;
           transform: translateX(-50%);
           z-index: 900;
           display: flex;
           align-items: center;
           gap: 4px;
-          background: #0D518C;
-          border: 1.5px solid rgba(255,255,255,0.15);
-          box-shadow: 0 4px 24px rgba(0,0,0,0.25), 0 1px 6px rgba(0,0,0,0.15);
+          background: #ffffff;
+          border: 2px solid #cbd5e1;
           border-radius: 999px;
-          padding: 6px 8px;
-          box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06);
+          padding: 8px 10px;
+          box-shadow: 0 6px 28px rgba(15,23,42,0.12), 0 2px 8px rgba(0,0,0,0.08);
           font-family: 'Poppins', sans-serif;
           width: max-content;
-          max-width: calc(100vw - 32px);
+          max-width: calc(100vw - 24px);
         }
 
         .ubnav-item {
@@ -53,43 +54,54 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 3px;
-          padding: 8px 16px 7px;
+          gap: 4px;
+          padding: 10px 16px 9px;
           border-radius: 999px;
-          border: none;
+          border: 2px solid transparent;
           background: transparent;
           cursor: pointer;
-          transition: background 0.18s, color 0.18s;
-          min-width: 78px;
+          transition: background 0.18s, color 0.18s, border-color 0.18s;
+          min-width: 96px;
+          min-height: 52px;
           font-family: 'Poppins', sans-serif;
-          color: rgba(255,255,255,0.55);
+          color: #334155;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .ubnav-item:focus-visible {
+          outline: 3px solid ${baseBlue};
+          outline-offset: 2px;
         }
 
         .ubnav-item:hover:not(.ubnav-active) {
-          background: rgba(255,255,255,0.12);
-          color: rgba(255,255,255,0.85);
+          background: #f1f5f9;
+          color: #0f172a;
         }
 
         .ubnav-item.ubnav-active {
-          background: #ffffff;
-          color: #0D518C;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+          background: ${baseBlue};
+          color: #ffffff;
+          box-shadow: 0 4px 14px rgba(10,76,134,0.35);
+          border-color: ${baseBlue};
         }
 
         .ubnav-label {
-          font-size: 10px;
-          font-weight: 600;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.15;
           white-space: nowrap;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.01em;
         }
 
         @media (max-width: 520px) {
           .ubnav-item {
-            padding: 7px 8px 6px;
-            min-width: 58px;
+            padding: 9px 12px 8px;
+            min-width: 84px;
+            min-height: 50px;
           }
           .ubnav-label {
-            font-size: 8.5px;
+            font-size: 11px;
+            font-weight: 700;
           }
         }
       `}</style>
@@ -104,11 +116,12 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
               onClick={() => onNavigate(label)}
               title={label}
               type="button"
+              aria-current={active ? "page" : undefined}
             >
               <Icon
-                size={18}
-                strokeWidth={active ? 2.2 : 1.8}
-                color={active ? "#0D518C" : "rgba(255,255,255,0.55)"}
+                size={20}
+                strokeWidth={active ? 2.35 : 2.1}
+                color={active ? "#ffffff" : "#334155"}
               />
               <span className="ubnav-label">{label}</span>
             </button>

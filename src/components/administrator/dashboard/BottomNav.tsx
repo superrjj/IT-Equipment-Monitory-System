@@ -136,15 +136,15 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           z-index: 900;
           display: flex;
           align-items: center;
-          gap: 2px;
+          gap: 4px;
           background: #ffffff;
-          border: 1.5px solid #e2e8f0;
+          border: 2px solid #cbd5e1;
           border-radius: 999px;
-          padding: 6px 8px;
-          box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06);
+          padding: 8px 10px;
+          box-shadow: 0 6px 28px rgba(15,23,42,0.12), 0 2px 8px rgba(0,0,0,0.08);
           font-family: 'Poppins', sans-serif;
           width: max-content;
-          max-width: calc(100vw - 32px);
+          max-width: calc(100vw - 24px);
         }
 
         .bnav-item {
@@ -152,34 +152,43 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 3px;
-          padding: 8px 18px 7px;
+          gap: 4px;
+          padding: 10px 16px 9px;
           border-radius: 999px;
-          border: none;
+          border: 2px solid transparent;
           background: transparent;
           cursor: pointer;
-          transition: background 0.18s, color 0.18s;
-          min-width: 88px;
+          transition: background 0.18s, color 0.18s, border-color 0.18s;
+          min-width: 96px;
+          min-height: 52px;
           font-family: 'Poppins', sans-serif;
-          color: #94a3b8;
+          color: #334155;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .bnav-item:focus-visible {
+          outline: 3px solid ${baseBlue};
+          outline-offset: 2px;
         }
 
         .bnav-item:hover:not(.bnav-active) {
           background: #f1f5f9;
-          color: #475569;
+          color: #0f172a;
         }
 
         .bnav-item.bnav-active {
           background: ${baseBlue};
           color: #ffffff;
-          box-shadow: 0 4px 14px rgba(10,76,134,0.28);
+          box-shadow: 0 4px 14px rgba(10,76,134,0.35);
+          border-color: ${baseBlue};
         }
 
         .bnav-label {
-          font-size: 10px;
-          font-weight: 600;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.15;
           white-space: nowrap;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.01em;
         }
 
         .bnav-more {
@@ -187,21 +196,28 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 3px;
-          padding: 8px 18px 7px;
+          gap: 4px;
+          padding: 10px 16px 9px;
           border-radius: 999px;
-          border: none;
+          border: 2px solid transparent;
           background: transparent;
           cursor: pointer;
           transition: background 0.18s, color 0.18s;
-          min-width: 72px;
+          min-width: 80px;
+          min-height: 52px;
           font-family: 'Poppins', sans-serif;
-          color: #94a3b8;
+          color: #334155;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .bnav-more:focus-visible {
+          outline: 3px solid ${baseBlue};
+          outline-offset: 2px;
         }
 
         .bnav-more:hover {
           background: #f1f5f9;
-          color: #475569;
+          color: #0f172a;
         }
 
         .bnav-more.bnav-more-open {
@@ -211,17 +227,17 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
 
         .bnav-drawer {
           position: fixed;
-          bottom: 90px;
+          bottom: 96px;
           left: 50%;
           transform: translateX(-50%) translateY(10px);
           z-index: 901;
           background: #ffffff;
-          border: 1px solid #e2e8f0;
+          border: 2px solid #cbd5e1;
           border-radius: 20px;
           box-shadow: 0 20px 50px rgba(10,76,134,0.18), 0 4px 16px rgba(0,0,0,0.08);
-          padding: 12px;
-          min-width: 280px;
-          max-width: 340px;
+          padding: 14px;
+          min-width: 300px;
+          max-width: min(380px, calc(100vw - 24px));
           font-family: 'Poppins', sans-serif;
           opacity: 0;
           pointer-events: none;
@@ -237,19 +253,26 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
         .bnav-drawer-item {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
           width: 100%;
-          padding: 10px 12px;
+          padding: 14px 14px;
           border-radius: 12px;
-          border: none;
+          border: 2px solid transparent;
           background: transparent;
           cursor: pointer;
           font-family: 'Poppins', sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          color: #475569;
+          font-size: 15px;
+          font-weight: 600;
+          color: #1e293b;
           text-align: left;
           transition: background 0.15s, color 0.15s;
+          min-height: 48px;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .bnav-drawer-item:focus-visible {
+          outline: 3px solid ${baseBlue};
+          outline-offset: 1px;
         }
 
         .bnav-drawer-item:hover {
@@ -258,18 +281,19 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
         }
 
         .bnav-drawer-item.bnav-drawer-active {
-          background: rgba(10,76,134,0.08);
+          background: rgba(10,76,134,0.12);
           color: ${baseBlue};
-          font-weight: 600;
+          font-weight: 700;
+          border-color: rgba(10,76,134,0.25);
         }
 
         .bnav-drawer-heading {
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 700;
-          color: #94a3b8;
+          color: #475569;
           text-transform: uppercase;
-          letter-spacing: 0.1em;
-          padding: 8px 12px 4px;
+          letter-spacing: 0.06em;
+          padding: 10px 14px 6px;
           font-family: 'Poppins', sans-serif;
         }
 
@@ -303,23 +327,26 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
       >
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "4px 12px 10px", borderBottom: "1px solid #f1f5f9", marginBottom: 6,
+          padding: "6px 12px 12px", borderBottom: "2px solid #e2e8f0", marginBottom: 8,
         }}>
           <span style={{
-            fontSize: 13, fontWeight: 700, color: "#0f172a",
+            fontSize: 16, fontWeight: 700, color: "#0f172a",
             fontFamily: "'Poppins', sans-serif",
+            letterSpacing: "0.01em",
           }}>
             More options
           </span>
           <button
+            type="button"
+            aria-label="Close menu"
             onClick={() => setDrawerOpen(false)}
             style={{
-              width: 28, height: 28, borderRadius: 8, border: "none",
-              background: "#f1f5f9", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b",
+              width: 44, height: 44, borderRadius: 10, border: "2px solid #e2e8f0",
+              background: "#f8fafc", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", color: "#334155",
             }}
           >
-            <X size={14} />
+            <X size={20} strokeWidth={2.25} />
           </button>
         </div>
 
@@ -332,11 +359,12 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
               const active = label === activeLabel;
               return (
                 <button
+                  type="button"
                   key={label}
                   className={`bnav-drawer-item${active ? " bnav-drawer-active" : ""}`}
                   onClick={() => handleNav(label)}
                 >
-                  <Icon size={16} strokeWidth={2} color={active ? baseBlue : "#64748b"} />
+                  <Icon size={20} strokeWidth={active ? 2.25 : 2} color={active ? baseBlue : "#334155"} />
                   {label}
                 </button>
               );
@@ -353,14 +381,16 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           return (
             <button
               key={label}
+              type="button"
               className={`bnav-item${active ? " bnav-active" : ""}`}
               onClick={() => handleNav(label)}
               title={label}
+              aria-current={active ? "page" : undefined}
             >
               <Icon
-                size={18}
-                strokeWidth={active ? 2.2 : 1.8}
-                color={active ? "#ffffff" : "#94a3b8"}
+                size={20}
+                strokeWidth={active ? 2.35 : 2.1}
+                color={active ? "#ffffff" : "#334155"}
               />
               <span className="bnav-label">{label}</span>
             </button>
@@ -369,14 +399,17 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
 
         {/* More button */}
         <button
+          type="button"
           className={`bnav-more${drawerOpen ? " bnav-more-open" : ""}`}
           onClick={() => setDrawerOpen(v => !v)}
           title="More"
+          aria-expanded={drawerOpen}
+          aria-haspopup="true"
         >
           <ChevronUp
-            size={18}
-            strokeWidth={1.8}
-            color={drawerOpen ? baseBlue : "#94a3b8"}
+            size={20}
+            strokeWidth={2.1}
+            color={drawerOpen ? baseBlue : "#334155"}
             style={{
               transform: drawerOpen ? "rotate(180deg)" : "rotate(0deg)",
               transition: "transform 0.2s",

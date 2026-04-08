@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Ticket, Clock, CheckCircle2, ArrowRight } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
+import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 
 const BRAND = "#0a4c86";
 
@@ -86,6 +87,92 @@ const UserDashboardHome: React.FC<Props> = ({
   }, [userId, fullName]);
 
   const fmt = (n: number | null) => (n === null ? "—" : String(n));
+
+  const kpiLoading = openCount === null;
+
+  if (kpiLoading) {
+    return (
+      <>
+        <ShimmerKeyframes />
+        <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        .udh-root { font-family: 'DM Sans', sans-serif; color: #0f172a; }
+        .udh-grid-kpi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.9rem; }
+        .udh-kpi-card {
+          background: #ffffff;
+          border-radius: 16px;
+          padding: 1rem 1.1rem;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 4px rgba(15,23,42,0.05);
+          display: flex;
+          flex-direction: column;
+          gap: 0.45rem;
+        }
+        .udh-section {
+          background: #ffffff;
+          border-radius: 18px;
+          border: 1px solid #e2e8f0;
+          padding: 1.1rem 1.2rem;
+          box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+        }
+        .udh-skel-quick {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.6rem;
+        }
+        @media (max-width: 960px) {
+          .udh-grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+          .udh-grid-kpi { grid-template-columns: minmax(0,1fr); }
+          .udh-skel-quick { grid-template-columns: minmax(0,1fr); }
+        }
+      `}</style>
+        <div className="udh-root">
+          <div style={{ marginBottom: "1rem" }}>
+            <Skeleton width={280} height={22} radius={8} />
+            <Skeleton width={320} height={13} radius={4} style={{ marginTop: 10 }} />
+          </div>
+          <div className="udh-grid-kpi" style={{ marginBottom: "1rem" }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} className="udh-kpi-card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Skeleton width={30} height={30} radius={9} />
+                </div>
+                <Skeleton width="45%" height={26} radius={6} />
+                <Skeleton width="55%" height={10} radius={4} />
+                <Skeleton width="85%" height={10} radius={4} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "0.9rem", marginBottom: "0.8rem" }}>
+            <div className="udh-section">
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Skeleton width={30} height={30} radius={9} />
+                <Skeleton width={120} height={14} radius={5} />
+              </div>
+              <Skeleton width="70%" height={11} radius={4} style={{ marginBottom: 12 }} />
+              <div className="udh-skel-quick">
+                <Skeleton width="100%" height={56} radius={14} />
+                <Skeleton width="100%" height={56} radius={14} />
+              </div>
+            </div>
+            <div />
+          </div>
+          <div className="udh-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 200px" }}>
+                <Skeleton width={200} height={14} radius={5} style={{ marginBottom: 8 }} />
+                <Skeleton width="100%" height={10} radius={4} style={{ marginBottom: 6 }} />
+                <Skeleton width="90%" height={10} radius={4} />
+              </div>
+              <Skeleton width={130} height={34} radius={999} />
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
