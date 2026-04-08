@@ -580,9 +580,9 @@ const UserSubmitTicket: React.FC = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
-                      IT Helpdesk
+                      IT Helpdesk Ticketing System
                     </div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>City Government</div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>City Government of Tarlac</div>
                   </div>
                 </div>
 
