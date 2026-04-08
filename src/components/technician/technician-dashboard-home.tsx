@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   Ticket, Clock, CheckCircle2, CircleDot,
   RefreshCw, ArrowUpRight, Trophy, Activity,
-  TrendingUp, Zap,
+  TrendingUp, Zap, Star,
 } from "lucide-react";
 import { getSessionUserId } from "../../lib/audit-notifications";
 import { supabase } from "../../lib/supabaseClient";
@@ -17,7 +17,114 @@ type TechStat = {
   resolved: number;
   inProgress: number;
   pending: number;
+  avgRating: number;
+  totalRatings: number;
 };
+
+// ── Skeleton primitives ───────────────────────────────────────────────────────
+const Skeleton: React.FC<{
+  width?: string | number;
+  height?: number;
+  radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div
+    style={{
+      width,
+      height,
+      borderRadius: radius,
+      background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+      backgroundSize: "200% 100%",
+      animation: "skShimmer 1.4s ease infinite",
+      flexShrink: 0,
+      ...style,
+    }}
+  />
+);
+
+// ── KPI Skeleton card ─────────────────────────────────────────────────────────
+const KpiSkeleton: React.FC = () => (
+  <div
+    style={{
+      background: "#fff",
+      borderRadius: 16,
+      padding: "1rem 1.1rem 0.9rem",
+      border: "1px solid #e8edf2",
+      boxShadow: "0 2px 8px rgba(10,76,134,0.07)",
+      position: "relative",
+      overflow: "hidden",
+    }}
+  >
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#e2e8f0", borderRadius: "16px 16px 0 0" }} />
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.9rem" }}>
+      <Skeleton width={30} height={30} radius={8} />
+      <Skeleton width={13} height={13} radius={4} />
+    </div>
+    <Skeleton width="55%" height={32} radius={6} style={{ marginBottom: 8 }} />
+    <Skeleton width="70%" height={10} radius={4} style={{ marginBottom: 4 }} />
+    <Skeleton width="50%" height={10} radius={4} />
+  </div>
+);
+
+// ── Panel skeleton (generic card shell) ───────────────────────────────────────
+const PanelSkeleton: React.FC<{
+  height?: number;
+  style?: React.CSSProperties;
+  lines?: number;
+}> = ({ height = 200, style = {}, lines = 3 }) => (
+  <div
+    style={{
+      background: "#fff",
+      borderRadius: 16,
+      padding: "1.1rem",
+      border: "1px solid #e8edf2",
+      boxShadow: "0 2px 8px rgba(10,76,134,0.07)",
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      minHeight: height,
+      ...style,
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Skeleton width={26} height={26} radius={7} />
+      <Skeleton width="40%" height={14} radius={5} />
+    </div>
+    <Skeleton width="100%" height={height * 0.38} radius={8} />
+    {Array.from({ length: lines }).map((_, i) => (
+      <Skeleton key={i} width={`${75 - i * 12}%`} height={10} radius={4} />
+    ))}
+  </div>
+);
+
+// ── Leaderboard card skeleton ─────────────────────────────────────────────────
+const LeaderboardCardSkeleton: React.FC = () => (
+  <div
+    style={{
+      border: "1px solid #e8edf2",
+      borderRadius: 16,
+      padding: "14px 16px",
+      background: "#fff",
+      boxShadow: "0 1px 6px rgba(10,76,134,0.04)",
+    }}
+  >
+    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+      <Skeleton width={28} height={18} radius={999} />
+      <Skeleton width={22} height={22} radius={6} />
+    </div>
+    <Skeleton width={40} height={40} radius={999} style={{ marginBottom: 8 }} />
+    <Skeleton width="75%" height={13} radius={5} style={{ marginBottom: 6 }} />
+    <Skeleton width="50%" height={18} radius={999} style={{ marginBottom: 10 }} />
+    <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
+      {[0, 1, 2].map(i => (
+        <Skeleton key={i} width="33%" height={42} radius={8} />
+      ))}
+    </div>
+    <Skeleton width="90%" height={8} radius={4} style={{ marginBottom: 6 }} />
+    <Skeleton width="100%" height={4} radius={999} style={{ marginBottom: 6 }} />
+    <Skeleton width="35%" height={8} radius={4} style={{ marginLeft: "auto" }} />
+  </div>
+);
 
 // ── Count-up hook ─────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 700) {
@@ -38,23 +145,21 @@ function useCountUp(target: number, duration = 700) {
   return val;
 }
 
-// ── Avatar helpers ─────────────────────────────────────────────────────────────
+// ── Avatar helpers ────────────────────────────────────────────────────────────
 const AVATAR_BG   = ["#fef9c3","#e0e7ff","#d1fae5","#fce7f3","#e0f2fe","#fce7f3","#e0e7ff"];
 const AVATAR_TEXT = ["#92400e","#3730a3","#065f46","#9d174d","#0c4a6e","#9d174d","#3730a3"];
 
 function getInitials(name: string) {
   return name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 }
-function getResolutionRate(tech: TechStat) {
-  const total = tech.resolved + tech.inProgress + tech.pending;
-  return total > 0 ? Math.round((tech.resolved / total) * 100) : 0;
-}
-function getPerformanceBadge(resolved: number, rank: number) {
-  if (rank === 0 && resolved > 0) return { label: "Top performer", color: "#92400e", bg: "#fef9c3" };
-  if (resolved >= 10)             return { label: "Expert",        color: "#1e40af", bg: "#dbeafe" };
-  if (resolved >= 5)              return { label: "Active",        color: "#1e40af", bg: "#dbeafe" };
-  if (resolved >= 1)              return { label: "Getting started", color: "#475569", bg: "#f1f5f9" };
-  return                                 { label: "No tickets yet",  color: "#94a3b8", bg: "#f8fafc" };
+
+function getPerformanceBadge(avgRating: number, rank: number) {
+  if (rank === 0 && avgRating > 0) return { label: "Top rated",        color: "#92400e", bg: "#fef9c3" };
+  if (avgRating >= 4.5)            return { label: "Excellent",         color: "#065f46", bg: "#d1fae5" };
+  if (avgRating >= 4.0)            return { label: "Great",             color: "#1e40af", bg: "#dbeafe" };
+  if (avgRating >= 3.0)            return { label: "Good",              color: "#475569", bg: "#f1f5f9" };
+  if (avgRating > 0)               return { label: "Needs improvement", color: "#92400e", bg: "#fef3c7" };
+  return                                  { label: "No ratings yet",    color: "#94a3b8", bg: "#f8fafc" };
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
@@ -82,12 +187,12 @@ const KpiCard: React.FC<{
       style={{
         background: "#fff", borderRadius: 16,
         padding: "1rem 1.1rem 0.9rem",
-        border: `1px solid ${hovered ? accent + "40" : "#e8edf5"}`,
+        border: `1px solid ${hovered ? accent + "40" : "#e8edf2"}`,
         position: "relative", overflow: "hidden",
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(10px)",
         transition: `opacity 0.35s ease ${delay}ms, transform 0.35s ease ${delay}ms, box-shadow 0.2s, border-color 0.2s`,
-        boxShadow: hovered ? `0 4px 18px ${accent}14` : "none",
+        boxShadow: hovered ? `0 4px 18px ${accent}14` : "0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04)",
         cursor: onClick ? "pointer" : "default",
       }}
     >
@@ -110,7 +215,7 @@ const KpiCard: React.FC<{
   );
 };
 
-// ── Resolution bar ─────────────────────────────────────────────────────────────
+// ── Resolution bar ────────────────────────────────────────────────────────────
 const ResolutionBar: React.FC<{
   label: string; value: number; total: number;
   color: string; delay?: number; animKey?: number;
@@ -143,9 +248,8 @@ const ResolutionBar: React.FC<{
   );
 };
 
-// ── Weekly Activity Heatmap (Mon–Thu only) ────────────────────────────────────
+// ── Weekly Activity Heatmap ───────────────────────────────────────────────────
 const WeeklyHeatmap: React.FC<{ tickets: any[] }> = ({ tickets }) => {
-  // Only Mon(1), Tue(2), Wed(3), Thu(4)
   const allDays   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const allCounts = Array(7).fill(0);
   tickets.forEach((t: any) => {
@@ -155,8 +259,8 @@ const WeeklyHeatmap: React.FC<{ tickets: any[] }> = ({ tickets }) => {
     }
   });
 
-  const days   = allDays.slice(1, 5);    // Mon–Thu
-  const counts = allCounts.slice(1, 5);  // Mon–Thu counts
+  const days   = allDays.slice(1, 5);
+  const counts = allCounts.slice(1, 5);
   const max    = Math.max(...counts, 1);
 
   return (
@@ -195,7 +299,7 @@ const WeeklyHeatmap: React.FC<{ tickets: any[] }> = ({ tickets }) => {
   );
 };
 
-// ── Donut / Ring Chart ─────────────────────────────────────────────────────────
+// ── Donut / Ring Chart ────────────────────────────────────────────────────────
 const RingChart: React.FC<{
   pending: number; inProg: number; resolved: number;
 }> = ({ pending, inProg, resolved }) => {
@@ -255,7 +359,7 @@ const RingChart: React.FC<{
   );
 };
 
-// ── Leaderboard Cards ──────────────────────────────────────────────────────────
+// ── Leaderboard Cards ─────────────────────────────────────────────────────────
 const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> = ({ techs, currentUserId }) => {
   const medals = ["🥇", "🥈", "🥉"];
 
@@ -268,10 +372,9 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
       {techs.map((tech, i) => {
-        const badge   = getPerformanceBadge(tech.resolved, i);
-        const rate    = getResolutionRate(tech);
+        const badge   = getPerformanceBadge(tech.avgRating, i);
         const isFirst = i === 0;
         const isMe    = tech.id === currentUserId;
         const total   = tech.resolved + tech.inProgress + tech.pending;
@@ -284,96 +387,120 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
             style={{
               border: isMe
                 ? `1.5px solid ${BRAND}50`
-                : `0.5px solid ${isFirst ? "#fde68a" : "#e8edf5"}`,
-              borderRadius: 16,
-              padding: "14px 16px",
-              background: isMe ? `${BRAND}05` : isFirst ? "#fffbeb" : "#fff",
+                : `1px solid ${isFirst ? "#fde68a" : "#e8edf5"}`,
+              borderRadius: 14,
+              padding: "16px 18px",
+              background: isMe ? `${BRAND}05` : isFirst ? "#fffbeb" : "#ffffff",
               position: "relative",
               boxShadow: isFirst
-                ? "0 2px 12px rgba(251,191,36,0.1)"
+                ? "0 2px 12px rgba(251,191,36,0.14)"
                 : isMe
                 ? `0 2px 12px ${BRAND}10`
-                : "0 1px 6px rgba(10,76,134,0.04)",
+                : "0 2px 12px rgba(10,76,134,0.06)",
             }}
           >
-            {/* ── Top row: ME badge (left) + Rank medal (right) ── */}
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 8,
-              minHeight: 24,
-            }}>
+            {/* Rank medal + ME badge */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, minHeight: 24 }}>
               {isMe ? (
-                <span style={{
-                  fontSize: 9, fontWeight: 700,
-                  padding: "2px 7px", borderRadius: 999,
-                  background: BRAND, color: "#fff",
-                  letterSpacing: "0.10em",
-                }}>ME</span>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: BRAND, color: "#fff", letterSpacing: "0.10em" }}>ME</span>
               ) : (
-                <span /> // empty spacer so rank stays right-aligned
+                <span />
               )}
-              <span style={{
-                fontSize: i < 3 ? 18 : 12,
-                fontWeight: 700,
-                color: "#94a3b8",
-                lineHeight: 1,
-              }}>
+              <span style={{ fontSize: i < 3 ? 18 : 12, fontWeight: 700, color: "#94a3b8", lineHeight: 1 }}>
                 {medals[i] ?? `#${i + 1}`}
               </span>
             </div>
 
             {/* Avatar */}
             <div style={{
-              width: 40, height: 40, borderRadius: "50%",
+              width: 42, height: 42, borderRadius: "50%",
               background: bg, overflow: "hidden",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 13, fontWeight: 700, color: textCol,
               border: isFirst ? "2px solid #fbbf24" : isMe ? `2px solid ${BRAND}` : "1.5px solid rgba(0,0,0,0.06)",
-              marginBottom: 8,
+              marginBottom: 10,
             }}>
               {tech.avatar_url ? (
-                <img src={tech.avatar_url} alt={tech.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                <img
+                  src={tech.avatar_url}
+                  alt={tech.full_name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
               ) : getInitials(tech.full_name)}
             </div>
 
-            {/* Name + badge */}
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2, paddingRight: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {/* Name */}
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 4, paddingRight: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {tech.full_name}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999, color: badge.color, background: badge.bg, display: "inline-block", marginBottom: 10 }}>
+
+            {/* Performance badge */}
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 9px", borderRadius: 999, color: badge.color, background: badge.bg, display: "inline-block", marginBottom: 12 }}>
               {badge.label}
             </span>
 
             {/* Stat trio */}
-            <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               {[
-                { num: tech.resolved,   lbl: "Resolved",  col: "#065f46", bg: "#d1fae5" },
-                { num: tech.inProgress, lbl: "Active",    col: "#1e40af", bg: "#dbeafe" },
-                { num: tech.pending,    lbl: "Pending",   col: "#92400e", bg: "#fef3c7" },
+                { num: tech.resolved,   lbl: "Resolved", col: "#065f46", bg: "#d1fae5" },
+                { num: tech.inProgress, lbl: "Active",   col: "#1e40af", bg: "#dbeafe" },
+                { num: tech.pending,    lbl: "Pending",  col: "#92400e", bg: "#fef3c7" },
               ].map(s => (
-                <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 8, padding: "6px 3px", textAlign: "center" }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: s.col, marginTop: 2, opacity: 0.75 }}>{s.lbl}</div>
+                <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "7px 4px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: s.col, marginTop: 3, opacity: 0.75 }}>{s.lbl}</div>
                 </div>
               ))}
             </div>
 
-            {/* Resolution rate bar */}
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>
-              <span>Resolution rate</span>
-              <span style={{ fontWeight: 600, color: "#475569" }}>{rate}%</span>
+            {/* User feedback section */}
+            <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  User feedback
+                </span>
+                {tech.totalRatings > 0 && (
+                  <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                    {tech.avgRating.toFixed(1)} / 5 ({tech.totalRatings})
+                  </span>
+                )}
+              </div>
+
+              {tech.totalRatings > 0 ? (
+                <>
+                  <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <Star
+                        key={n} size={15}
+                        fill={n <= Math.round(tech.avgRating) ? "#f59e0b" : "none"}
+                        color={n <= Math.round(tech.avgRating) ? "#f59e0b" : "#cbd5e1"}
+                        strokeWidth={n <= Math.round(tech.avgRating) ? 0 : 2}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ height: 4, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${(tech.avgRating / 5) * 100}%`,
+                      background: isFirst
+                        ? "linear-gradient(90deg,#f59e0b,#fbbf24)"
+                        : isMe
+                        ? `linear-gradient(90deg,${BRAND},#3b82f6)`
+                        : "linear-gradient(90deg,#7c3aed,#a78bfa)",
+                      borderRadius: 99,
+                      transition: "width 0.6s ease",
+                    }} />
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 11, color: "#cbd5e1", fontStyle: "italic" }}>No ratings yet</div>
+              )}
+
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6, textAlign: "right" }}>
+                {total} total assigned
+              </div>
             </div>
-            <div style={{ height: 4, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{
-                height: "100%", width: `${rate}%`,
-                background: isFirst ? "linear-gradient(90deg,#f59e0b,#fbbf24)" : isMe ? `linear-gradient(90deg,${BRAND},#3b82f6)` : "linear-gradient(90deg,#7c3aed,#a78bfa)",
-                borderRadius: 99, transition: "width 0.6s ease",
-              }} />
-            </div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4, textAlign: "right" }}>{total} total</div>
           </div>
         );
       })}
@@ -381,7 +508,7 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
   );
 };
 
-// ── Trend Line (mini chart using canvas) ─────────────────────────────────────
+// ── Trend Line Chart ──────────────────────────────────────────────────────────
 const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<any>(null);
@@ -476,13 +603,11 @@ const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
 const TechnicianDashboardHome: React.FC = () => {
   const userId = getSessionUserId();
 
-  const [loading, setLoading]       = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [animKey, setAnimKey]       = useState(0);
-
-  const [myTickets, setMyTickets]   = useState<any[]>([]);
-  const [tickets, setTickets]       = useState({ total: 0, pending: 0, inProg: 0, resolved: 0 });
-
+  const [loading, setLoading]         = useState(true);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [animKey, setAnimKey]         = useState(0);
+  const [myTickets, setMyTickets]     = useState<any[]>([]);
+  const [tickets, setTickets]         = useState({ total: 0, pending: 0, inProg: 0, resolved: 0 });
   const [leaderboard, setLeaderboard] = useState<TechStat[]>([]);
 
   const stampAvatar = (t: any) => ({
@@ -494,58 +619,89 @@ const TechnicianDashboardHome: React.FC = () => {
 
   const load = useCallback(async (isRefresh = false) => {
     if (!userId) { setLoading(false); return; }
-
     if (isRefresh) setTickets({ total: 0, pending: 0, inProg: 0, resolved: 0 });
 
-    const [
-      { data: myTix },
-      { data: allTix },
-      { data: techs },
-    ] = await Promise.all([
-      supabase
-        .from("file_reports")
-        .select("id, status, date_submitted")
-        .contains("assigned_to", [userId]),
-      supabase
-        .from("file_reports")
-        .select("id, status, assigned_to, date_submitted"),
-      supabase
-        .from("user_accounts")
-        .select("id, full_name, avatar_url, updated_at")
-        .eq("role", "IT Technician")
-        .eq("is_active", true)
-        .eq("is_archived", false)
-        .order("full_name"),
-    ]);
+    try {
+      const [
+        { data: myTix,     error: e1 },
+        { data: allTix,    error: e2 },
+        { data: techs,     error: e3 },
+        { data: feedbacks, error: e4 },
+      ] = await Promise.all([
+        supabase.from("file_reports").select("id, status, date_submitted").contains("assigned_to", [userId]),
+        supabase.from("file_reports").select("id, status, assigned_to, date_submitted"),
+        supabase.from("user_accounts")
+          .select("id, full_name, avatar_url, updated_at")
+          .eq("role", "IT Technician")
+          .eq("is_active", true)
+          .eq("is_archived", false)
+          .order("full_name"),
+        supabase.from("ticket_feedback").select("report_id, rating"),
+      ]);
 
-    const t = myTix ?? [];
-    setMyTickets(t);
-    setTickets({
-      total:    t.length,
-      pending:  t.filter((x: any) => x.status === "Pending").length,
-      inProg:   t.filter((x: any) => x.status === "In Progress").length,
-      resolved: t.filter((x: any) => x.status === "Resolved").length,
-    });
+      if (e1) console.error("myTix query error:", e1);
+      if (e2) console.error("allTix query error:", e2);
+      if (e3) console.error("techs query error:", e3);
+      if (e4) console.error("feedbacks query error:", e4);
 
-    const allT = allTix ?? [];
-    const board: TechStat[] = (techs ?? []).map(stampAvatar).map((tech: any) => {
-      const isAssigned = (assignedTo: any) => {
+      const feedbackList      = feedbacks ?? [];
+      const feedbackReportIds = new Set(feedbackList.map((f: any) => String(f.report_id)));
+
+      const t = myTix ?? [];
+      setMyTickets(t);
+      setTickets({
+        total:    t.length,
+        pending:  t.filter((x: any) => x.status === "Pending").length,
+        inProg:   t.filter((x: any) => x.status === "In Progress").length,
+        resolved: t.filter((x: any) => x.status === "Resolved" && feedbackReportIds.has(String(x.id))).length,
+      });
+
+      const techRatingsMap: Record<string, number[]> = {};
+      feedbackList.forEach((fb: any) => {
+        const ticket = (allTix ?? []).find((tk: any) => String(tk.id) === String(fb.report_id));
+        if (!ticket) return;
+        const assigned: string[] = Array.isArray(ticket.assigned_to)
+          ? ticket.assigned_to.map(String)
+          : ticket.assigned_to ? [String(ticket.assigned_to)] : [];
+        assigned.forEach(techId => {
+          if (!techRatingsMap[techId]) techRatingsMap[techId] = [];
+          techRatingsMap[techId].push(Number(fb.rating));
+        });
+      });
+
+      const isAssigned = (assignedTo: any, techId: string) => {
         if (!assignedTo) return false;
-        if (Array.isArray(assignedTo)) return assignedTo.includes(tech.id);
-        return assignedTo === tech.id;
+        if (Array.isArray(assignedTo)) return assignedTo.map(String).includes(techId);
+        return String(assignedTo) === techId;
       };
-      return {
-        id:         tech.id,
-        full_name:  tech.full_name,
-        avatar_url: tech.avatar_url ?? "",
-        resolved:   allT.filter((x: any) => isAssigned(x.assigned_to) && x.status === "Resolved").length,
-        inProgress: allT.filter((x: any) => isAssigned(x.assigned_to) && x.status === "In Progress").length,
-        pending:    allT.filter((x: any) => isAssigned(x.assigned_to) && x.status === "Pending").length,
-      };
-    }).sort((a: TechStat, b: TechStat) => b.resolved - a.resolved || b.inProgress - a.inProgress);
 
-    setLeaderboard(board);
-    setLoading(false);
+      const board: TechStat[] = (techs ?? [])
+        .map(stampAvatar)
+        .map((tech: any) => {
+          const techTickets = (allTix ?? []).filter((x: any) => isAssigned(x.assigned_to, String(tech.id)));
+          const ratings     = techRatingsMap[String(tech.id)] ?? [];
+          const avgRating   = ratings.length > 0
+            ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length
+            : 0;
+          return {
+            id:           tech.id,
+            full_name:    tech.full_name,
+            avatar_url:   tech.avatar_url ?? "",
+            resolved:     techTickets.filter((x: any) => x.status === "Resolved" && feedbackReportIds.has(String(x.id))).length,
+            inProgress:   techTickets.filter((x: any) => x.status === "In Progress").length,
+            pending:      techTickets.filter((x: any) => x.status === "Pending").length,
+            avgRating:    Math.round(avgRating * 10) / 10,
+            totalRatings: ratings.length,
+          };
+        })
+        .sort((a: TechStat, b: TechStat) => b.avgRating - a.avgRating || b.resolved - a.resolved);
+
+      setLeaderboard(board);
+    } catch (err) {
+      console.error("Dashboard load error:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useEffect(() => { load(); }, [load]);
@@ -554,8 +710,9 @@ const TechnicianDashboardHome: React.FC = () => {
     if (!userId) return;
     const channel = supabase
       .channel(`technician_dashboard_v2_${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void load(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" }, () => { void load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" },    () => { void load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_accounts" },   () => { void load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ticket_feedback" }, () => { void load(); })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [userId, load]);
@@ -573,11 +730,8 @@ const TechnicianDashboardHome: React.FC = () => {
     setTimeout(() => setRefreshing(false), 600);
   };
 
-  const resolveRate = tickets.total > 0
-    ? Math.round((tickets.resolved / tickets.total) * 100)
-    : 0;
-
-  const myRank = leaderboard.findIndex(t => t.id === userId);
+  const resolveRate = tickets.total > 0 ? Math.round((tickets.resolved / tickets.total) * 100) : 0;
+  const myRank      = leaderboard.findIndex(t => t.id === userId);
 
   if (!userId) {
     return (
@@ -595,6 +749,7 @@ const TechnicianDashboardHome: React.FC = () => {
         @keyframes tdb2-spin  { to { transform: rotate(360deg); } }
         @keyframes tdb2-pulse { 0%,100%{ opacity:1 } 50%{ opacity:.35 } }
         @keyframes tdb2-up    { from{ opacity:0; transform:translateY(12px) } to{ opacity:1; transform:translateY(0) } }
+        @keyframes skShimmer  { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
         .tdb2-in { animation: tdb2-up 0.35s ease both; }
         .tdb2-refresh:hover { background: #f1f5f9 !important; }
         @media(max-width:900px){
@@ -609,9 +764,9 @@ const TechnicianDashboardHome: React.FC = () => {
         }
       `}</style>
 
-      <div className="tdb2" style={{ fontFamily: "'DM Sans', sans-serif", color: "#0f172a", paddingRight: 4 }}>
+      <div className="tdb2" style={{ fontFamily: "'DM Sans', sans-serif", color: "#0f172a", paddingRight: 4, paddingTop: "1.2rem" }}>
 
-        {/* Refresh */}
+        {/* Refresh button */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
           <button
             className="tdb2-refresh"
@@ -620,7 +775,8 @@ const TechnicianDashboardHome: React.FC = () => {
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "0.45rem 0.9rem", borderRadius: 10,
-              border: "1px solid #e2e8f0", background: "#fff",
+              border: "1px solid #e8edf2", background: "#fff",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
               fontSize: 12, fontWeight: 600, color: "#475569",
               cursor: refreshing ? "not-allowed" : "pointer",
               fontFamily: "'DM Sans', sans-serif",
@@ -633,28 +789,64 @@ const TechnicianDashboardHome: React.FC = () => {
           </button>
         </div>
 
-        {/* ── Skeleton ── */}
+        {/* ══════════════ SKELETON STATE ══════════════ */}
         {loading ? (
-          <div className="tdb2-kpi" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem" }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ background: "#fff", borderRadius: 16, height: 120, border: "1px solid #e8edf5", animation: "tdb2-pulse 1.4s ease infinite", animationDelay: `${i * 80}ms` }} />
-            ))}
-          </div>
-        ) : (
           <>
-            {/* ── KPI Row ── */}
-            <div className="tdb2-in tdb2-kpi" style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem", marginBottom: "0.85rem" }}>
-              <KpiCard label="My Tickets"  value={tickets.total}    sub="Assigned to you"   icon={<Ticket size={15} />}       accent={BRAND}   delay={0}   animKey={animKey} />
-              <KpiCard label="Pending"     value={tickets.pending}  sub="Awaiting action"   icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
-              <KpiCard label="In Progress" value={tickets.inProg}   sub="Currently active"  icon={<CircleDot size={15} />}     accent="#3b82f6" delay={100} animKey={animKey} />
-              <KpiCard label="Resolved"    value={tickets.resolved} sub="Closed tickets"    icon={<CheckCircle2 size={15} />}  accent="#10b981" delay={150} animKey={animKey} />
+            <div
+              className="tdb2-kpi"
+              style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem", marginBottom: "0.85rem" }}
+            >
+              {[0, 1, 2, 3].map(d => <KpiSkeleton key={d} />)}
             </div>
 
-            {/* ── Mid row: Ring chart + Weekly heatmap ── */}
-            <div className="tdb2-in tdb2-mid" style={{ animationDelay: "100ms", display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
+            <div
+              className="tdb2-mid"
+              style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "0.85rem", marginBottom: "0.85rem" }}
+            >
+              <PanelSkeleton height={200} lines={3} />
+              <PanelSkeleton height={200} lines={2} />
+            </div>
 
-              {/* Ring chart */}
-              <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
+            <div
+              className="tdb2-bot"
+              style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}
+            >
+              <PanelSkeleton height={220} lines={2} />
+              <PanelSkeleton height={220} lines={4} />
+            </div>
+
+            <div style={{
+              background: "#fff", borderRadius: 16, padding: "1.1rem",
+              border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
+                <Skeleton width={26} height={26} radius={7} />
+                <Skeleton width="30%" height={14} radius={5} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+                {[0, 1, 2, 3, 4].map(d => <LeaderboardCardSkeleton key={d} />)}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* ══════════════ KPI Row ══════════════ */}
+            <div
+              className="tdb2-in tdb2-kpi"
+              style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem", marginBottom: "0.85rem" }}
+            >
+              <KpiCard label="My Tickets"  value={tickets.total}    sub="Assigned to you"  icon={<Ticket size={15} />}       accent={BRAND}   delay={0}   animKey={animKey} />
+              <KpiCard label="Pending"     value={tickets.pending}  sub="Awaiting action"  icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
+              <KpiCard label="In Progress" value={tickets.inProg}   sub="Currently active" icon={<CircleDot size={15} />}     accent="#3b82f6" delay={100} animKey={animKey} />
+              <KpiCard label="Resolved"    value={tickets.resolved} sub="Closed tickets"   icon={<CheckCircle2 size={15} />}  accent="#10b981" delay={150} animKey={animKey} />
+            </div>
+
+            {/* ══════════════ Mid row ══════════════ */}
+            <div
+              className="tdb2-in tdb2-mid"
+              style={{ animationDelay: "100ms", display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "0.85rem", marginBottom: "0.85rem" }}
+            >
+              <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: "1rem" }}>
                   <div style={{ width: 26, height: 26, borderRadius: 7, background: `${BRAND}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Activity size={13} color={BRAND} />
@@ -668,7 +860,6 @@ const TechnicianDashboardHome: React.FC = () => {
                 )}
               </div>
 
-              {/* Weekly heatmap */}
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -683,10 +874,11 @@ const TechnicianDashboardHome: React.FC = () => {
               </div>
             </div>
 
-            {/* ── Bottom row: Trend line + Breakdown ── */}
-            <div className="tdb2-in tdb2-bot" style={{ animationDelay: "140ms", display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
-
-              {/* Trend line chart */}
+            {/* ══════════════ Bottom row ══════════════ */}
+            <div
+              className="tdb2-in tdb2-bot"
+              style={{ animationDelay: "140ms", display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}
+            >
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -700,7 +892,6 @@ const TechnicianDashboardHome: React.FC = () => {
                 <TrendLineChart tickets={myTickets} />
               </div>
 
-              {/* Breakdown panel */}
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -744,8 +935,11 @@ const TechnicianDashboardHome: React.FC = () => {
               </div>
             </div>
 
-            {/* ── Leaderboard ── */}
-            <div className="tdb2-in" style={{ animationDelay: "180ms", background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
+            {/* ══════════════ Leaderboard ══════════════ */}
+            <div
+              className="tdb2-in"
+              style={{ animationDelay: "180ms", background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}
+            >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <div style={{ width: 26, height: 26, borderRadius: 7, background: "#f59e0b12", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -753,7 +947,7 @@ const TechnicianDashboardHome: React.FC = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>IT Technician Leaderboard</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>Ranked by resolved tickets</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>Ranked by avg. rating · resolved tickets</div>
                   </div>
                 </div>
                 {myRank >= 0 && (
@@ -767,7 +961,6 @@ const TechnicianDashboardHome: React.FC = () => {
               </div>
               <LeaderboardCards techs={leaderboard} currentUserId={userId} />
             </div>
-
           </>
         )}
       </div>
