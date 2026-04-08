@@ -14,7 +14,6 @@ const headerStyles = `
     inset: 0;
     z-index: 999;
     background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -867,10 +866,10 @@ const Header: React.FC<HeaderProps> = ({
             <div
               className="hdr-avatar"
               style={{
-                width: 36, height: 36, borderRadius: "999px",
-                background: brandBlue,
+                width: 38, height: 38, borderRadius: "999px",
+                background: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff", fontSize: 14, fontWeight: 600,
+                color: brandBlue, fontSize: 15, fontWeight: 700,
                 flexShrink: 0, overflow: "hidden",
               }}
             >

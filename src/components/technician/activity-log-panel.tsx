@@ -3,7 +3,7 @@ import { getSessionUserId } from "../../lib/audit-notifications";
 import { supabase } from "../../lib/supabaseClient";
 import { ActivityIcon } from "lucide-react";
 
-const BRAND = "#0a4c86";
+const BRAND = "#0D518C";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const BUCKET = "profile-avatar";
 
@@ -150,6 +150,36 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
+const [period, setPeriod] = useState<string>("this_week");
+
+
+const PERIOD_OPTIONS = [
+  { key: "today", label: "Today" },
+  { key: "this_week", label: "This Week" },
+  { key: "this_month", label: "This Month" },
+  { key: "last_7_days", label: "Last 7 Days" },
+  { key: "last_30_days", label: "Last 30 Days" },
+];
+
+function getPeriodRange(key: string): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(); end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  switch (key) {
+    case "today": start.setHours(0, 0, 0, 0); break;
+    case "this_week": {
+      const day = start.getDay();
+      start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
+      start.setHours(0, 0, 0, 0); break;
+    }
+    case "this_month": start.setDate(1); start.setHours(0, 0, 0, 0); break;
+    case "last_7_days": start.setDate(now.getDate() - 6); start.setHours(0, 0, 0, 0); break;
+    case "last_30_days": start.setDate(now.getDate() - 29); start.setHours(0, 0, 0, 0); break;
+    default: start.setDate(1); start.setHours(0, 0, 0, 0);
+  }
+  return { start, end };
+}
+
   const prettyAction = (action: string) => {
     const map: Record<string, string> = {
       ticket_created: "Opened a ticket",
@@ -204,12 +234,15 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
   useEffect(() => {
     const run = async () => {
       setLoading(true);
+      const { start, end } = getPeriodRange(period);
       let q = supabase
         .from("activity_log")
         .select(`id, action, entity_type, entity_id, meta, created_at,
           actor:user_accounts!activity_log_actor_user_id_fkey(full_name, avatar_url)`)
         .order("created_at", { ascending: false })
-        .limit(isAdmin ? 400 : 200);
+        .gte("created_at", start.toISOString())
+        .lte("created_at", end.toISOString())
+        .limit(isAdmin ? 50 : 25);
 
       if (!isAdmin && userId) {
         q = q.eq("actor_user_id", userId);
@@ -250,7 +283,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
       .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, () => { void run(); })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [isAdmin, userId]);
+  }, [isAdmin, userId, period]);
 
   const grouped = rows.reduce<{ label: string; items: Row[] }[]>((acc, row) => {
     const d = new Date(row.created_at);
@@ -272,7 +305,7 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
   const poppins: React.CSSProperties = { fontFamily: "'Poppins', 'Inter', sans-serif" };
 
   return (
-    <div style={{ ...poppins, color: "#0f172a" }}>
+    <div style={{ ...poppins, color: "#0f172a", paddingTop: "1.2rem" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');`}</style>
 
       {/* Header */}
@@ -285,6 +318,30 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
             ? "Keep tabs on all system activity — tickets, repairs, units, accounts, and more."
             : "Actions you performed while signed in."}
         </p>
+      </div>
+
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>
+        {PERIOD_OPTIONS.map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => setPeriod(opt.key)}
+            style={{
+              padding: "0.3rem 0.85rem",
+              borderRadius: 999,
+              border: `1.5px solid ${period === opt.key ? BRAND : "#e2e8f0"}`,
+              background: period === opt.key ? BRAND : "#fff",
+              color: period === opt.key ? "#fff" : "#475569",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'Poppins', sans-serif",
+              transition: "all 0.15s",
+              boxShadow: period === opt.key ? "0 2px 8px rgba(10,76,134,0.18)" : "0 1px 3px rgba(0,0,0,0.05)",
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -343,8 +400,9 @@ const ActivityLogPanel: React.FC<Props> = ({ isAdmin }) => {
                   <div style={{ flex: 1, paddingLeft: 10, paddingBottom: isLast ? 0 : 10 }}>
                     <div style={{
                       background: "#fff",
-                      border: "0.5px solid #e2e8f0",
+                      border: "1px solid #e8edf2",
                       borderRadius: 8,
+                      boxShadow: "0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04)",
                       padding: "8px 12px",
                       display: "flex",
                       alignItems: "center",

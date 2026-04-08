@@ -200,7 +200,7 @@ const styles = `
   .lp-admin-notice-desc  { font-size: 0.72rem; color: #4a5568; line-height: 1.55; }
 
   .lp-keep-row   { display: flex; align-items: center; margin-bottom: 1rem; }
-  .lp-keep-checkbox { display: flex; align-items: center; gap: 0.4rem; font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #4a5568; cursor: pointer; }
+  .lp-keep-checkbox { display: flex; align-items: center; gap: 0.4rem; font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: ; cursor: pointer; }
   .lp-keep-checkbox input { width: 13px; height: 13px; cursor: pointer; }
   .lp-create-link { font-family: 'Poppins', sans-serif; font-size: 0.72rem; color: #0b5fa5; background: none; border: none; cursor: pointer; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
   .lp-create-link:hover { color: #083766; }
