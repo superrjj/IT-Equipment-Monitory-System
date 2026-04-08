@@ -461,7 +461,7 @@ const UserSubmitTicket: React.FC = () => {
                 <div className="ust-modal-head">
                   <h2 className="ust-modal-title">Submit New Ticket</h2>
                   <p className="ust-modal-sub">
-                    Same flow as IT admin — pick issue type, describe the problem. Your name and
+                    Pick issue type, describe the problem. Your name and
                     office are filled from your account.
                   </p>
                 </div>

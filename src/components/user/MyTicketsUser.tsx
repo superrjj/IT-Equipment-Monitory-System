@@ -6,12 +6,14 @@ import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 const BRAND = "#0a4c86";
 
 type TicketStatus = "Pending" | "In Progress" | "Resolved";
+type EffectiveStatus = "Pending" | "Assigned" | "In Progress" | "Resolved";
 type TicketRow = {
   id: string;
   ticket_number?: string | null;
   title: string;
   issue_type: string;
   status: TicketStatus;
+  assigned_to?: string[] | null;
   date_submitted: string;
   action_taken: string;
   started_at: string | null;
@@ -21,8 +23,9 @@ type TicketRow = {
   feedback_comment?: string | null;
 };
 
-const statusStyle: Record<TicketStatus, { bg: string; color: string }> = {
+const statusStyle: Record<EffectiveStatus, { bg: string; color: string }> = {
   Pending:       { bg: "rgba(59,130,246,0.10)",  color: "#475569" },
+  Assigned:      { bg: "rgba(124,58,237,0.10)", color: "#7c3aed" },
   "In Progress": { bg: "rgba(234,179,8,0.12)",   color: "#a16207" },
   Resolved:      { bg: "rgba(22,163,74,0.10)",   color: "#15803d" },
 };
@@ -34,8 +37,16 @@ const fmtDate = (iso: string | null | undefined) =>
       })
     : "—";
 
-const statusSteps: TicketStatus[] = ["Pending", "In Progress", "Resolved"];
-const stepIndex = (status: TicketStatus) => statusSteps.indexOf(status);
+const statusSteps: EffectiveStatus[] = ["Pending", "Assigned", "In Progress", "Resolved"];
+const stepIndex = (status: EffectiveStatus) => statusSteps.indexOf(status);
+
+const effectiveStatusFor = (ticket: TicketRow): EffectiveStatus => {
+  if (ticket.status === "Resolved") return "Resolved";
+  if (ticket.status === "In Progress") return "In Progress";
+  // file_reports.status === "Pending"
+  const assigned = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : [];
+  return assigned.length > 0 ? "Assigned" : "Pending";
+};
 
 // ── Feedback modal ────────────────────────────────────────────────────────────
 const FeedbackModal: React.FC<{
@@ -207,7 +218,7 @@ const MyTicketsUser: React.FC = () => {
         supabase
           .from("file_reports")
           .select(
-            "id,ticket_number,title,issue_type,status,date_submitted," +
+            "id,ticket_number,title,issue_type,status,assigned_to,date_submitted," +
             "action_taken,started_at,completed_at,department_id,employee_name"
           )
           .eq("employee_name", fullName)
@@ -261,11 +272,13 @@ const MyTicketsUser: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r =>
-      [r.title, r.issue_type, r.status, r.ticket_number ?? ""]
-        .join(" ").toLowerCase().includes(q)
-    );
+    const base = q
+      ? rows.filter(r =>
+        [r.title, r.issue_type, effectiveStatusFor(r), r.status, r.ticket_number ?? ""]
+          .join(" ").toLowerCase().includes(q)
+      )
+      : rows;
+    return base;
   }, [rows, search]);
 
   return (
@@ -371,9 +384,10 @@ const MyTicketsUser: React.FC = () => {
                       </span>
                       <span style={{
                         borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600,
-                        background: statusStyle[r.status].bg, color: statusStyle[r.status].color,
+                        background: statusStyle[effectiveStatusFor(r)].bg,
+                        color: statusStyle[effectiveStatusFor(r)].color,
                       }}>
-                        {r.status}
+                        {effectiveStatusFor(r)}
                       </span>
                     </div>
 
@@ -466,7 +480,7 @@ const MyTicketsUser: React.FC = () => {
 
               <div style={{ padding: "1rem 1.1rem", display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
                 <div><strong>Ticket #:</strong> {selected.ticket_number?.trim() || `TKT-${selected.id.slice(0, 8).toUpperCase()}`}</div>
-                <div><strong>Status:</strong> {selected.status}</div>
+                <div><strong>Status:</strong> {effectiveStatusFor(selected)}</div>
                 <div><strong>Issue type:</strong> {selected.issue_type}</div>
                 <div><strong>Department:</strong> {deptMap[selected.department_id] ?? "—"}</div>
                 <div><strong>Submitted:</strong> {fmtDate(selected.date_submitted)}</div>
@@ -479,8 +493,9 @@ const MyTicketsUser: React.FC = () => {
                   <div style={{ position: "relative", paddingLeft: 30 }}>
                     <div className="mtu-tracker-line" />
                     {statusSteps.map((step, idx) => {
-                      const active    = idx <= stepIndex(selected.status);
-                      const isCurrent = step === selected.status;
+                      const eff       = effectiveStatusFor(selected);
+                      const active    = idx <= stepIndex(eff);
+                      const isCurrent = step === eff;
                       return (
                         <div key={step} style={{ position: "relative", paddingBottom: idx === statusSteps.length - 1 ? 0 : 12 }}>
                           <div style={{

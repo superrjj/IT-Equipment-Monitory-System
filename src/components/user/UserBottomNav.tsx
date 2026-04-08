@@ -113,7 +113,9 @@ const UserBottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate }) =>
             <button
               key={label}
               className={`ubnav-item${active ? " ubnav-active" : ""}`}
-              onClick={() => onNavigate(label)}
+              onClick={() => {
+                onNavigate(label);
+              }}
               title={label}
               type="button"
               aria-current={active ? "page" : undefined}

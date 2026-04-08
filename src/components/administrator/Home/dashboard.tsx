@@ -864,12 +864,12 @@ const Dashboard: React.FC = () => {
   );
 
   const getPage = (label: string): React.ReactNode => {
-    const adminOnlyLabels = new Set(["Submit Ticket", "Repair History", "Resolved Tickets", "Departments", "User Accounts", "Reports & Analytics"]);
+    const adminOnlyLabels = new Set(["Submit Ticket", "Assign Job", "Resolved Tickets", "Departments", "User Accounts", "Reports & Analytics"]);
     if (!isAdmin && adminOnlyLabels.has(label)) return dashHomeNode.current;
     switch (label) {
       case "Dashboard":           return dashHomeNode.current;
       case "Submit Ticket":       return <FileReports />;
-      case "Repair History":      return <Repairs />;
+      case "Assign Job":          return <Repairs />;
       case "My Tickets":          return <MyTickets />;
       case "Work History":        return <WorkHistory />;
       case "Resolved Tickets":    return <WorkHistory />;
@@ -904,7 +904,7 @@ const Dashboard: React.FC = () => {
             onNotificationNavigate={(entityType, entityId) => {
               if (isAdmin) {
                 if (entityType === "file_report") { if (entityId) localStorage.setItem("focus_ticket_id", entityId); setActiveLabel("Submit Ticket"); }
-                else if (entityType === "repair")          setActiveLabel("Repair History");
+                else if (entityType === "repair")          setActiveLabel("Assign Job");
                 else if (entityType === "signup_request")  setActiveLabel("User Accounts");
               } else if (isTechnician) {
                 if (entityType === "file_report") { if (entityId) localStorage.setItem("focus_ticket_id", entityId); setActiveLabel("My Tickets"); }

@@ -36,7 +36,7 @@ type Repair = {
   ticket_title?:     string;
 };
 
-type TicketOption = { id: string; ticket_number: string; title: string };
+type TicketOption = { id: string; ticket_number: string; title: string; status: string; is_archived: boolean };
 type UserOption   = { id: string; full_name: string; role: string };
 
 type FormState = {
@@ -52,6 +52,10 @@ type FormState = {
 const BRAND     = "#0a4c86";
 const PAGE_SIZE = 10;
 const REPAIR_STATUSES: RepairStatus[] = ["Pending", "In Progress", "Completed"];
+
+// UI requirement: Admin "Pending" == "Assigned" stage (techs are already chosen).
+const repairStatusLabel = (status: RepairStatus): string =>
+  status === "Pending" ? "Assigned" : status;
 
 function sanitize(val: string): string {
   return val
@@ -81,6 +85,7 @@ const emptyForm = (): FormState => ({
   assigned_to:    [],
   problem:        "",
   action_taken:   "",
+  // Default stage after assignment is "Assigned" (stored as Pending in repairs table)
   status:         "Pending",
   started_at:     "",
   completed_at:   "",
@@ -109,10 +114,88 @@ const RepairStatusBadge: React.FC<{ status: string }> = ({ status }) => {
       background: s.bg, color: s.color,
     }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
-      {status}
+      {status === "Pending" ? "Assigned" : status}
     </span>
   );
 };
+
+// ── Skeletons (matches admin dashboard shimmer) ───────────────────────────────
+const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+const KpiSkel: React.FC = () => (
+  <div style={{
+    background: "#ffffff",
+    borderRadius: 14,
+    padding: "0.9rem 1rem",
+    border: "1px solid #e8edf2",
+    boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.55rem",
+  }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Skeleton width={36} height={36} radius={10} />
+      <Skeleton width={38} height={24} radius={6} />
+    </div>
+    <Skeleton width={78} height={10} radius={4} />
+  </div>
+);
+
+const RepairsPageSkeleton: React.FC = () => (
+  <>
+    <style>{`@keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }`}</style>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+      <div>
+        <Skeleton width={140} height={22} radius={8} style={{ marginBottom: 8 }} />
+        <Skeleton width={240} height={12} radius={4} />
+      </div>
+      <Skeleton width={120} height={36} radius={10} />
+    </div>
+
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
+      {[0, 1, 2, 3].map(i => <KpiSkel key={i} />)}
+    </div>
+
+    <div style={{
+      background: "#ffffff",
+      borderRadius: 18,
+      border: "1px solid #e8edf2",
+      overflow: "hidden",
+      boxShadow: "0 6px 22px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+    }}>
+      <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 12, alignItems: "center" }}>
+        <Skeleton width={260} height={36} radius={10} />
+        <Skeleton width={140} height={32} radius={8} />
+        <Skeleton width={92} height={14} radius={6} style={{ marginLeft: "auto" }} />
+      </div>
+      <div style={{ padding: "0.8rem 1.2rem" }}>
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <div key={idx} style={{ display: "grid", gridTemplateColumns: "140px 1fr 180px 120px 120px 120px 120px 90px", gap: 10, padding: "0.7rem 0", borderBottom: idx === 5 ? "none" : "1px solid #f1f5f9", alignItems: "center" }}>
+            <Skeleton width={120} height={14} radius={6} />
+            <Skeleton width="95%" height={14} radius={6} />
+            <Skeleton width={160} height={14} radius={6} />
+            <Skeleton width={86} height={22} radius={999} />
+            <Skeleton width={92} height={12} radius={6} />
+            <Skeleton width={92} height={12} radius={6} />
+            <Skeleton width={92} height={12} radius={6} />
+            <Skeleton width={74} height={30} radius={8} />
+          </div>
+        ))}
+      </div>
+    </div>
+  </>
+);
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
@@ -253,7 +336,15 @@ const Repairs: React.FC = () => {
 
   const fetchDropdowns = async () => {
     const [{ data: tix }, { data: ua }] = await Promise.all([
-      supabase.from("file_reports").select("id, ticket_number, title").order("created_at", { ascending: false }),
+      // Only tickets that can still be worked on:
+      // - exclude Resolved
+      // - exclude archived
+      supabase
+        .from("file_reports")
+        .select("id, ticket_number, title, status, is_archived")
+        .neq("status", "Resolved")
+        .eq("is_archived", false)
+        .order("created_at", { ascending: false }),
       supabase
         .from("user_accounts")
         .select("id, full_name, role")
@@ -336,7 +427,9 @@ const Repairs: React.FC = () => {
   const availableTickets = useMemo(() => {
     return tickets.filter(t => {
       const isAssignedElsewhere = assignedTicketIds.has(t.id) && t.id !== selected?.file_report_id;
-      return !isAssignedElsewhere;
+      // extra safety: never offer already resolved/archived tickets here
+      const isClosed = t.status === "Resolved" || t.is_archived === true;
+      return !isAssignedElsewhere && !isClosed;
     });
   }, [tickets, assignedTicketIds, selected]);
 
@@ -372,6 +465,23 @@ const Repairs: React.FC = () => {
         setSubmitting(false);
         return;
       }
+
+      if (form.file_report_id) {
+        // FLOW RULE:
+        // - Admin only assigns technicians (Assigned/Pending)
+        // - Technician updates: In Progress / Resolved
+        const nextTicketStatus = form.assigned_to.length > 0 ? "Assigned" : "Pending";
+
+        const { error: ticketErr } = await supabase.from("file_reports").update({
+          assigned_to: form.assigned_to,
+          status: nextTicketStatus,
+        }).eq("id", form.file_report_id);
+
+        if (ticketErr) {
+          showToast(friendlyError(ticketErr.message), "error");
+        }
+      }
+
       if (row?.id && form.assigned_to.length > 0) {
         const summary = [tickets.find(t => t.id === form.file_report_id)?.ticket_number, form.problem || payload.problem]
           .filter(Boolean)
@@ -398,6 +508,23 @@ const Repairs: React.FC = () => {
         setSubmitting(false);
         return;
       }
+
+      if (payload.file_report_id) {
+        // FLOW RULE:
+        // - Admin only assigns technicians (Assigned/Pending)
+        // - Technician updates: In Progress / Resolved
+        const nextTicketStatus = form.assigned_to.length > 0 ? "Assigned" : "Pending";
+
+        const { error: ticketErr } = await supabase.from("file_reports").update({
+          assigned_to: form.assigned_to,
+          status: nextTicketStatus,
+        }).eq("id", payload.file_report_id);
+
+        if (ticketErr) {
+          showToast(friendlyError(ticketErr.message), "error");
+        }
+      }
+
       const added = diffNewAssignees(prevAssigned, form.assigned_to);
       if (added.length > 0) {
         const summary = [selected.ticket_number, selected.problem].filter(Boolean).join(" — ").slice(0, 200);
@@ -439,7 +566,15 @@ const Repairs: React.FC = () => {
     fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4, display: "block",
   };
   const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
-  const today = new Date().toISOString().slice(0, 10);
+
+  if (loading) {
+    return (
+      <div className="rp-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+        <CrudAlertToast toast={toast} />
+        <RepairsPageSkeleton />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -461,7 +596,7 @@ const Repairs: React.FC = () => {
         @media (max-width: 480px) { .rp-stat-cards { grid-template-columns: 1fr !important; } .rp-header-row { flex-direction: column; align-items: flex-start !important; } }
       `}</style>
 
-      <div className="rp-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+      <div className="rp-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
 
         {/* Toast */}
         <CrudAlertToast toast={toast} />
@@ -469,7 +604,7 @@ const Repairs: React.FC = () => {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 2, display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: 2, display: "flex", alignItems: "center", gap: 8, color: BRAND, fontFamily: "'Poppins', sans-serif" }}>
               <Wrench size={20} color={BRAND} /> Repairs
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>Track and manage equipment repair jobs.</p>
@@ -488,11 +623,23 @@ const Repairs: React.FC = () => {
         <div className="rp-stat-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
           {[
             { label: "Total",       value: counts.total,      color: BRAND,     icon: <Wrench size={16} /> },
-            { label: "Pending",     value: counts.pending,    color: "#475569", icon: <ClipboardList size={16} /> },
+            { label: "Assigned",    value: counts.pending,    color: "#475569", icon: <ClipboardList size={16} /> },
             { label: "In Progress", value: counts.inProgress, color: "#a16207", icon: <Loader size={16} /> },
             { label: "Completed",   value: counts.completed,  color: "#15803d", icon: <CheckCircle size={16} /> },
           ].map(c => (
-            <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div
+              key={c.label}
+              style={{
+                background: "#ffffff",
+                borderRadius: 14,
+                padding: "0.9rem 1rem",
+                border: "1px solid #e8edf2",
+                boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: `${c.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color }}>
                   {c.icon}
@@ -505,7 +652,7 @@ const Repairs: React.FC = () => {
         </div>
 
         {/* Table card */}
-        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+        <div style={{ background: "#ffffff", borderRadius: 18, border: "1px solid #e8edf2", overflow: "hidden", boxShadow: "0 6px 22px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)" }}>
 
           {/* Toolbar */}
           <div style={{ padding: "0.9rem 1.2rem", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
@@ -516,7 +663,7 @@ const Repairs: React.FC = () => {
             </div>
             <select className="rp-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="All">All Statuses</option>
-              {REPAIR_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              {REPAIR_STATUSES.map(s => <option key={s} value={s}>{repairStatusLabel(s)}</option>)}
             </select>
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
               Page {page}/{totalPages}
@@ -552,9 +699,7 @@ const Repairs: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
-                ) : paginated.length === 0 ? (
+                {paginated.length === 0 ? (
                   <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No repair jobs found.</td></tr>
                 ) : paginated.map(r => (
                   <tr key={r.id} className="rp-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
@@ -646,7 +791,7 @@ const Repairs: React.FC = () => {
             <div className="modal-box-rp" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 520, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, fontFamily: "'Poppins', sans-serif", color: BRAND, letterSpacing: 1 }}>
                   {modalMode === "add" ? "New Repair Job" : "Edit Repair Job"}
                 </h2>
                 <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
@@ -700,46 +845,24 @@ const Repairs: React.FC = () => {
                   />
                 </div>
 
-                {/* Status */}
+                {/* Status (Technician-owned workflow) */}
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={labelStyle}>Status <span style={{ color: "#dc2626" }}>*</span></label>
-                  <select value={form.status}
-                    onChange={e => {
-                      const s = e.target.value as RepairStatus;
-                      setForm(f => ({
-                        ...f, status: s,
-                        started_at:   s === "Pending" ? "" : f.started_at,
-                        completed_at: s !== "Completed" ? "" : f.completed_at,
-                      }));
-                      setFormError("");
-                    }}
-                    style={selectStyle}>
-                    {REPAIR_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <label style={labelStyle}>Status</label>
+                  <div style={{
+                    ...inputStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    background: "#f8fafc",
+                    color: "#475569",
+                    cursor: "not-allowed",
+                  }}>
+                    <span style={{ fontWeight: 600 }}>{repairStatusLabel("Pending")}</span>
+                    <span style={{ fontSize: 11, color: "#94a3b8" }} />
+                  </div>
                 </div>
 
-                {/* Start date */}
-                {(form.status === "In Progress" || form.status === "Completed") && (
-                  <div>
-                    <label style={labelStyle}>Start Date <span style={{ color: "#dc2626" }}>*</span></label>
-                    <input type="date" value={form.started_at} max={today}
-                      onChange={e => { setForm(f => ({ ...f, started_at: e.target.value })); setFormError(""); }}
-                      style={{ ...inputStyle, borderColor: formError && !form.started_at ? "#fca5a5" : "#e2e8f0" }}
-                    />
-                  </div>
-                )}
-
-                {/* End date */}
-                {form.status === "Completed" && (
-                  <div>
-                    <label style={labelStyle}>End Date <span style={{ color: "#dc2626" }}>*</span></label>
-                    <input type="date" value={form.completed_at}
-                      min={form.started_at || undefined} max={today}
-                      onChange={e => { setForm(f => ({ ...f, completed_at: e.target.value })); setFormError(""); }}
-                      style={{ ...inputStyle, borderColor: formError && !form.completed_at ? "#fca5a5" : "#e2e8f0" }}
-                    />
-                  </div>
-                )}
+                {/* Start/End dates are technician-owned and not set here */}
 
                 {/* Action taken */}
                 <div style={{ gridColumn: "span 2" }}>

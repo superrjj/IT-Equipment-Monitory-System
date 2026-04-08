@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   LayoutDashboard, Building2, BarChart2, User,
   CircleArrowDown, CircleArrowUp, TicketIcon,
-  ScrollText, CheckCircle2, ChevronUp, X,
+  ScrollText, CheckCircle2, ChevronUp, X, Wrench,
 } from "lucide-react";
 
 const baseBlue = "#0a4c86";
@@ -16,6 +16,7 @@ const adminMenuSections: MenuSection[] = [
     heading: "Tickets & Repairs",
     items: [
       { label: "Submit Ticket",    icon: TicketIcon   },
+      { label: "Assign Job",       icon: Wrench       },
       { label: "Resolved Tickets", icon: CheckCircle2 },
     ],
   },
@@ -65,7 +66,8 @@ const technicianMenuSections: MenuSection[] = [
   },
 ];
 
-const adminPrimaryLabels      = ["Dashboard", "Submit Ticket", "Incoming Units", "Outgoing Units", "More"];
+// Default 4 menus (plus "More"): Dashboard, Submit Ticket, Assign, Resolved Tickets
+const adminPrimaryLabels      = ["Dashboard", "Submit Ticket", "Assign Job", "Resolved Tickets", "More"];
 const technicianPrimaryLabels = ["Dashboard", "My Tickets",    "Incoming Units", "Outgoing Units", "More"];
 
 type BottomNavProps = {
