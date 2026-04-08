@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Eye, Search, X, AlertTriangle, Pencil, Ticket,
+  Eye, Search, X, AlertTriangle, Ticket,
   Clock, Loader, Building2, User, CheckCircle2, Timer,
 } from "lucide-react";
 import {
@@ -224,6 +224,12 @@ const MyTickets: React.FC = () => {
   };
 
   const openWork = (r: TicketRow) => {
+    // ── BUG FIX: Block resolving if ticket is not yet In Progress ──
+    if (r.status !== "In Progress") {
+      showToast("Ticket must be In Progress before it can be marked as Resolved.", "error");
+      return;
+    }
+
     setFocusedTicketId(r.id);
     setSelected(r);
     const existingStarted =
@@ -232,13 +238,11 @@ const MyTickets: React.FC = () => {
         : r.date_submitted
           ? r.date_submitted.slice(0, 10)
           : today;
-    const wasInProgress  = r.status === "In Progress";
-    const initialStatus: Status = wasInProgress ? "Resolved" : "In Progress";
     setForm({
-      status:       initialStatus,
+      status:       "Resolved",
       action_taken: r.action_taken ?? "",
       started_at:   existingStarted,
-      completed_at: initialStatus === "Resolved" ? today : "",
+      completed_at: today,
     });
     setFormErrors({});
     setModal("work");
@@ -411,7 +415,7 @@ const MyTickets: React.FC = () => {
 
         {/* ── Page header ── */}
         <div style={{ marginBottom: "1rem" }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "'Poppins', sans-serif", color: BRAND }}>
             <Ticket size={20} color={BRAND} /> My Tickets
           </h2>
           <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>
@@ -595,24 +599,30 @@ const MyTickets: React.FC = () => {
                                   )}
                                 </button>
 
-                                {/* Resolved option */}
+                                {/* Resolved option — disabled if not In Progress */}
                                 <button
                                   type="button"
+                                  disabled={r.status !== "In Progress"}
                                   onClick={() => { setOpenDropdownId(null); openWork(r); }}
                                   style={{
                                     width: "100%", textAlign: "left", border: "none",
                                     borderRadius: 8, padding: "0.5rem 0.6rem",
                                     display: "flex", alignItems: "center", gap: 8,
                                     fontSize: 12, fontWeight: 600,
-                                    background: "transparent", color: "#475569",
-                                    cursor: "pointer",
+                                    background: "transparent",
+                                    color: r.status !== "In Progress" ? "#94a3b8" : "#475569",
+                                    cursor: r.status !== "In Progress" ? "not-allowed" : "pointer",
+                                    opacity: r.status !== "In Progress" ? 0.5 : 1,
                                     fontFamily: "'Poppins', sans-serif",
                                   }}
                                 >
                                   <span style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(22,163,74,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <CheckCircle2 size={11} color="#15803d" />
+                                    <CheckCircle2 size={11} color={r.status !== "In Progress" ? "#94a3b8" : "#15803d"} />
                                   </span>
                                   Mark as Resolved
+                                  {r.status !== "In Progress" && (
+                                    <span style={{ marginLeft: "auto", fontSize: 10, color: "#94a3b8" }}></span>
+                                  )}
                                 </button>
                               </div>
                             )}
@@ -703,16 +713,6 @@ const MyTickets: React.FC = () => {
                         {selected.action_taken || "—"}
                       </div>
                     </div>
-                  </div>
-                  <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                    <button type="button" onClick={closeModal} className="mt-btn-cancel"
-                      style={{ padding: "0.55rem 1rem", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: "'Poppins', sans-serif" }}>
-                      Close
-                    </button>
-                    <button type="button" onClick={() => openWork(selected)}
-                      style={{ padding: "0.55rem 1.1rem", borderRadius: 10, border: "none", background: BRAND, color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13, fontFamily: "'Poppins', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
-                      <Pencil size={13} /> Update Work
-                    </button>
                   </div>
                 </div>
               )}
