@@ -304,9 +304,50 @@ function getPeriodRange(key: string): { start: Date; end: Date } {
 
   const poppins: React.CSSProperties = { fontFamily: "'Poppins', 'Inter', sans-serif" };
 
+
+  const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+const ActivityRowSkeleton: React.FC<{ isLast?: boolean }> = ({ isLast = false }) => (
+  <div style={{ display: "flex", gap: 0 }}>
+    {/* Time column */}
+    <div style={{ width: 68, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+      <Skeleton width={42} height={10} radius={4} style={{ marginRight: 10, marginTop: 8 }} />
+      {!isLast && <div style={{ flex: 1, width: 1.5, background: "#e2e8f0", marginRight: 10, marginTop: 3 }} />}
+    </div>
+    {/* Spine */}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+      <Skeleton width={28} height={28} radius={999} />
+      {!isLast && <div style={{ flex: 1, width: 1.5, background: "#e2e8f0", marginTop: 3 }} />}
+    </div>
+    {/* Card */}
+    <div style={{ flex: 1, paddingLeft: 10, paddingBottom: isLast ? 0 : 10 }}>
+      <div style={{ background: "#fff", border: "1px solid #e8edf2", borderRadius: 8, boxShadow: "0 2px 8px rgba(10,76,134,0.07)", padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+        <Skeleton width={32} height={32} radius={999} />
+        <div style={{ flex: 1 }}>
+          <Skeleton width="40%" height={12} radius={4} style={{ marginBottom: 5 }} />
+          <Skeleton width="75%" height={12} radius={4} />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
   return (
     <div style={{ ...poppins, color: "#0f172a", paddingTop: "1.2rem" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+       @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
+       `}</style>
 
       {/* Header */}
       <div style={{ marginBottom: "1.5rem" }}>
@@ -345,10 +386,18 @@ function getPeriodRange(key: string): { start: Date; end: Date } {
       </div>
 
       {loading ? (
-        <p style={{ ...poppins, color: "#94a3b8", fontSize: 12 }}>Loading…</p>
-      ) : rows.length === 0 ? (
-        <p style={{ ...poppins, color: "#94a3b8", fontSize: 12 }}>No activity recorded yet.</p>
-      ) : (
+          <div>
+            {/* Date group label skeleton */}
+            <Skeleton width={160} height={10} radius={4} style={{ marginBottom: 10 }} />
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ActivityRowSkeleton key={i} isLast={i === 5} />
+              ))}
+            </div>
+          </div>
+        ) : rows.length === 0 ? (
+          <p style={{ ...poppins, color: "#94a3b8", fontSize: 13 }}>No activity recorded yet.</p>
+        ) : (
         grouped.map((group) => (
           <div key={group.label} style={{ marginBottom: "2rem" }}>
             <p style={{

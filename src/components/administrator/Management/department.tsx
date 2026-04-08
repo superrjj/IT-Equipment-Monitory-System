@@ -359,6 +359,37 @@ const Departments: React.FC = () => {
       year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Manila",
     });
 
+    // ── Skeleton ──────────────────────────────────────────────────────────────────
+const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+const TableRowSkeleton: React.FC = () => (
+  <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="70%" height={13} radius={5} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="85%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="60%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={50} height={22} radius={999} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={90} height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <Skeleton width={30} height={30} radius={8} />
+        <Skeleton width={30} height={30} radius={8} />
+        <Skeleton width={30} height={30} radius={8} />
+      </div>
+    </td>
+  </tr>
+);
+
   return (
     <>
       <style>{`
@@ -376,6 +407,7 @@ const Departments: React.FC = () => {
         @media (max-width: 640px) {
           .dept-header-row { flex-direction: column; align-items: flex-start !important; }
         }
+        @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
       `}</style>
 
       <div className="departments-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
@@ -451,9 +483,9 @@ const Departments: React.FC = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+                   Array.from({ length: PAGE_SIZE }).map((_, i) => <TableRowSkeleton key={i} />)
                 ) : paginated.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No departments found.</td></tr>
+                  <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No departments found.</td></tr>
                 ) : paginated.map(d => (
                   <tr key={d.id} className="dept-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
                     <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "#0f172a" }}>{d.name}</td>

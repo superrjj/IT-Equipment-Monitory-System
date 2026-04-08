@@ -311,6 +311,7 @@ const raStyles = `
     .ra-bar-label { width: 80px; font-size: 10px; }
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
 `;
 
 // ─── Period config ────────────────────────────────────────────────────────────
@@ -719,6 +720,51 @@ const ReportAnalytics: React.FC = () => {
     }));
   }, [tickets, deptNameById]);
 
+  const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+const StatCardSkeleton: React.FC = () => (
+  <div className="ra-stat-card" style={{ position: "relative", overflow: "hidden" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+      <Skeleton width="55%" height={11} radius={4} />
+      <Skeleton width={30} height={30} radius={8} />
+    </div>
+    <Skeleton width="45%" height={28} radius={6} style={{ marginBottom: 6 }} />
+    <Skeleton width="70%" height={10} radius={4} />
+  </div>
+);
+
+const PanelSkeletonRA: React.FC<{ height?: number }> = ({ height = 220 }) => (
+  <div className="ra-panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+      <Skeleton width={15} height={15} radius={4} />
+      <Skeleton width="40%" height={14} radius={5} />
+    </div>
+    <Skeleton width="100%" height={height * 0.45} radius={8} />
+    {[0,1,2].map(i => <Skeleton key={i} width={`${80 - i * 15}%`} height={10} radius={4} />)}
+  </div>
+);
+
+const TableRowSkeletonRA: React.FC = () => (
+  <tr>
+    <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width={80} height={12} radius={4} /></td>
+    <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width="85%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width="70%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width={70} height={22} radius={999} /></td>
+    <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width={80} height={11} radius={4} /></td>
+  </tr>
+);
+
   return (
     <>
       <style>{raStyles}</style>
@@ -755,10 +801,38 @@ const ReportAnalytics: React.FC = () => {
         )}
 
         {loading ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "3rem", color: "#94a3b8", fontSize: 14 }}>
-            <Loader size={22} style={{ animation: "spin 0.9s linear infinite" }} />
-            Loading analytics…
-          </div>
+         <>
+              {/* Stat cards skeleton */}
+              <div className="ra-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: "0.9rem" }}>
+                {[0,1,2,3].map(i => <StatCardSkeleton key={i} />)}
+              </div>
+
+              {/* Middle row skeleton */}
+              <div className="ra-middle-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1.1rem" }}>
+                <PanelSkeletonRA height={240} />
+                <PanelSkeletonRA height={240} />
+              </div>
+
+              {/* Table skeleton */}
+              <div className="ra-table-card">
+                <div className="ra-table-toolbar">
+                  <Skeleton width={15} height={15} radius={4} />
+                  <Skeleton width={140} height={14} radius={5} />
+                </div>
+                <table className="ra-table">
+                  <thead>
+                    <tr style={{ background: "#f0f5fb", borderBottom: "1px solid #dde6f0" }}>
+                      {["Ticket ID","Title","Department","Status","Date"].map(h => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 6 }).map((_, i) => <TableRowSkeletonRA key={i} />)}
+                  </tbody>
+                </table>
+              </div>
+            </>
         ) : (
           <>
             {/* Stat Cards */}

@@ -512,6 +512,47 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     display: "block",
   };
 
+  const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+const StatCardSkeletonIU: React.FC = () => (
+  <div style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Skeleton width={36} height={36} radius={10} />
+      <Skeleton width="50%" height={24} radius={6} />
+    </div>
+    <Skeleton width="65%" height={10} radius={4} />
+  </div>
+);
+
+const OutgoingRowSkeleton: React.FC = () => (
+  <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={100} height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="75%" height={13} radius={5} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="80%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="70%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="65%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="85%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <Skeleton width={30} height={30} radius={8} />
+        <Skeleton width={30} height={30} radius={8} />
+        <Skeleton width={30} height={30} radius={8} />
+      </div>
+    </td>
+  </tr>
+);
+
   return (
     <>
       <style>{`
@@ -532,6 +573,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         @keyframes spin        { to { transform: rotate(360deg); } }
         .ou-month-select:focus { outline: 2px solid #16a34a30; border-color: #16a34a !important; }
         .ou-export-btn:hover:not(:disabled) { background: #15803d !important; border-color: #15803d !important; }
+        @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
       `}</style>
 
       <div className="ou-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem"}}>
@@ -660,7 +702,10 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
-          {[
+          {loading ? (
+          [0,1].map(i => <StatCardSkeletonIU key={i} />)
+        ) : (
+          [
             { label: "Total logged",         value: rows.length,     color: BRAND,     icon: <Package size={16} /> },
             { label: "This list (filtered)", value: filtered.length, color: "#475569", icon: <Search  size={16} /> },
           ].map(c => (
@@ -671,7 +716,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               </div>
               <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{c.label}</div>
             </div>
-          ))}
+          )))}
         </div>
 
         {/* Table */}
@@ -712,9 +757,9 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+                  Array.from({ length: PAGE_SIZE }).map((_, i) => <OutgoingRowSkeleton key={i} />)
                 ) : paginated.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No outgoing units found.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No outgoing units found.</td></tr>
                 ) : paginated.map(r => (
                   <tr key={r.id} className="ou-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>{fmtDate(r.date_released)}</td>

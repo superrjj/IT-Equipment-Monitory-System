@@ -603,6 +603,48 @@ const SubmitTicket: React.FC = () => {
 
   const getDepartmentName = (id: string) => departments.find(d => d.id === id)?.name ?? id;
 
+  const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+const StatCardSkeletonTicket: React.FC = () => (
+  <div style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Skeleton width={36} height={36} radius={10} />
+      <Skeleton width="45%" height={24} radius={6} />
+    </div>
+    <Skeleton width="60%" height={10} radius={4} />
+  </div>
+);
+
+const TicketRowSkeleton: React.FC = () => (
+  <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="80%" height={13} radius={5} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={70} height={22} radius={999} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="75%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={110} height={22} radius={999} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={100} height={22} radius={999} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={70} height={22} radius={999} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={90} height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <Skeleton width={30} height={30} radius={8} />
+        <Skeleton width={30} height={30} radius={8} />
+        <Skeleton width={30} height={30} radius={8} />
+      </div>
+    </td>
+  </tr>
+);
+
   return (
     <>
       <style>{`
@@ -631,6 +673,7 @@ const SubmitTicket: React.FC = () => {
         .ticket-detail-label { font-size: 12px; font-weight: 600; color: #64748b; min-width: 140px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
         @media (max-width: 1024px) { .ticket-stat-cards { grid-template-columns: repeat(2, 1fr) !important; } }
         @media (max-width: 480px) { .ticket-stat-cards { grid-template-columns: 1fr !important; } .ticket-header-row { flex-direction: column; align-items: flex-start !important; } }
+        @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
       `}</style>
 
       <div className="ticket-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
@@ -653,12 +696,16 @@ const SubmitTicket: React.FC = () => {
         </div>
 
         {/* Stat cards */}
-        <div className="ticket-stat-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.2rem" }}>
-          {[
+        <div className="ticket-stat-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.2rem"}}>
+          {loading ? (
+          [0,1,2,3].map(i => <StatCardSkeletonTicket key={i} />)
+          ) : (
+          [
             { label: "Total Tickets", value: counts.total,      color: BRAND,     icon: <Ticket size={16} /> },
             { label: "Pending",       value: counts.open,       color: "#475569", icon: <FileText size={16} /> },
             { label: "In Progress",   value: counts.inProgress, color: "#a16207", icon: <Loader size={16} /> },
             { label: "Resolved",      value: counts.resolved,   color: "#15803d", icon: <CheckCircle size={16} /> },
+
           ].map(c => (
             <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem 1rem", border: "1px solid #e8edf2", boxShadow: "0 2px 8px rgba(10,76,134,0.07), 0 1px 2px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -669,7 +716,7 @@ const SubmitTicket: React.FC = () => {
               </div>
               <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{c.label}</div>
             </div>
-          ))}
+          )))}
         </div>
 
         {/* Table card */}
@@ -718,9 +765,9 @@ const SubmitTicket: React.FC = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+                  Array.from({ length: PAGE_SIZE }).map((_, i) => <TicketRowSkeleton key={i} />)
                 ) : paginated.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No tickets found.</td></tr>
+                   <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No tickets found.</td></tr>
                 ) : paginated.map(r => {
                   const isResolved = r.status === "Resolved";
                   return (

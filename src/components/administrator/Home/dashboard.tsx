@@ -225,6 +225,63 @@ const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreak
   return <div style={{ position: "relative", width: "100%", height: 190 }}><canvas ref={canvasRef} /></div>;
 };
 
+// ── Skeleton primitive ────────────────────────────────────────────────────────
+const Skeleton: React.FC<{
+  width?: string | number; height?: number; radius?: number;
+  style?: React.CSSProperties;
+}> = ({ width = "100%", height = 14, radius = 6, style = {} }) => (
+  <div style={{
+    width, height, borderRadius: radius,
+    background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)",
+    backgroundSize: "200% 100%",
+    animation: "skShimmer 1.4s ease infinite",
+    flexShrink: 0, ...style,
+  }} />
+);
+
+// ── KPI skeleton ──────────────────────────────────────────────────────────────
+const KpiSkeleton: React.FC = () => (
+  <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: "0.7rem", position: "relative", overflow: "hidden", padding: "1.3rem 1.4rem" }}>
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#e2e8f0", borderRadius: "18px 18px 0 0" }} />
+    <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <Skeleton width={38} height={38} radius={12} />
+      <Skeleton width={14} height={14} radius={4} />
+    </div>
+    <Skeleton width="55%" height={32} radius={6} />
+    <Skeleton width="70%" height={10} radius={4} />
+    <Skeleton width="50%" height={10} radius={4} />
+  </div>
+);
+
+// ── Panel skeleton ────────────────────────────────────────────────────────────
+const PanelSkeleton: React.FC<{ height?: number; lines?: number }> = ({ height = 200, lines = 3 }) => (
+  <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12, minHeight: height }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Skeleton width={30} height={30} radius={9} />
+      <Skeleton width="40%" height={14} radius={5} />
+    </div>
+    <Skeleton width="100%" height={height * 0.38} radius={8} />
+    {Array.from({ length: lines }).map((_, i) => (
+      <Skeleton key={i} width={`${75 - i * 12}%`} height={10} radius={4} />
+    ))}
+  </div>
+);
+
+// ── Leaderboard card skeleton ─────────────────────────────────────────────────
+const LeaderboardCardSkeleton: React.FC = () => (
+  <div style={{ border: "1px solid #e8edf5", borderRadius: 14, padding: "16px 18px", background: "#fff" }}>
+    <Skeleton width={28} height={18} radius={999} style={{ marginBottom: 10 }} />
+    <Skeleton width={42} height={42} radius={999} style={{ marginBottom: 10 }} />
+    <Skeleton width="75%" height={13} radius={5} style={{ marginBottom: 6 }} />
+    <Skeleton width="50%" height={18} radius={999} style={{ marginBottom: 12 }} />
+    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+      {[0, 1, 2].map(i => <Skeleton key={i} width="33%" height={42} radius={8} />)}
+    </div>
+    <Skeleton width="100%" height={4} radius={999} style={{ marginBottom: 6 }} />
+    <Skeleton width="35%" height={8} radius={4} style={{ marginLeft: "auto" }} />
+  </div>
+);
+
 // ── Department Horizontal Bar Chart ──────────────────────────────────────────
 const DEPT_PALETTE = ["#0a4c86","#7c3aed","#0891b2","#f59e0b","#10b981","#ef4444","#f97316","#8b5cf6","#06b6d4","#84cc16","#e11d48","#14b8a6"];
 function getDeptColor(name: string): string {
@@ -579,12 +636,48 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   };
 
   if (loading) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 12 }}>
-      <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid #e2e8f0", borderTopColor: "#0a4c86", animation: "spin 0.8s linear infinite" }} />
-      <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>Loading dashboard…</span>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  <>
+    <style>{`@keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }`}</style>
+    <div className="dash-new" style={{ color: "#0f172a", paddingRight: 8 }}>
+      {/* Refresh button placeholder */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
+        <Skeleton width={90} height={34} radius={10} />
+      </div>
+
+      {/* KPI grid skeleton */}
+      <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
+        {[0,1,2,3,4,5].map(i => <KpiSkeleton key={i} />)}
+      </div>
+
+      {/* Mid row skeleton */}
+      <div className="dash-mid-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "1rem", marginBottom: "1rem" }}>
+        <PanelSkeleton height={220} lines={3} />
+        <PanelSkeleton height={220} lines={2} />
+      </div>
+
+      {/* Bottom row skeleton */}
+      <div className="dash-bot-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+        <PanelSkeleton height={260} lines={2} />
+        <PanelSkeleton height={260} lines={2} />
+      </div>
+
+      {/* Leaderboard skeleton */}
+      <div style={{ ...CARD }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem" }}>
+          <Skeleton width={30} height={30} radius={9} />
+          <div>
+            <Skeleton width={200} height={14} radius={5} style={{ marginBottom: 5 }} />
+            <Skeleton width={160} height={10} radius={4} />
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+          {[0,1,2,3,4].map(i => <LeaderboardCardSkeleton key={i} />)}
+        </div>
+      </div>
     </div>
-  );
+  </>
+);
+
   if (!data) return null;
 
   const donutData = [
@@ -606,6 +699,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           .dash-bot-grid { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 580px) { .dash-kpi-grid { grid-template-columns: 1fr !important; } }
+        @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
       `}</style>
 
       <div className="dash-new" style={{ color: "#0f172a", paddingRight: 8 }}>
