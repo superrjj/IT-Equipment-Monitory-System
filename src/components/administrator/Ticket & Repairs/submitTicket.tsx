@@ -79,6 +79,11 @@ const STATUS_ORDER: Record<Status, number> = {
   "Resolved":    2,
 };
 
+/** DB value remains `"Pending"`; users see **Assigned**. */
+function displayFileReportStatus(s: string): string {
+  return s === "Pending" ? "Assigned" : s;
+}
+
 const ISSUE_TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; activeBg: string; color: string; border: string }> = {
   "Hardware": { icon: <Cpu size={14} />,     bg: "#f8fafc", activeBg: "rgba(10,76,134,0.08)",  color: "#0a4c86", border: "#0a4c86" },
   "Software": { icon: <Monitor size={14} />, bg: "#f8fafc", activeBg: "rgba(124,58,237,0.08)", color: "#7c3aed", border: "#7c3aed" },
@@ -177,7 +182,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     ?? { icon: <AlertCircle size={11} />, bg: "rgba(100,116,139,0.09)", color: "#475569" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", background: cfg.bg, color: cfg.color }}>
-      {cfg.icon} {status}
+      {cfg.icon} {displayFileReportStatus(status)}
     </span>
   );
 };
@@ -708,7 +713,7 @@ const TicketRowSkeleton: React.FC = () => (
           ) : (
           [
             { label: "Total Tickets", value: counts.total,      color: BRAND,     icon: <Ticket size={16} /> },
-            { label: "Pending",       value: counts.open,       color: "#475569", icon: <FileText size={16} /> },
+            { label: "Assigned",       value: counts.open,       color: "#475569", icon: <FileText size={16} /> },
             { label: "In Progress",   value: counts.inProgress, color: "#a16207", icon: <Loader size={16} /> },
             { label: "Resolved",      value: counts.resolved,   color: "#15803d", icon: <CheckCircle size={16} /> },
 
@@ -740,7 +745,7 @@ const TicketRowSkeleton: React.FC = () => (
             </select>
             <select className="ticket-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="All">All Statuses</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              {STATUSES.map(s => <option key={s} value={s}>{displayFileReportStatus(s)}</option>)}
             </select>
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
               Page {page}/{totalPages}
@@ -992,7 +997,7 @@ const TicketRowSkeleton: React.FC = () => (
                 </div>
               ) : (
                 <div style={{ padding: "0.6rem 0.8rem", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 12, color: "#94a3b8", marginBottom: "1rem" }}>
-                  No action taken yet — pending IT Technician response.
+                  No action taken yet — awaiting IT Technician response.
                 </div>
               )}
 

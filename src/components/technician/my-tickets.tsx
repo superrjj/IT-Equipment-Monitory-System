@@ -103,6 +103,11 @@ const statusStyle: Record<string, { bg: string; color: string; dot: string }> = 
   Resolved:      { bg: "rgba(22,163,74,0.10)",   color: "#15803d", dot: "#22c55e" },
 };
 
+/** DB value stays `Pending`; label shown as **Assigned**. */
+function displayTicketStatus(s: string): string {
+  return s === "Pending" ? "Assigned" : s;
+}
+
 const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   <div style={{
     minHeight: 18, marginTop: 1, fontSize: 11, fontWeight: 500,
@@ -508,7 +513,7 @@ const MyTickets: React.FC = () => {
                           display: "inline-flex", alignItems: "center", gap: 5,
                         }}>
                           <span style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot, display: "inline-block" }} />
-                          {r.status}
+                          {displayTicketStatus(r.status)}
                         </span>
                       </td>
 
@@ -557,7 +562,7 @@ const MyTickets: React.FC = () => {
                                     ? <Timer size={12} color="#a16207" />
                                     : <Ticket size={12} color={BRAND} />
                                   }
-                                  {r.status === "In Progress" ? "In Progress" : "Pending"}
+                                  {r.status === "In Progress" ? "In Progress" : "Assigned"}
                                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 1 }}>
                                     <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                                   </svg>

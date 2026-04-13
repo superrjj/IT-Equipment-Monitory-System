@@ -410,8 +410,8 @@ const UserDashboardHome: React.FC<Props> = ({
               <Clock size={15} color="#b45309" />
             </div>
             <div className="udh-kpi-value">{fmt(awaitingCount)}</div>
-            <div className="udh-kpi-label">Pending</div>
-            <div className="udh-kpi-sub">Waiting in the queue for assignment</div>
+            <div className="udh-kpi-label">Assigned</div>
+            <div className="udh-kpi-sub">With IT; not yet started by a technician</div>
           </div>
           <div className="udh-kpi-card">
             <div style={{ width: 30, height: 30, borderRadius: 9, background: "#16a34a15", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -481,7 +481,7 @@ const UserDashboardHome: React.FC<Props> = ({
                           <span>{fmtDate(t.date_submitted)}</span>
                         </div>
                       </div>
-                      <span className={`udh-badge ${badgeClass}`}>{t.status}</span>
+                      <span className={`udh-badge ${badgeClass}`}>{t.status === "Pending" ? "Assigned" : t.status}</span>
                     </button>
                   );
                 })}

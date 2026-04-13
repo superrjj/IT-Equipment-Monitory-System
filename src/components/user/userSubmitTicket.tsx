@@ -581,7 +581,7 @@ const UserSubmitTicket: React.FC = () => {
                   <div className="ust-step">
                     <span className="ust-step-num">1</span>
                     <span>
-                      Your request is <strong>queued</strong> as <em>Pending</em>. You’ll get a
+                      Your request is <strong>queued</strong> as <em>Assigned</em> to IT. You’ll get a
                       ticket number after submit.
                     </span>
                   </div>

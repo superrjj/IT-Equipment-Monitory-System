@@ -467,6 +467,10 @@ const statusColors: Record<string, { bg: string; color: string }> = {
   Pending: { bg: "rgba(59,130,246,0.10)", color: "#475569" },
 };
 
+function displayFileReportStatus(s: string): string {
+  return s === "Pending" ? "Assigned" : s;
+}
+
 type DonutSeg = { label: string; value: number; color: string };
 
 const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
@@ -659,7 +663,7 @@ const ReportAnalytics: React.FC = () => {
         delta: stats.total > 0 ? `${stats.resolutionPct}% resolution rate` : "No tickets in period",
       },
       {
-        label: "Pending",
+        label: "Assigned",
         value: stats.pending,
         accent: "#ca8a04",
         icon: Clock,
@@ -940,7 +944,7 @@ const TableRowSkeletonRA: React.FC = () => (
                             <td style={{ maxWidth: 160 }}>{t.title}</td>
                             <td style={{ color: "#6b7280" }}>{t.dept}</td>
                             <td>
-                              <span className="ra-badge" style={{ background: bg, color }}>{t.status}</span>
+                              <span className="ra-badge" style={{ background: bg, color }}>{displayFileReportStatus(t.status)}</span>
                             </td>
                             <td style={{ color: "#94a3b8", fontSize: 12 }}>{t.date}</td>
                           </tr>

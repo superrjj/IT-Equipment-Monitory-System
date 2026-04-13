@@ -384,7 +384,7 @@ const CardsView: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
               {[
                 { num: tech.resolved,   lbl: "Resolved", col: "#065f46", bg: "#d1fae5" },
                 { num: tech.inProgress, lbl: "Active",   col: "#1e40af", bg: "#dbeafe" },
-                { num: tech.pending,    lbl: "Pending",  col: "#92400e", bg: "#fef3c7" },
+                { num: tech.pending,    lbl: "Assigned",  col: "#92400e", bg: "#fef3c7" },
               ].map(s => (
                 <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "7px 4px", textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
@@ -682,7 +682,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   if (!data) return null;
 
   const donutData = [
-    { label: "Pending",     value: data.pendingTickets,    color: "#f59e0b" },
+    { label: "Assigned",     value: data.pendingTickets,    color: "#f59e0b" },
     { label: "In Progress", value: data.inProgressTickets, color: "#3b82f6" },
     { label: "Resolved",    value: data.resolvedTickets,   color: "#10b981" },
   ];
@@ -729,7 +729,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         {/* ── KPI Grid ── */}
         <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
           <KPI label="Total Tickets"      value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="Pending"            value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="Assigned"            value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
           <KPI label="In Progress"        value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#3b82f6" delay={120} sub="Being handled"        onClick={() => onNavigate("Submit Ticket")} />
           <KPI
             label="Avg Feedback Rating"

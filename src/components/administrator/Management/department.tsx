@@ -58,7 +58,7 @@ const TicketStatusBadge: React.FC<{ status: string }> = ({ status }) => {
       fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
       background: s.bg, color: s.color,
     }}>
-      {s.icon} {status}
+      {s.icon} {status === "Pending" ? "Assigned" : status}
     </span>
   );
 };
@@ -653,7 +653,7 @@ const TableRowSkeleton: React.FC = () => (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.6rem", marginBottom: "1rem" }}>
                   {[
                     { label: "Total",       value: ticketSummary.total,      color: brandBlue,  bg: "rgba(10,76,134,0.08)"   },
-                    { label: "Pending",     value: ticketSummary.pending,    color: "#a16207",  bg: "rgba(234,179,8,0.10)"   },
+                    { label: "Assigned",     value: ticketSummary.pending,    color: "#a16207",  bg: "rgba(234,179,8,0.10)"   },
                     { label: "In Progress", value: ticketSummary.inProgress, color: "#0369a1",  bg: "rgba(14,165,233,0.10)"  },
                     { label: "Resolved",    value: ticketSummary.resolved,   color: "#15803d",  bg: "rgba(22,163,74,0.10)"   },
                   ].map(c => (

@@ -48,6 +48,28 @@ const effectiveStatusFor = (ticket: TicketRow): EffectiveStatus => {
   return assigned.length > 0 ? "Assigned" : "Pending";
 };
 
+/** User-facing label (avoids duplicate “Assigned” in the stepper vs. technician-assigned stage). */
+function effectiveStatusLabel(e: EffectiveStatus): string {
+  if (e === "Pending") return "Queued";
+  return e;
+}
+
+/** One-line blurb for the **current** timeline step only (shown under that stage). */
+function trackStepDescription(step: EffectiveStatus): string {
+  switch (step) {
+    case "Pending":
+      return "Your ticket is received and waiting to be routed to IT.";
+    case "Assigned":
+      return "A technician is assigned and will begin work shortly.";
+    case "In Progress":
+      return "Your request is actively being worked on.";
+    case "Resolved":
+      return "This ticket is closed. See the technician update below.";
+    default:
+      return "";
+  }
+}
+
 // ── Feedback modal ────────────────────────────────────────────────────────────
 const FeedbackModal: React.FC<{
   ticket: TicketRow;
@@ -387,7 +409,7 @@ const MyTicketsUser: React.FC = () => {
                         background: statusStyle[effectiveStatusFor(r)].bg,
                         color: statusStyle[effectiveStatusFor(r)].color,
                       }}>
-                        {effectiveStatusFor(r)}
+                        {effectiveStatusLabel(effectiveStatusFor(r))}
                       </span>
                     </div>
 
@@ -480,7 +502,7 @@ const MyTicketsUser: React.FC = () => {
 
               <div style={{ padding: "1rem 1.1rem", display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
                 <div><strong>Ticket #:</strong> {selected.ticket_number?.trim() || `TKT-${selected.id.slice(0, 8).toUpperCase()}`}</div>
-                <div><strong>Status:</strong> {effectiveStatusFor(selected)}</div>
+                <div><strong>Status:</strong> {effectiveStatusLabel(effectiveStatusFor(selected))}</div>
                 <div><strong>Issue type:</strong> {selected.issue_type}</div>
                 <div><strong>Department:</strong> {deptMap[selected.department_id] ?? "—"}</div>
                 <div><strong>Submitted:</strong> {fmtDate(selected.date_submitted)}</div>
@@ -489,30 +511,38 @@ const MyTicketsUser: React.FC = () => {
 
                 {/* Status tracker */}
                 <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
-                  <strong style={{ display: "block", marginBottom: 8 }}>Application Status</strong>
+                  <strong style={{ display: "block", marginBottom: 8 }}>Status timeline</strong>
                   <div style={{ position: "relative", paddingLeft: 30 }}>
                     <div className="mtu-tracker-line" />
                     {statusSteps.map((step, idx) => {
                       const eff       = effectiveStatusFor(selected);
-                      const active    = idx <= stepIndex(eff);
+                      const curIdx    = stepIndex(eff);
+                      const active    = idx <= curIdx;
                       const isCurrent = step === eff;
                       return (
-                        <div key={step} style={{ position: "relative", paddingBottom: idx === statusSteps.length - 1 ? 0 : 12 }}>
+                        <div key={step} style={{ position: "relative", paddingBottom: idx === statusSteps.length - 1 ? 0 : 14 }}>
                           <div style={{
                             position: "absolute", left: -30, top: 1,
                             width: 22, height: 22, borderRadius: "50%",
-                            background: active ? "#10b981" : "#cbd5e1",
+                            background: active ? "#10b981" : "#e2e8f0",
                             color: "#fff", fontSize: 11, fontWeight: 700,
                             display: "flex", alignItems: "center", justifyContent: "center",
                           }}>
                             {idx + 1}
                           </div>
-                          <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 600, color: isCurrent ? "#0f172a" : "#64748b" }}>
-                            {step}
+                          <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 600, color: isCurrent ? "#0f172a" : active ? "#475569" : "#94a3b8" }}>
+                            {effectiveStatusLabel(step)}
                           </div>
                           {isCurrent && (
-                            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
-                              Current stage of your ticket.
+                            <div style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              fontWeight: 500,
+                              marginTop: 3,
+                              lineHeight: 1.45,
+                              maxWidth: "100%",
+                            }}>
+                              {trackStepDescription(step)}
                             </div>
                           )}
                         </div>

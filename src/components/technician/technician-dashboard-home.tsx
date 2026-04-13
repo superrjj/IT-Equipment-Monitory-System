@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import type { Plugin } from "chart.js";
 import {
   Ticket, Clock, CheckCircle2, CircleDot,
   RefreshCw, ArrowUpRight, Trophy, Activity,
@@ -215,146 +216,334 @@ const KpiCard: React.FC<{
   );
 };
 
-// ── Resolution bar ────────────────────────────────────────────────────────────
-const ResolutionBar: React.FC<{
-  label: string; value: number; total: number;
-  color: string; delay?: number; animKey?: number;
-}> = ({ label, value, total, color, delay = 0, animKey = 0 }) => {
-  const [width, setWidth] = useState(0);
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+/** Mon–Thu only (excludes Fri–Sun). Segment colors aligned with Chart.js sample palettes. */
+const WORKWEEK_LABELS = ["Mon", "Tue", "Wed", "Thu"];
+const WORKWEEK_POLAR_BG = [
+  "rgba(255, 99, 132, 0.55)",
+  "rgba(255, 159, 64, 0.55)",
+  "rgba(255, 205, 86, 0.55)",
+  "rgba(75, 192, 192, 0.55)",
+];
+const WORKWEEK_POLAR_BORDER = [
+  "rgb(255, 99, 132)",
+  "rgb(255, 159, 64)",
+  "rgb(255, 205, 86)",
+  "rgb(75, 192, 192)",
+];
+
+/** Chart.js polar area — ticket count Mon–Thu (`date_submitted`, local calendar day). */
+const WeeklyActivityPolarChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<{ destroy: () => void } | null>(null);
+
+  const dayCounts = useMemo(() => {
+    const full = Array(7).fill(0) as number[];
+    tickets.forEach((t: any) => {
+      if (!t.date_submitted) return;
+      full[new Date(t.date_submitted).getDay()]++;
+    });
+    return [full[1], full[2], full[3], full[4]];
+  }, [tickets]);
 
   useEffect(() => {
-    setWidth(0);
-    const t = setTimeout(() => setWidth(pct), delay + 250);
-    return () => clearTimeout(t);
-  }, [pct, delay, animKey]);
+    if (!canvasRef.current) return;
+    let cancelled = false;
+
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "polarArea",
+        data: {
+          labels: WORKWEEK_LABELS,
+          datasets: [{
+            label: "Tickets",
+            data: dayCounts,
+            backgroundColor: WORKWEEK_POLAR_BG,
+            borderColor: WORKWEEK_POLAR_BORDER,
+            borderWidth: 1,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: "top",
+              labels: {
+                boxWidth: 10,
+                boxHeight: 10,
+                padding: 10,
+                font: { size: 10, family: "'DM Sans',sans-serif" },
+                color: "#64748b",
+              },
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 8,
+              cornerRadius: 8,
+              callbacks: {
+                label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}`,
+              },
+            },
+          },
+          scales: {
+            r: {
+              beginAtZero: true,
+              angleLines: { color: "rgba(148, 163, 184, 0.25)" },
+              grid: { color: "rgba(148, 163, 184, 0.2)" },
+              pointLabels: {
+                display: true,
+                font: { size: 11, weight: "bold", family: "'DM Sans',sans-serif" },
+                color: "#64748b",
+              },
+              ticks: {
+                display: true,
+                backdropColor: "transparent",
+                font: { size: 9, family: "'DM Sans',sans-serif" },
+                color: "#94a3b8",
+                precision: 0,
+              },
+            },
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [tickets, dayCounts]);
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{label}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{value}</span>
-          <span style={{ fontSize: 11, color: "#94a3b8", minWidth: 30, textAlign: "right" }}>{pct}%</span>
-        </div>
-      </div>
-      <div style={{ height: 5, background: "#f1f5f9", borderRadius: 999, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 999, transition: "width 0.65s cubic-bezier(.22,.68,0,1.2)" }} />
-      </div>
+    <div style={{ position: "relative", width: "100%", height: 240 }}>
+      <canvas ref={canvasRef} />
     </div>
   );
 };
 
-// ── Weekly Activity Heatmap ───────────────────────────────────────────────────
-const WeeklyHeatmap: React.FC<{ tickets: any[] }> = ({ tickets }) => {
-  const allDays   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const allCounts = Array(7).fill(0);
-  tickets.forEach((t: any) => {
-    if (t.date_submitted) {
-      const d = new Date(t.date_submitted).getDay();
-      allCounts[d]++;
-    }
-  });
+const STATUS_COLORS = { assigned: "#f59e0b", inProg: "#3b82f6", resolved: "#10b981" };
 
-  const days   = allDays.slice(1, 5);
-  const counts = allCounts.slice(1, 5);
-  const max    = Math.max(...counts, 1);
+/** Draws "NN%" on each non-zero pie slice (Chart.js plugin). */
+const pieSlicePercentPlugin: Plugin<"pie"> = {
+  id: "pieSlicePercentLabels",
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    const ds = chart.data.datasets[0];
+    const data = (ds?.data ?? []) as number[];
+    const total = data.reduce((a, b) => a + (Number(b) || 0), 0);
+    if (total <= 0) return;
+
+    const meta = chart.getDatasetMeta(0);
+    meta.data.forEach((element: unknown, i: number) => {
+      const raw = Number(data[i]) || 0;
+      if (raw <= 0) return;
+      const pct = Math.round((raw / total) * 100);
+      const arc = element as { tooltipPosition?: () => { x: number; y: number } };
+      if (typeof arc.tooltipPosition !== "function") return;
+      const { x, y } = arc.tooltipPosition();
+      const label = `${pct}%`;
+      ctx.save();
+      ctx.font = "bold 13px 'DM Sans', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(15,23,42,0.35)";
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeText(label, x, y);
+      ctx.fillText(label, x, y);
+      ctx.restore();
+    });
+  },
+};
+
+/** Chart.js pie — My Ticket Status with % on each slice. */
+const TicketStatusPieChart: React.FC<{
+  pending: number; inProg: number; resolved: number;
+}> = ({ pending, inProg, resolved }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const total = pending + inProg + resolved;
+  const resolveRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let cancelled = false;
+
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+      if (total === 0) return;
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "pie",
+        plugins: [pieSlicePercentPlugin],
+        data: {
+          labels: ["Assigned", "In Progress", "Resolved"],
+          datasets: [{
+            data: [pending, inProg, resolved],
+            backgroundColor: [STATUS_COLORS.assigned, STATUS_COLORS.inProg, STATUS_COLORS.resolved],
+            borderWidth: 2,
+            borderColor: "#fff",
+            hoverOffset: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: 4 },
+          plugins: {
+            legend: {
+              position: "right",
+              labels: { font: { family: "'DM Sans',sans-serif", size: 11 }, color: "#475569", padding: 10, usePointStyle: true },
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+              callbacks: {
+                label: (ctx) => {
+                  const v = Number(ctx.raw) || 0;
+                  const sum = (ctx.dataset.data as number[]).reduce((a, b) => a + b, 0);
+                  const p = sum > 0 ? Math.round((v / sum) * 100) : 0;
+                  return ` ${v} (${p}%)`;
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [pending, inProg, resolved, total]);
+
+  if (total === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "1.2rem 0", color: "#94a3b8", fontSize: 12 }}>No tickets assigned yet.</div>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-        {counts.map((count, i) => {
-          const intensity = count / max;
-          const bg = intensity === 0
-            ? "#f1f5f9"
-            : `rgba(10,76,134,${0.15 + intensity * 0.85})`;
+    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div style={{ position: "relative", width: 220, height: 220, flexShrink: 0 }}>
+        <canvas ref={canvasRef} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 160 }}>
+        {[
+          { label: "Resolved", value: resolved, color: STATUS_COLORS.resolved },
+          { label: "In Progress", value: inProg, color: STATUS_COLORS.inProg },
+          { label: "Assigned", value: pending, color: STATUS_COLORS.assigned },
+        ].map(d => {
+          const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
           return (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8" }}>{count}</div>
-              <div
-                title={`${days[i]}: ${count} ticket${count !== 1 ? "s" : ""}`}
-                style={{
-                  width: "100%", height: 44, borderRadius: 6,
-                  background: bg,
-                  transition: "background 0.3s",
-                  cursor: "default",
-                }}
-              />
-              <div style={{ fontSize: 9, color: "#94a3b8", fontWeight: 500 }}>{days[i]}</div>
+            <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "#475569", fontWeight: 500 }}>{d.label}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginLeft: "auto" }}>
+                {d.value} <span style={{ color: "#64748b", fontWeight: 600 }}>({pct}%)</span>
+              </span>
             </div>
           );
         })}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-        <span style={{ fontSize: 10, color: "#94a3b8" }}>Less</span>
-        {[0.1, 0.3, 0.55, 0.75, 1].map((op, i) => (
-          <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: `rgba(10,76,134,${op})` }} />
-        ))}
-        <span style={{ fontSize: 10, color: "#94a3b8" }}>More</span>
+        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 2 }}>
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+            Total assigned: <strong style={{ color: "#0f172a" }}>{total}</strong>
+            {" · "}
+            <strong style={{ color: "#0f172a" }}>{resolveRate}%</strong> resolved
+          </span>
+        </div>
       </div>
     </div>
   );
 };
 
-// ── Donut / Ring Chart ────────────────────────────────────────────────────────
-const RingChart: React.FC<{
+/** Chart.js pie — Breakdown (same three slices). */
+const BreakdownPieChart: React.FC<{
   pending: number; inProg: number; resolved: number;
 }> = ({ pending, inProg, resolved }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<{ destroy: () => void } | null>(null);
   const total = pending + inProg + resolved;
-  const r = 48, cx = 60, cy = 60, stroke = 14;
-  const circ = 2 * Math.PI * r;
 
-  const segments = [
-    { value: resolved, color: "#10b981" },
-    { value: inProg,   color: "#3b82f6" },
-    { value: pending,  color: "#f59e0b" },
-  ];
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let cancelled = false;
 
-  let offset = 0;
-  const resolveRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+      if (total === 0) return;
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "pie",
+        plugins: [pieSlicePercentPlugin],
+        data: {
+          labels: ["Assigned", "In Progress", "Resolved"],
+          datasets: [{
+            data: [pending, inProg, resolved],
+            backgroundColor: [STATUS_COLORS.assigned, STATUS_COLORS.inProg, STATUS_COLORS.resolved],
+            borderWidth: 2,
+            borderColor: "#fff",
+            hoverOffset: 8,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: 6 },
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: { font: { family: "'DM Sans',sans-serif", size: 11 }, color: "#475569", padding: 12, usePointStyle: true },
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+              callbacks: {
+                label: (ctx) => {
+                  const v = Number(ctx.raw) || 0;
+                  const sum = (ctx.dataset.data as number[]).reduce((a, b) => a + b, 0);
+                  const pct = sum > 0 ? Math.round((v / sum) * 100) : 0;
+                  return ` ${v} (${pct}%)`;
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [pending, inProg, resolved, total]);
+
+  if (total === 0) return null;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "1.2rem" }}>
-      <svg width={120} height={120} viewBox="0 0 120 120">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
-        {total > 0 && segments.map((seg, i) => {
-          const pct  = seg.value / total;
-          const dash = pct * circ;
-          const gap  = circ - dash;
-          const el = (
-            <circle key={i}
-              cx={cx} cy={cy} r={r} fill="none"
-              stroke={seg.color} strokeWidth={stroke}
-              strokeDasharray={`${dash} ${gap}`}
-              strokeDashoffset={-offset * circ + circ / 4}
-              strokeLinecap="round"
-            />
-          );
-          offset += pct;
-          return el;
-        })}
-        <text x={cx} y={cy - 5} textAnchor="middle" fontSize={20} fontWeight={800} fill="#0f172a" fontFamily="'DM Sans',sans-serif">{resolveRate}%</text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize={8} fill="#94a3b8" fontWeight={600} letterSpacing="1">RESOLVED</text>
-      </svg>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {[
-          { label: "Resolved",    value: resolved, color: "#10b981" },
-          { label: "In Progress", value: inProg,   color: "#3b82f6" },
-          { label: "Pending",     value: pending,  color: "#f59e0b" },
-        ].map(d => (
-          <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: "#475569", fontWeight: 500 }}>{d.label}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginLeft: "auto", paddingLeft: 16 }}>{d.value}</span>
-          </div>
-        ))}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>Total assigned: <strong style={{ color: "#0f172a" }}>{total}</strong></span>
-        </div>
-      </div>
+    <div style={{ position: "relative", width: "100%", height: 220, maxWidth: 320, margin: "0 auto" }}>
+      <canvas ref={canvasRef} />
     </div>
   );
 };
@@ -445,7 +634,7 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
               {[
                 { num: tech.resolved,   lbl: "Resolved", col: "#065f46", bg: "#d1fae5" },
                 { num: tech.inProgress, lbl: "Active",   col: "#1e40af", bg: "#dbeafe" },
-                { num: tech.pending,    lbl: "Pending",  col: "#92400e", bg: "#fef3c7" },
+                { num: tech.pending,    lbl: "Assigned",  col: "#92400e", bg: "#fef3c7" },
               ].map(s => (
                 <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "7px 4px", textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
@@ -508,51 +697,63 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
   );
 };
 
-// ── Trend Line Chart ──────────────────────────────────────────────────────────
-const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Chart.js line — ticket count per calendar month for selected year (by `date_submitted`). */
+const MonthlyVolumeLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<any>(null);
+  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const currentY = new Date().getFullYear();
+  const [year, setYear] = useState(currentY);
+
+  const monthCounts = useMemo(() => {
+    const counts = Array(12).fill(0);
+    tickets.forEach((t: any) => {
+      if (!t.date_submitted) return;
+      const d = new Date(t.date_submitted);
+      if (d.getFullYear() !== year) return;
+      counts[d.getMonth()]++;
+    });
+    return counts;
+  }, [tickets, year]);
+
+  const yearOptions = useMemo(() => {
+    const ys = new Set<number>();
+    ys.add(currentY);
+    ys.add(currentY - 1);
+    ys.add(currentY - 2);
+    tickets.forEach((t: any) => {
+      if (!t.date_submitted) return;
+      ys.add(new Date(t.date_submitted).getFullYear());
+    });
+    return Array.from(ys).sort((a, b) => b - a);
+  }, [tickets, currentY]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
     let cancelled = false;
 
-    const now   = new Date();
-    const weeks: string[] = [];
-    const counts: number[] = [];
-    for (let w = 7; w >= 0; w--) {
-      const start = new Date(now);
-      start.setDate(now.getDate() - w * 7);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 7);
-      weeks.push(`W-${w === 0 ? "now" : w}`);
-      counts.push(tickets.filter((t: any) => {
-        const d = new Date(t.date_submitted);
-        return d >= start && d < end;
-      }).length);
-    }
-
     import("chart.js/auto").then(({ default: Chart }) => {
       if (cancelled || !canvasRef.current) return;
-      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+      chartRef.current?.destroy();
+      chartRef.current = null;
 
       chartRef.current = new Chart(canvasRef.current, {
         type: "line",
         data: {
-          labels: weeks,
+          labels: MONTH_SHORT,
           datasets: [{
             label: "Tickets",
-            data: counts,
+            data: monthCounts,
             borderColor: BRAND,
-            backgroundColor: "rgba(10,76,134,0.07)",
+            backgroundColor: "rgba(10,76,134,0.08)",
             pointBackgroundColor: BRAND,
             pointBorderColor: "#fff",
             pointBorderWidth: 2,
             pointRadius: 4,
             pointHoverRadius: 7,
             fill: true,
-            tension: 0.4,
+            tension: 0.35,
             borderWidth: 2,
           }],
         },
@@ -568,6 +769,10 @@ const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
               padding: 8,
               cornerRadius: 8,
               callbacks: {
+                title: (items) => {
+                  const i = items[0]?.dataIndex ?? 0;
+                  return `${MONTH_SHORT[i]} ${year}`;
+                },
                 label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}`,
               },
             },
@@ -576,7 +781,7 @@ const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
             x: {
               grid: { display: false },
               border: { display: false },
-              ticks: { font: { size: 10, family: "'DM Sans',sans-serif" }, color: "#94a3b8" },
+              ticks: { font: { size: 10, family: "'DM Sans',sans-serif" }, color: "#94a3b8", maxRotation: 0 },
             },
             y: {
               beginAtZero: true,
@@ -589,12 +794,41 @@ const TrendLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
       });
     });
 
-    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
-  }, [tickets]);
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [tickets, year, monthCounts]);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: 160 }}>
-      <canvas ref={canvasRef} />
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }} htmlFor="tdb-volume-year">Year</label>
+        <select
+          id="tdb-volume-year"
+          value={year}
+          onChange={e => setYear(Number(e.target.value))}
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#0f172a",
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            fontFamily: "'DM Sans',sans-serif",
+            cursor: "pointer",
+          }}
+        >
+          {yearOptions.map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+      <div style={{ position: "relative", width: "100%", height: 200 }}>
+        <canvas ref={canvasRef} />
+      </div>
     </div>
   );
 };
@@ -836,7 +1070,7 @@ const TechnicianDashboardHome: React.FC = () => {
               style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem", marginBottom: "0.85rem" }}
             >
               <KpiCard label="My Tickets"  value={tickets.total}    sub="Assigned to you"  icon={<Ticket size={15} />}       accent={BRAND}   delay={0}   animKey={animKey} />
-              <KpiCard label="Pending"     value={tickets.pending}  sub="Awaiting action"  icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
+              <KpiCard label="Assigned"     value={tickets.pending}  sub="Awaiting action"  icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
               <KpiCard label="In Progress" value={tickets.inProg}   sub="Currently active" icon={<CircleDot size={15} />}     accent="#3b82f6" delay={100} animKey={animKey} />
               <KpiCard label="Resolved"    value={tickets.resolved} sub="Closed tickets"   icon={<CheckCircle2 size={15} />}  accent="#10b981" delay={150} animKey={animKey} />
             </div>
@@ -853,11 +1087,7 @@ const TechnicianDashboardHome: React.FC = () => {
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>My Ticket Status</span>
                 </div>
-                {tickets.total > 0 ? (
-                  <RingChart pending={tickets.pending} inProg={tickets.inProg} resolved={tickets.resolved} />
-                ) : (
-                  <div style={{ textAlign: "center", padding: "1.2rem 0", color: "#94a3b8", fontSize: 12 }}>No tickets assigned yet.</div>
-                )}
+                <TicketStatusPieChart pending={tickets.pending} inProg={tickets.inProg} resolved={tickets.resolved} />
               </div>
 
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
@@ -870,7 +1100,7 @@ const TechnicianDashboardHome: React.FC = () => {
                   </div>
                   <span style={{ fontSize: 11, color: "#94a3b8" }}>Mon – Thu</span>
                 </div>
-                <WeeklyHeatmap tickets={myTickets} />
+                <WeeklyActivityPolarChart tickets={myTickets} />
               </div>
             </div>
 
@@ -885,11 +1115,11 @@ const TechnicianDashboardHome: React.FC = () => {
                     <div style={{ width: 26, height: 26, borderRadius: 7, background: "#10b98112", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <TrendingUp size={13} color="#10b981" />
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Ticket Volume (8 Weeks)</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Ticket Volume</span>
                   </div>
-                  <span style={{ fontSize: 11, color: "#94a3b8" }}>My assignments</span>
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}>By month · year</span>
                 </div>
-                <TrendLineChart tickets={myTickets} />
+                <MonthlyVolumeLineChart tickets={myTickets} />
               </div>
 
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
@@ -911,10 +1141,8 @@ const TechnicianDashboardHome: React.FC = () => {
 
                 {tickets.total > 0 ? (
                   <>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: "0.85rem" }}>
-                      <ResolutionBar label="Pending"     value={tickets.pending}  total={tickets.total} color="#f59e0b" delay={0}   animKey={animKey} />
-                      <ResolutionBar label="In Progress" value={tickets.inProg}   total={tickets.total} color="#3b82f6" delay={70}  animKey={animKey} />
-                      <ResolutionBar label="Resolved"    value={tickets.resolved} total={tickets.total} color="#10b981" delay={140} animKey={animKey} />
+                    <div style={{ marginBottom: "0.85rem" }}>
+                      <BreakdownPieChart pending={tickets.pending} inProg={tickets.inProg} resolved={tickets.resolved} />
                     </div>
                     <div style={{ display: "flex", gap: "1.2rem", paddingTop: "0.75rem", borderTop: "1px solid #f1f5f9" }}>
                       {[
