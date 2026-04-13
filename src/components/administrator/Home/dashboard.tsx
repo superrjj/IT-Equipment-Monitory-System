@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../../lib/supabaseClient";
+import { NAV_BADGES_CHANGED_EVENT } from "../../../lib/audit-notifications";
 import BottomNav from "../dashboard/BottomNav";
 import Header from "../dashboard/header";
 import ProfileModal from "../Management/my-profiles";
@@ -827,6 +828,7 @@ const Dashboard: React.FC = () => {
   const [activeLabel, setActiveLabel]           = useState("Dashboard");
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [headerAvatarUrl, setHeaderAvatarUrl]   = useState("");
+  const [assignJobBadgeCount, setAssignJobBadgeCount] = useState(0);
 
   const navigate = useNavigate();
 
@@ -836,6 +838,47 @@ const Dashboard: React.FC = () => {
   const isAdmin         = userRole === "Administrator";
   const isTechnician    = userRole === "IT Technician";
   const isEmployee      = userRole === "Employee";
+
+  const refreshAssignJobPendingBadge = useCallback(async () => {
+    if (userRole !== "Administrator") {
+      setAssignJobBadgeCount(0);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("file_reports")
+      .select("assigned_to")
+      .eq("status", "Pending")
+      .eq("is_archived", false);
+    if (error) return;
+    const n = (data ?? []).filter((row: { assigned_to: unknown }) => {
+      const a = row.assigned_to;
+      const arr = Array.isArray(a) ? a : [];
+      return arr.length === 0;
+    }).length;
+    setAssignJobBadgeCount(n);
+  }, [userRole]);
+
+  useEffect(() => {
+    void refreshAssignJobPendingBadge();
+  }, [refreshAssignJobPendingBadge]);
+
+  useEffect(() => {
+    if (userRole !== "Administrator") return;
+    const ch = supabase
+      .channel(`adm_nav_badges_${Date.now()}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "file_reports" },
+        () => { void refreshAssignJobPendingBadge(); }
+      )
+      .subscribe();
+    const onEvt = () => { void refreshAssignJobPendingBadge(); };
+    window.addEventListener(NAV_BADGES_CHANGED_EVENT, onEvt);
+    return () => {
+      window.removeEventListener(NAV_BADGES_CHANGED_EVENT, onEvt);
+      void supabase.removeChannel(ch);
+    };
+  }, [userRole, refreshAssignJobPendingBadge]);
 
   useEffect(() => {
     const token  = localStorage.getItem("session_token");
@@ -918,7 +961,12 @@ const Dashboard: React.FC = () => {
           {getPage(activeLabel)}
         </div>
 
-        <BottomNav activeLabel={activeLabel} onNavigate={setActiveLabel} userRole={userRole} />
+        <BottomNav
+          activeLabel={activeLabel}
+          onNavigate={setActiveLabel}
+          userRole={userRole}
+          badgeByLabel={isAdmin ? { "Assign Job": assignJobBadgeCount } : undefined}
+        />
       </div>
 
       <ProfileModal

@@ -1,10 +1,17 @@
 export const NOTIFICATIONS_CHANGED_EVENT = "itdesk-notifications-changed";
+/** Fired after ticket assignment flows so the admin bottom bar can refresh pending counts. */
+export const NAV_BADGES_CHANGED_EVENT = "itdesk-nav-badges-changed";
 
 /** Untyped client — matches createClient() from @supabase/supabase-js */
 type Db = { from: (t: string) => any };
 
 export function dispatchNotificationsChanged(): void {
   window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT));
+}
+
+export function dispatchNavBadgesChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(NAV_BADGES_CHANGED_EVENT));
 }
 
 async function fetchActiveAdminIds(supabase: Db): Promise<string[]> {
@@ -60,7 +67,7 @@ export async function insertNotification(
     body?: string;
     entityType?: string | null;
     entityId?: string | null;
-    actorUserId?: string | null; // ← NEW: who triggered this notification
+    actorUserId?: string | null;
   }
 ): Promise<void> {
   const title = clip(row.title, 200);
@@ -74,7 +81,7 @@ export async function insertNotification(
     body,
     entity_type: row.entityType ? clip(row.entityType, 80) : null,
     entity_id: row.entityId ?? null,
-    actor_user_id: row.actorUserId ?? null, // ← NEW
+    actor_user_id: row.actorUserId ?? null,
   });
 }
 
@@ -86,7 +93,7 @@ export async function notifyTicketAssignees(
     ticketId: string;
     ticketTitle: string;
     ticketNumber?: string | null;
-    actorUserId?: string | null; // ← NEW
+    actorUserId?: string | null;
   }
 ): Promise<void> {
   const label = ctx.ticketNumber?.trim() || "Ticket";
@@ -100,7 +107,7 @@ export async function notifyTicketAssignees(
       body: `${label}: ${clip(ctx.ticketTitle, 180)}`,
       entityType: "file_report",
       entityId: ctx.ticketId,
-      actorUserId: ctx.actorUserId ?? null, // ← NEW
+      actorUserId: ctx.actorUserId ?? null,
     });
   }
   dispatchNotificationsChanged();
@@ -113,7 +120,7 @@ export async function notifyRepairAssignees(
   ctx: {
     repairId: string;
     summary: string;
-    actorUserId?: string | null; // ← NEW
+    actorUserId?: string | null;
   }
 ): Promise<void> {
   const uniqueAssignees = Array.from(new Set(assigneeIds.filter(Boolean)));
@@ -126,7 +133,33 @@ export async function notifyRepairAssignees(
       body: clip(ctx.summary, 2000),
       entityType: "repair",
       entityId: ctx.repairId,
-      actorUserId: ctx.actorUserId ?? null, // ← NEW
+      actorUserId: ctx.actorUserId ?? null,
+    });
+  }
+  dispatchNotificationsChanged();
+}
+
+/** Notify all active admins when an employee submits a new ticket (actor = employee). Optional if DB trigger handles inserts. */
+export async function notifyAdminsNewEmployeeTicket(
+  supabase: Db,
+  ctx: {
+    ticketId: string;
+    ticketTitle: string;
+    ticketNumber?: string | null;
+    actorUserId?: string | null;
+  }
+): Promise<void> {
+  const label = ctx.ticketNumber?.trim() || "Ticket";
+  const adminIds = await fetchActiveAdminIds(supabase);
+  for (const uid of adminIds) {
+    await insertNotification(supabase, {
+      userId: uid,
+      type: "employee_new_ticket",
+      title: "New ticket submitted",
+      body: `${label}: ${clip(ctx.ticketTitle, 180)}`,
+      entityType: "file_report",
+      entityId: ctx.ticketId,
+      actorUserId: ctx.actorUserId ?? null,
     });
   }
   dispatchNotificationsChanged();
@@ -139,7 +172,7 @@ export async function notifyAdminsTicketStatusChanged(
     ticketTitle: string;
     ticketNumber?: string | null;
     status: string;
-    actorUserId?: string | null; // ← NEW
+    actorUserId?: string | null;
   }
 ): Promise<void> {
   const label = ctx.ticketNumber?.trim() || "Ticket";
@@ -152,7 +185,7 @@ export async function notifyAdminsTicketStatusChanged(
       body: `${label}: ${clip(ctx.ticketTitle, 180)} → ${clip(ctx.status, 80)}`,
       entityType: "file_report",
       entityId: ctx.ticketId,
-      actorUserId: ctx.actorUserId ?? null, // ← NEW
+      actorUserId: ctx.actorUserId ?? null,
     });
   }
   dispatchNotificationsChanged();
@@ -203,7 +236,7 @@ export async function notifyAdminsRepairStatusChanged(
     repairId: string;
     summary: string;
     status: string;
-    actorUserId?: string | null; // ← NEW
+    actorUserId?: string | null;
   }
 ): Promise<void> {
   const adminIds = await fetchActiveAdminIds(supabase);
@@ -215,7 +248,7 @@ export async function notifyAdminsRepairStatusChanged(
       body: `${clip(ctx.summary, 2000)} → ${clip(ctx.status, 80)}`,
       entityType: "repair",
       entityId: ctx.repairId,
-      actorUserId: ctx.actorUserId ?? null, // ← NEW
+      actorUserId: ctx.actorUserId ?? null,
     });
   }
   dispatchNotificationsChanged();
@@ -233,7 +266,7 @@ export async function notifyAdminsSignupRequest(
     requestId: string;
     fullName: string;
     username: string;
-    actorUserId?: string | null; // ← NEW
+    actorUserId?: string | null;
   }
 ): Promise<void> {
   const adminIds = await fetchActiveAdminIds(supabase);
@@ -245,7 +278,7 @@ export async function notifyAdminsSignupRequest(
       body: `${clip(ctx.fullName, 120)} (@${clip(ctx.username, 80)}) has requested an account.`,
       entityType: "signup_request",
       entityId: ctx.requestId,
-      actorUserId: ctx.actorUserId ?? null, // ← NEW
+      actorUserId: ctx.actorUserId ?? null,
     });
   }
   dispatchNotificationsChanged();

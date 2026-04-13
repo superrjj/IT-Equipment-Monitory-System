@@ -119,9 +119,7 @@ const UserSubmitTicket: React.FC = () => {
         assigned_to: [] as string[],
       };
 
-      const { error: insertError } = await supabase
-        .from("file_reports")
-        .insert(payload);
+      const { error: insertError } = await supabase.from("file_reports").insert(payload);
 
       if (insertError) throw insertError;
 

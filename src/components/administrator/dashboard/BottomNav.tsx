@@ -74,9 +74,16 @@ type BottomNavProps = {
   activeLabel: string;
   onNavigate: (label: string) => void;
   userRole: string;
+  /** Non-zero counts show a red pill (1–9, then "9+") on matching primary nav labels. */
+  badgeByLabel?: Record<string, number>;
 };
 
-const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole }) => {
+function formatNavBadge(n: number): string {
+  if (n <= 0) return "";
+  return n > 9 ? "9+" : String(n);
+}
+
+const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole, badgeByLabel }) => {
   const isTechnician = userRole === "IT Technician";
 
   const menuSections = useMemo(
@@ -166,6 +173,31 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           font-family: 'Poppins', sans-serif;
           color: #334155;
           -webkit-tap-highlight-color: transparent;
+          position: relative;
+        }
+
+        .bnav-badge {
+          position: absolute;
+          top: 4px;
+          right: 10px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: #dc2626;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          line-height: 18px;
+          text-align: center;
+          box-shadow: 0 1px 4px rgba(220,38,38,0.45);
+          pointer-events: none;
+        }
+
+        .bnav-item.bnav-active .bnav-badge {
+          background: #fff;
+          color: #dc2626;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.12);
         }
 
         .bnav-item:focus-visible {
@@ -380,6 +412,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
       <nav className="bnav-bar" role="navigation" aria-label="Main navigation">
         {primaryItems.map(({ label, icon: Icon }) => {
           const active = label === activeLabel;
+          const badgeTxt = formatNavBadge(badgeByLabel?.[label] ?? 0);
           return (
             <button
               key={label}
@@ -389,6 +422,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
               title={label}
               aria-current={active ? "page" : undefined}
             >
+              {badgeTxt ? <span className="bnav-badge" aria-hidden>{badgeTxt}</span> : null}
               <Icon
                 size={20}
                 strokeWidth={active ? 2.35 : 2.1}

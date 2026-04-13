@@ -4,6 +4,7 @@ import {
   diffNewAssignees,
   insertActivityLog,
   getSessionUserId,
+  dispatchNavBadgesChanged,
 } from "../../../lib/audit-notifications";
 import {
   Plus, Pencil, Trash2, Eye, Search,
@@ -490,6 +491,7 @@ const Repairs: React.FC = () => {
         await notifyRepairAssignees(supabase, form.assigned_to, {
           repairId: row.id,
           summary: summary || "New repair job",
+          actorUserId: getSessionUserId(),
         });
       }
       await insertActivityLog(supabase, {
@@ -531,6 +533,7 @@ const Repairs: React.FC = () => {
         await notifyRepairAssignees(supabase, added, {
           repairId: selected.id,
           summary: summary || "Repair job reassigned",
+          actorUserId: getSessionUserId(),
         });
       }
       await insertActivityLog(supabase, {
@@ -545,6 +548,7 @@ const Repairs: React.FC = () => {
 
     setSubmitting(false);
     closeModal();
+    dispatchNavBadgesChanged();
     fetchRepairs();
   };
 

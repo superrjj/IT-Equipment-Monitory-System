@@ -328,6 +328,7 @@ const NotifAvatar: React.FC<{ actor: ActorRow | null }> = ({ actor }) => {
 function formatNotifType(type: string): string {
   const map: Record<string, string> = {
     ticket_assigned:              "Ticket Assigned",
+    employee_new_ticket:          "New Ticket",
     ticket_status_changed_admin:  "Status Updated",
     ticket_status_requester:      "Your Ticket",
     repair_assigned:              "Repair Assigned",

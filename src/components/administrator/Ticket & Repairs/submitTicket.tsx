@@ -4,6 +4,7 @@ import {
   diffNewAssignees,
   insertActivityLog,
   getSessionUserId,
+  dispatchNavBadgesChanged,
 } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
 import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
@@ -545,6 +546,7 @@ const SubmitTicket: React.FC = () => {
         meta: { title: form.title, ticket_number: row?.ticket_number ?? null, employee_name: form.employee_name },
       });
       showToast("Ticket submitted successfully.", "success");
+      dispatchNavBadgesChanged();
 
     } else if (modalMode === "edit" && selected) {
       const prevAssigned = Array.isArray(selected.assigned_to) ? selected.assigned_to : [];
@@ -573,6 +575,7 @@ const SubmitTicket: React.FC = () => {
         },
       });
       showToast("Ticket updated successfully.", "success");
+      dispatchNavBadgesChanged();
     }
 
     setSubmitting(false);
@@ -587,7 +590,10 @@ const SubmitTicket: React.FC = () => {
       .update({ is_archived: true })
       .eq("id", deleteTarget.id);
     if (error) showToast(friendlyError(error.message), "error");
-    else showToast(`Ticket "${deleteTarget.title}" archived.`, "success");
+    else {
+      showToast(`Ticket "${deleteTarget.title}" archived.`, "success");
+      dispatchNavBadgesChanged();
+    }
     setDeleteTarget(null);
   };
 
