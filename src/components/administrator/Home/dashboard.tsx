@@ -158,10 +158,21 @@ const pieSlicePercentPlugin: Plugin<"pie"> = {
   },
 };
 
+const PIE_ANIMATION = {
+  duration: 850,
+  easing: "easeOutCubic" as const,
+};
+
+const PIE_ANIMATIONS = {
+  radius: { from: 0, duration: 850, easing: "easeOutCubic" as const },
+  rotation: { from: -0.5 * Math.PI, duration: 850, easing: "easeOutCubic" as const },
+};
+
+
 // ── Tickets This Week (Mixed Chart.js: bar + line) ───────────────────────────
 const WeeklyMixedChart: React.FC<{ weeklyTickets: number[] }> = ({ weeklyTickets }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<{ destroy: () => void } | null>(null);
+  const chartRef  = useRef<{ destroy: () => void; update: () => void } | null>(null);
   useEffect(() => {
     if (!canvasRef.current) return;
     let cancelled = false;
@@ -257,7 +268,7 @@ const WeeklyMixedChart: React.FC<{ weeklyTickets: number[] }> = ({ weeklyTickets
 // ── Donut Chart (Chart.js, non-redundant legend with counts) ─────────────────
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const chartRef = useRef<{ destroy: () => void; update: () => void } | null>(null);
   const total = data.reduce((s, d) => s + d.value, 0);
   const legendItems = data.map((item) => ({
     ...item,
@@ -287,6 +298,8 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          animation: PIE_ANIMATION,
+          animations: PIE_ANIMATIONS,
           plugins: {
             legend: {
               display: false,
@@ -308,6 +321,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
           },
         },
       });
+      chartRef.current.update();
     });
     return () => {
       cancelled = true;
@@ -348,7 +362,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
 // ── Issue Types Line Chart ────────────────────────────────────────────────────
 const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<{ destroy: () => void } | null>(null);
+  const chartRef  = useRef<{ destroy: () => void; update: () => void } | null>(null);
   useEffect(() => {
     if (!canvasRef.current || issueBreakdown.length === 0) return;
     let cancelled = false;
@@ -460,7 +474,7 @@ function getDeptColor(name: string): string {
 }
 const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<{ destroy: () => void } | null>(null);
+  const chartRef  = useRef<{ destroy: () => void; update: () => void } | null>(null);
   const total = deptRows.reduce((s, d) => s + d.tickets, 0);
   const legendItems = deptRows.map((row) => ({
     label: row.name,
@@ -491,6 +505,8 @@ const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          animation: PIE_ANIMATION,
+          animations: PIE_ANIMATIONS,
           plugins: {
             legend: {
               display: false,
@@ -512,6 +528,7 @@ const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
           },
         },
       });
+      chartRef.current.update();
     });
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
   }, [deptRows, total]);
@@ -780,6 +797,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   const [data, setData]           = useState<DashData | null>(null);
   const [loading, setLoading]     = useState(true);
   const [refreshed, setRefreshed] = useState(false);
+  const [pieAnimKey, setPieAnimKey] = useState(0);
 
   const ticketsRef   = useRef<any[]>([]);
   const incomingRef  = useRef<any[]>([]);
@@ -846,6 +864,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
 
   const handleRefresh = async () => {
     setRefreshed(true);
+    setPieAnimKey((k) => k + 1);
     await load();
     setTimeout(() => setRefreshed(false), 600);
   };
@@ -966,7 +985,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               iconBg="#0a4c8615"
               title="Ticket Status"
             />
-            <DonutChart data={donutData} />
+            <DonutChart key={`admin-status-pie-${pieAnimKey}`} data={donutData} />
           </div>
 
           <div style={{ ...CARD }}>
@@ -1015,7 +1034,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             />
             {data.deptRows.length === 0
               ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No department data yet.</p>
-              : <DeptPieChart deptRows={data.deptRows} />}
+              : <DeptPieChart key={`admin-dept-pie-${pieAnimKey}`} deptRows={data.deptRows} />}
           </div>
         </div>
 

@@ -234,7 +234,7 @@ const WORKWEEK_POLAR_BORDER = [
 /** Chart.js polar area — ticket count Mon–Thu (`date_submitted`, local calendar day). */
 const WeeklyActivityPolarChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const chartRef = useRef<{ destroy: () => void; update: () => void } | null>(null);
 
   const dayCounts = useMemo(() => {
     const full = Array(7).fill(0) as number[];
@@ -364,12 +364,23 @@ const pieSlicePercentPlugin: Plugin<"pie"> = {
   },
 };
 
+const PIE_ANIMATION = {
+  duration: 850,
+  easing: "easeOutCubic" as const,
+};
+
+const PIE_ANIMATIONS = {
+  radius: { from: 0, duration: 850, easing: "easeOutCubic" as const },
+  rotation: { from: -0.5 * Math.PI, duration: 850, easing: "easeOutCubic" as const },
+};
+
+
 /** Chart.js pie — My Ticket Status with % on each slice. */
 const TicketStatusPieChart: React.FC<{
   assigned: number; inProg: number; resolved: number;
 }> = ({ assigned, inProg, resolved }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const chartRef = useRef<{ destroy: () => void; update: () => void } | null>(null);
   const total = assigned + inProg + resolved;
   const legendItems = [
     { label: "Assigned", value: assigned, color: STATUS_COLORS.assigned },
@@ -397,13 +408,15 @@ const TicketStatusPieChart: React.FC<{
             backgroundColor: [STATUS_COLORS.assigned, STATUS_COLORS.inProg, STATUS_COLORS.resolved],
             borderWidth: 2,
             borderColor: "#fff",
-            hoverOffset: 6,
+            hoverOffset: 8,
           }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           layout: { padding: 4 },
+          animation: PIE_ANIMATION,
+          animations: PIE_ANIMATIONS,
           plugins: {
             legend: {
               display: false,
@@ -426,6 +439,7 @@ const TicketStatusPieChart: React.FC<{
           },
         },
       });
+      chartRef.current.update();
     });
 
     return () => {
@@ -476,7 +490,7 @@ const BreakdownPieChart: React.FC<{
   assigned: number; inProg: number; resolved: number;
 }> = ({ assigned, inProg, resolved }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const chartRef = useRef<{ destroy: () => void; update: () => void } | null>(null);
   const total = assigned + inProg + resolved;
 
   useEffect(() => {
@@ -506,6 +520,8 @@ const BreakdownPieChart: React.FC<{
           responsive: true,
           maintainAspectRatio: false,
           layout: { padding: 6 },
+          animation: PIE_ANIMATION,
+          animations: PIE_ANIMATIONS,
           plugins: {
             legend: {
               position: "bottom",
@@ -553,6 +569,7 @@ const BreakdownPieChart: React.FC<{
           },
         },
       });
+      chartRef.current.update();
     });
 
     return () => {
@@ -730,7 +747,7 @@ const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 /** Chart.js line — ticket count per calendar month for selected year (by `date_submitted`). */
 const MonthlyVolumeLineChart: React.FC<{ tickets: any[] }> = ({ tickets }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  const chartRef = useRef<{ destroy: () => void; update: () => void } | null>(null);
   const currentY = new Date().getFullYear();
   const [year, setYear] = useState(currentY);
 
@@ -1114,7 +1131,7 @@ const TechnicianDashboardHome: React.FC = () => {
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>My Ticket Status</span>
                 </div>
-                <TicketStatusPieChart assigned={tickets.assigned} inProg={tickets.inProg} resolved={tickets.resolved} />
+                <TicketStatusPieChart key={`status-pie-${animKey}`} assigned={tickets.assigned} inProg={tickets.inProg} resolved={tickets.resolved} />
               </div>
 
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
@@ -1169,7 +1186,7 @@ const TechnicianDashboardHome: React.FC = () => {
                 {tickets.total > 0 ? (
                   <>
                     <div style={{ marginBottom: "0.85rem" }}>
-                      <BreakdownPieChart assigned={tickets.assigned} inProg={tickets.inProg} resolved={tickets.resolved} />
+                      <BreakdownPieChart key={`breakdown-pie-${animKey}`} assigned={tickets.assigned} inProg={tickets.inProg} resolved={tickets.resolved} />
                     </div>
                     <div style={{ display: "flex", gap: "1.2rem", paddingTop: "0.75rem", borderTop: "1px solid #f1f5f9" }}>
                       {[
