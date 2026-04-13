@@ -3,6 +3,14 @@
  * Permission is requested when the user opens the bell (user gesture).
  */
 
+/** Served from `public/masaya-sa-tarlac-city-logo.png` (Vite root URL). */
+export const BROWSER_NOTIFICATION_ICON_PATH = "/masaya-sa-tarlac-city-logo.png";
+
+function notificationIconAbsoluteUrl(): string {
+  if (typeof window === "undefined") return "";
+  return new URL(BROWSER_NOTIFICATION_ICON_PATH, window.location.origin).href;
+}
+
 export function shouldShowBrowserPushForRole(notificationType: string, userRole: string): boolean {
   const t = (notificationType ?? "").trim();
   if (!t) return false;
@@ -47,10 +55,12 @@ export function showBrowserNotification(title: string, body: string, tag: string
   if (Notification.permission !== "granted") return;
   const safeTitle = title?.trim() || "Notification";
   const safeBody = body?.trim() ?? "";
+  const icon = notificationIconAbsoluteUrl();
   try {
     new Notification(safeTitle, {
       body: safeBody || undefined,
       tag,
+      ...(icon ? { icon } : {}),
     });
   } catch {
     /* ignore */
