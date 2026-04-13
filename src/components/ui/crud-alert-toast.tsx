@@ -1,4 +1,3 @@
-import React from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 export type CrudToastState = { msg: string; type: "success" | "error" } | null;
