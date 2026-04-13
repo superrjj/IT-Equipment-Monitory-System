@@ -2,6 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Menu, Bell, Settings, ChevronDown, CheckCheck } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
+import {
+  requestBrowserNotificationPermission,
+  shouldShowBrowserPushForRole,
+  showBrowserNotification,
+} from "../../../lib/browser-notifications";
 import { supabase } from "../../../lib/supabaseClient";
 
 const brandBlue = "#0D518C";
@@ -332,6 +337,7 @@ function formatNotifType(type: string): string {
     ticket_status_changed_admin:  "Status Updated",
     ticket_status_requester:      "Your Ticket",
     repair_assigned:              "Repair Assigned",
+    admin_repair_assigned:        "Repair Assigned",
     repair_status_changed_admin:  "Repair Status Updated",
     signup_request:               "Account Request",
   };
@@ -524,6 +530,40 @@ const Header: React.FC<HeaderProps> = ({
       if (channel) void supabase.removeChannel(channel);
     };
   }, [refreshUnread]);
+
+  // ── Browser / OS push for new in-app notification rows ───────────────────────
+  useEffect(() => {
+    if (!onNotificationNavigate) return;
+    const uid = localStorage.getItem("session_user_id")?.trim();
+    if (!uid) return;
+
+    const channel = supabase
+      .channel(`browser_push_${uid}_${Date.now()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "app_notifications",
+          filter: `user_id=eq.${uid}`,
+        },
+        (payload: { new?: Record<string, unknown> }) => {
+          const row = payload.new;
+          if (!row || typeof row !== "object") return;
+          const type = typeof row.type === "string" ? row.type : "";
+          if (!shouldShowBrowserPushForRole(type, userRole)) return;
+          const title = typeof row.title === "string" ? row.title : "Notification";
+          const body = typeof row.body === "string" ? row.body : "";
+          const tag = typeof row.id === "string" ? row.id : `n-${Date.now()}`;
+          showBrowserNotification(title, body, tag);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [onNotificationNavigate, userRole]);
 
   // ── Fetch notifications (with actor join) ──────────────────────────────────
   const fetchNotifications = useCallback(async () => {
@@ -745,7 +785,10 @@ const Header: React.FC<HeaderProps> = ({
             <button
               ref={notifBtnRef}
               type="button"
-              onClick={() => setShowNotifPanel(v => !v)}
+              onClick={() => {
+                void requestBrowserNotificationPermission();
+                setShowNotifPanel(v => !v);
+              }}
               title="Notifications"
               style={{
                 position: "relative", width: 40, height: 40,

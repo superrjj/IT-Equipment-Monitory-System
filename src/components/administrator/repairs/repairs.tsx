@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   notifyRepairAssignees,
+  notifyAdminsRepairAssignment,
   diffNewAssignees,
   insertActivityLog,
   getSessionUserId,
@@ -493,6 +494,11 @@ const Repairs: React.FC = () => {
           summary: summary || "New repair job",
           actorUserId: getSessionUserId(),
         });
+        await notifyAdminsRepairAssignment(supabase, {
+          repairId: row.id,
+          summary: summary || "New repair job",
+          actorUserId: getSessionUserId(),
+        });
       }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
@@ -535,6 +541,11 @@ const Repairs: React.FC = () => {
           summary: summary || "Repair job reassigned",
           actorUserId: getSessionUserId(),
         });
+        await notifyAdminsRepairAssignment(supabase, {
+          repairId: selected.id,
+          summary: summary || "Repair job reassigned",
+          actorUserId: getSessionUserId(),
+        });
       }
       await insertActivityLog(supabase, {
         actorUserId: getSessionUserId(),
@@ -573,15 +584,18 @@ const Repairs: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="rp-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+      <>
         <CrudAlertToast toast={toast} />
-        <RepairsPageSkeleton />
-      </div>
+        <div className="rp-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a" }}>
+          <RepairsPageSkeleton />
+        </div>
+      </>
     );
   }
 
   return (
     <>
+      <CrudAlertToast toast={toast} />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .rp-root, .rp-root * { box-sizing: border-box; }
@@ -601,9 +615,6 @@ const Repairs: React.FC = () => {
       `}</style>
 
       <div className="rp-root" style={{ fontFamily: "'Poppins', sans-serif", color: "#0f172a", paddingTop: "2rem" }}>
-
-        {/* Toast */}
-        <CrudAlertToast toast={toast} />
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>

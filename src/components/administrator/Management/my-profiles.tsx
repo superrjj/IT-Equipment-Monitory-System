@@ -502,7 +502,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     <>
       <style>{css}</style>
 
-      <CrudAlertToast toast={toast} placement="bottom" />
+      <CrudAlertToast toast={toast} />
 
       {/* Overlay */}
       <div

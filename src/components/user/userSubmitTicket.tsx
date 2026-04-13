@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Ticket,
-  AlertCircle,
-  CheckCircle2,
   Building2,
   User,
   Cpu,
@@ -13,7 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 
 const BRAND = "#0a4c86";
@@ -42,14 +40,19 @@ const UserSubmitTicket: React.FC = () => {
   const [departmentName, setDepartmentName] = useState("");
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [highlightProblem, setHighlightProblem] = useState(false);
+
+  const showToast = useCallback((msg: string, type: "success" | "error") => {
+    setToast({ msg, type });
+    window.setTimeout(() => setToast(null), 3500);
+  }, []);
 
   useEffect(() => {
     const loadProfile = async () => {
       const userId = localStorage.getItem("session_user_id");
       if (!userId) {
-        setError("Session missing. Please sign in again.");
+        showToast("Session missing. Please sign in again.", "error");
         setLoadingProfile(false);
         return;
       }
@@ -61,7 +64,7 @@ const UserSubmitTicket: React.FC = () => {
         .single();
 
       if (userErr || !data) {
-        setError("Unable to load your account details. Please try again.");
+        showToast("Unable to load your account details. Please try again.", "error");
         setLoadingProfile(false);
         return;
       }
@@ -84,25 +87,27 @@ const UserSubmitTicket: React.FC = () => {
     };
 
     void loadProfile();
-  }, []);
+  }, [showToast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
+    setToast(null);
+    setHighlightProblem(false);
 
     if (!profile?.full_name || !profile.department_id) {
-      setError("Your account is missing employee or department information.");
+      showToast("Your account is missing employee or department information.", "error");
       return;
     }
 
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      setError("Please enter the issue/problem before submitting.");
+      showToast("Please enter the issue/problem before submitting.", "error");
+      setHighlightProblem(true);
       return;
     }
     if (cleanTitle.length < 5 || cleanTitle.length > 150) {
-      setError("Problem must be 5 to 150 characters.");
+      showToast("Problem must be 5 to 150 characters.", "error");
+      setHighlightProblem(true);
       return;
     }
 
@@ -125,9 +130,9 @@ const UserSubmitTicket: React.FC = () => {
 
       setTitle("");
       setIssueType("Hardware");
-      setSuccess("Your ticket has been recorded. IT will review it shortly.");
+      showToast("Your ticket has been recorded. IT will review it shortly.", "success");
     } catch {
-      setError("Something went wrong while submitting your ticket. Please try again.");
+      showToast("Something went wrong while submitting your ticket. Please try again.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -156,6 +161,7 @@ const UserSubmitTicket: React.FC = () => {
 
   return (
     <>
+      <CrudAlertToast toast={toast} />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         .ust-root { font-family: 'Poppins', sans-serif; color: #0f172a; }
@@ -432,26 +438,6 @@ const UserSubmitTicket: React.FC = () => {
           </>
         ) : (
           <>
-            {error && (
-              <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
-                <Alert variant="destructive">
-                  <AlertCircle size={16} strokeWidth={2} aria-hidden />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              </div>
-            )}
-
-            {success && (
-              <div style={{ marginBottom: "0.75rem", maxWidth: "28rem" }}>
-                <Alert>
-                  <CheckCircle2 size={16} strokeWidth={2} aria-hidden />
-                  <AlertTitle>Success</AlertTitle>
-                  <AlertDescription>{success}</AlertDescription>
-                </Alert>
-              </div>
-            )}
-
             <div className="ust-page">
               <div className="ust-backdrop">
                 <div className="ust-modal">
@@ -495,13 +481,16 @@ const UserSubmitTicket: React.FC = () => {
                     </label>
                     <input
                       value={title}
-                      onChange={e => setTitle(e.target.value)}
+                      onChange={e => {
+                        setTitle(e.target.value);
+                        setHighlightProblem(false);
+                      }}
                       placeholder="Brief description of the issue"
                       maxLength={150}
                       disabled={submitting}
                       style={{
                         ...inputStyle,
-                        borderColor: error && error.includes("Problem") ? "#fca5a5" : "#e2e8f0",
+                        borderColor: highlightProblem ? "#fca5a5" : "#e2e8f0",
                       }}
                     />
                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
@@ -539,8 +528,8 @@ const UserSubmitTicket: React.FC = () => {
                       onClick={() => {
                         setTitle("");
                         setIssueType("Hardware");
-                        setError(null);
-                        setSuccess(null);
+                        setToast(null);
+                        setHighlightProblem(false);
                       }}
                       disabled={submitting}
                     >

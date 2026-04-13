@@ -139,6 +139,30 @@ export async function notifyRepairAssignees(
   dispatchNotificationsChanged();
 }
 
+/** Notify all active admins when a repair job is assigned to technicians (oversight / in-app list). */
+export async function notifyAdminsRepairAssignment(
+  supabase: Db,
+  ctx: {
+    repairId: string;
+    summary: string;
+    actorUserId?: string | null;
+  }
+): Promise<void> {
+  const adminIds = await fetchActiveAdminIds(supabase);
+  for (const uid of adminIds) {
+    await insertNotification(supabase, {
+      userId: uid,
+      type: "admin_repair_assigned",
+      title: "Repair job assigned",
+      body: clip(ctx.summary, 2000),
+      entityType: "repair",
+      entityId: ctx.repairId,
+      actorUserId: ctx.actorUserId ?? null,
+    });
+  }
+  dispatchNotificationsChanged();
+}
+
 /** Notify all active admins when an employee submits a new ticket (actor = employee). Optional if DB trigger handles inserts. */
 export async function notifyAdminsNewEmployeeTicket(
   supabase: Db,
