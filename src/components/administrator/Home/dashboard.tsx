@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import type { Plugin } from "chart.js";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../../lib/supabaseClient";
 import { NAV_BADGES_CHANGED_EVENT } from "../../../lib/audit-notifications";
@@ -125,59 +126,220 @@ const KPI: React.FC<{
   );
 };
 
-// ── Sparkline ─────────────────────────────────────────────────────────────────
-const Sparkline: React.FC<{ data: number[]; color: string }> = ({ data }) => {
-  const days      = ["Mon", "Tue", "Wed", "Thu"];
-  const sliced    = data.slice(0, 4);
-  const max       = Math.max(...sliced, 1);
-  const dayColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b"];
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 56 }}>
-      {sliced.map((v, i) => (
-        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-          <div style={{ width: "100%", height: `${Math.max((v / max) * 44, 4)}px`, background: dayColors[i], borderRadius: 4 }} />
-          <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 500 }}>{days[i]}</span>
-        </div>
-      ))}
-    </div>
-  );
+/** Draws "NN%" on each non-zero pie slice (same pattern as technician dashboard). */
+const pieSlicePercentPlugin: Plugin<"pie"> = {
+  id: "pieSlicePercentLabels",
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    const ds = chart.data.datasets[0];
+    const data = (ds?.data ?? []) as number[];
+    const total = data.reduce((a, b) => a + (Number(b) || 0), 0);
+    if (total <= 0) return;
+    const meta = chart.getDatasetMeta(0);
+    meta.data.forEach((element: unknown, i: number) => {
+      const raw = Number(data[i]) || 0;
+      if (raw <= 0) return;
+      const pct = Math.round((raw / total) * 100);
+      const arc = element as { tooltipPosition?: () => { x: number; y: number } };
+      if (typeof arc.tooltipPosition !== "function") return;
+      const { x, y } = arc.tooltipPosition();
+      const label = `${pct}%`;
+      ctx.save();
+      ctx.font = "bold 12px 'DM Sans', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(15,23,42,0.35)";
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeText(label, x, y);
+      ctx.fillText(label, x, y);
+      ctx.restore();
+    });
+  },
 };
 
-// ── Donut Chart ───────────────────────────────────────────────────────────────
+// ── Tickets This Week (Mixed Chart.js: bar + line) ───────────────────────────
+const WeeklyMixedChart: React.FC<{ weeklyTickets: number[] }> = ({ weeklyTickets }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef  = useRef<{ destroy: () => void } | null>(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let cancelled = false;
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+      const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const bars = weeklyTickets.length === 7
+        ? weeklyTickets
+        : [...weeklyTickets, ...Array(Math.max(0, 7 - weeklyTickets.length)).fill(0)].slice(0, 7);
+      const cumulative = bars.map((_, i) => bars.slice(0, i + 1).reduce((a, b) => a + b, 0));
+      chartRef.current = new Chart(canvasRef.current, {
+        data: {
+          labels,
+          datasets: [
+            {
+              type: "bar",
+              label: "Tickets",
+              data: bars,
+              backgroundColor: "rgba(10,76,134,0.22)",
+              borderColor: "#0a4c86",
+              borderWidth: 1.5,
+              borderRadius: 7,
+              yAxisID: "y",
+            },
+            {
+              type: "line",
+              label: "Cumulative",
+              data: cumulative,
+              borderColor: "#f59e0b",
+              backgroundColor: "#f59e0b",
+              pointRadius: 3.5,
+              pointHoverRadius: 6,
+              tension: 0.35,
+              yAxisID: "y1",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "top",
+              labels: {
+                color: "#64748b",
+                font: { family: "'DM Sans', sans-serif", size: 11 },
+                usePointStyle: true,
+              },
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: { color: "#94a3b8", font: { family: "'DM Sans', sans-serif", size: 10 } },
+            },
+            y: {
+              beginAtZero: true,
+              position: "left",
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+              ticks: { color: "#94a3b8", precision: 0, stepSize: 1 },
+            },
+            y1: {
+              beginAtZero: true,
+              position: "right",
+              grid: { drawOnChartArea: false },
+              border: { display: false },
+              ticks: { color: "#f59e0b", precision: 0, stepSize: 1 },
+            },
+          },
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [weeklyTickets]);
+  return <div style={{ position: "relative", width: "100%", height: 220 }}><canvas ref={canvasRef} /></div>;
+};
+
+// ── Donut Chart (Chart.js, non-redundant legend with counts) ─────────────────
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<{ destroy: () => void } | null>(null);
   const total = data.reduce((s, d) => s + d.value, 0);
-  const r = 52, cx = 64, cy = 64, stroke = 18;
-  const circ = 2 * Math.PI * r;
-  let offset = 0;
+  const legendItems = data.map((item) => ({
+    ...item,
+    pct: total > 0 ? Math.round((item.value / total) * 100) : 0,
+  }));
+
+  useEffect(() => {
+    if (!canvasRef.current || total === 0) return;
+    let cancelled = false;
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "pie",
+        plugins: [pieSlicePercentPlugin],
+        data: {
+          labels: data.map(d => d.label),
+          datasets: [{
+            data: data.map(d => d.value),
+            backgroundColor: data.map(d => d.color),
+            borderColor: "#fff",
+            borderWidth: 2,
+            hoverOffset: 8,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false,
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+              callbacks: {
+                label: (ctx) => {
+                  const v = Number(ctx.raw) || 0;
+                  const p = total > 0 ? Math.round((v / total) * 100) : 0;
+                  return ` ${v} (${p}%)`;
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [data, total]);
+
+  if (total === 0) {
+    return <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No ticket status data yet.</p>;
+  }
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "1.4rem" }}>
-      <svg width={128} height={128} viewBox="0 0 128 128">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
-        {total > 0 && data.map((d, i) => {
-          const pct  = d.value / total;
-          const dash = pct * circ;
-          const gap  = circ - dash;
-          const el   = (
-            <circle key={i} cx={cx} cy={cy} r={r} fill="none"
-              stroke={d.color} strokeWidth={stroke}
-              strokeDasharray={`${dash} ${gap}`}
-              strokeDashoffset={-offset * circ + circ / 4}
-            />
-          );
-          offset += pct;
-          return el;
-        })}
-        <text x={cx} y={cy - 6}  textAnchor="middle" fontSize={22} fontWeight={800} fill="#0f172a" fontFamily="'DM Sans', sans-serif">{total}</text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fontSize={9}  fill="#94a3b8" fontWeight={600} letterSpacing="1">TOTAL</text>
-      </svg>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {data.map(d => (
-          <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: "#475569", fontWeight: 500 }}>{d.label}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginLeft: "auto" }}>{d.value}</span>
-          </div>
-        ))}
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) minmax(180px, 1fr)", gap: 12, alignItems: "center" }}>
+      <div style={{ position: "relative", width: "100%", height: 230, minHeight: 230 }}><canvas ref={canvasRef} /></div>
+      <div>
+        <div style={{ display: "grid", gap: 8 }}>
+          {legendItems.map((item) => (
+            <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: item.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                {item.value} ({item.pct}%)
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e2e8f0", fontSize: 12, color: "#94a3b8" }}>
+          Total: <strong style={{ color: "#0f172a" }}>{total}</strong>
+        </div>
       </div>
     </div>
   );
@@ -186,26 +348,32 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
 // ── Issue Types Line Chart ────────────────────────────────────────────────────
 const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<any>(null);
+  const chartRef  = useRef<{ destroy: () => void } | null>(null);
   useEffect(() => {
     if (!canvasRef.current || issueBreakdown.length === 0) return;
     let cancelled = false;
     import("chart.js/auto").then(({ default: Chart }) => {
       if (cancelled || !canvasRef.current) return;
-      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
-      const sliced      = issueBreakdown.slice(0, 6);
-      const pointColors = ["#0a4c86", "#7c3aed", "#0891b2", "#f59e0b", "#ef4444", "#10b981"];
+      chartRef.current?.destroy();
+      chartRef.current = null;
+      const sliced = issueBreakdown.slice(0, 12);
       chartRef.current = new Chart(canvasRef.current, {
         type: "line",
         data: {
           labels: sliced.map(i => i.type),
           datasets: [{
-            label: "Tickets", data: sliced.map(i => i.count),
-            borderColor: "#0a4c86", backgroundColor: "rgba(10,76,134,0.07)",
-            pointBackgroundColor: sliced.map((_, i) => pointColors[i] ?? "#0a4c86"),
-            pointBorderColor: "#fff", pointBorderWidth: 2,
-            pointRadius: 6, pointHoverRadius: 9,
-            fill: true, tension: 0.4, borderWidth: 2,
+            label: "Tickets",
+            data: sliced.map(i => i.count),
+            borderColor: "#0a4c86",
+            backgroundColor: "rgba(10,76,134,0.08)",
+            pointBackgroundColor: "#0a4c86",
+            pointBorderColor: "#fff",
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
           }],
         },
         options: {
@@ -215,7 +383,7 @@ const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreak
             tooltip: { backgroundColor: "#0f172a", titleColor: "#f8fafc", bodyColor: "#cbd5e1", padding: 10, cornerRadius: 8, callbacks: { title: (items) => items[0]?.label ?? "", label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}` } },
           },
           scales: {
-            x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", maxRotation: 25, autoSkip: false } },
+            x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", maxRotation: 0 } },
             y: { beginAtZero: true, grid: { color: "#f1f5f9" }, border: { display: false }, ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", stepSize: 1, precision: 0 } },
           },
         },
@@ -283,42 +451,93 @@ const LeaderboardCardSkeleton: React.FC = () => (
   </div>
 );
 
-// ── Department Horizontal Bar Chart ──────────────────────────────────────────
+// ── Top Departments Pie Chart (Chart.js) ─────────────────────────────────────
 const DEPT_PALETTE = ["#0a4c86","#7c3aed","#0891b2","#f59e0b","#10b981","#ef4444","#f97316","#8b5cf6","#06b6d4","#84cc16","#e11d48","#14b8a6"];
 function getDeptColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return DEPT_PALETTE[Math.abs(hash) % DEPT_PALETTE.length];
 }
-const DeptBarChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
+const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<any>(null);
+  const chartRef  = useRef<{ destroy: () => void } | null>(null);
+  const total = deptRows.reduce((s, d) => s + d.tickets, 0);
+  const legendItems = deptRows.map((row) => ({
+    label: row.name,
+    value: row.tickets,
+    color: getDeptColor(row.name),
+    pct: total > 0 ? Math.round((row.tickets / total) * 100) : 0,
+  }));
   useEffect(() => {
     if (!canvasRef.current || deptRows.length === 0) return;
     let cancelled = false;
     import("chart.js/auto").then(({ default: Chart }) => {
       if (cancelled || !canvasRef.current) return;
-      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+      chartRef.current?.destroy();
+      chartRef.current = null;
       chartRef.current = new Chart(canvasRef.current, {
-        type: "bar",
+        type: "pie",
+        plugins: [pieSlicePercentPlugin],
         data: {
           labels: deptRows.map(d => d.name),
-          datasets: [{ data: deptRows.map(d => d.tickets), backgroundColor: deptRows.map(d => getDeptColor(d.name)), borderRadius: 8, borderSkipped: false, barThickness: 26 }],
+          datasets: [{
+            data: deptRows.map(d => d.tickets),
+            backgroundColor: deptRows.map(d => getDeptColor(d.name)),
+            borderColor: "#fff",
+            borderWidth: 2,
+            hoverOffset: 8,
+          }],
         },
         options: {
-          indexAxis: "y", responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { backgroundColor: "#0f172a", titleColor: "#f8fafc", bodyColor: "#94a3b8", padding: 10, cornerRadius: 8, callbacks: { title: (items) => items[0]?.label ?? "", label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}` } } },
-          scales: {
-            x: { grid: { color: "rgba(148,163,184,0.12)" }, border: { display: false }, ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", precision: 0 } },
-            y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 12, family: "'DM Sans', sans-serif", weight: 500 }, color: "#475569", padding: 4 } },
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false,
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#94a3b8",
+              padding: 10,
+              cornerRadius: 8,
+              callbacks: {
+                label: (item) => {
+                  const raw = Number(item.raw) || 0;
+                  const pct = total > 0 ? Math.round((raw / total) * 100) : 0;
+                  return ` ${raw} (${pct}%)`;
+                },
+              },
+            },
           },
-          layout: { padding: { right: 8 } },
         },
       });
     });
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
-  }, [deptRows]);
-  return <div style={{ position: "relative", width: "100%", height: `${Math.max(deptRows.length * 52 + 32, 160)}px` }}><canvas ref={canvasRef} /></div>;
+  }, [deptRows, total]);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) minmax(180px, 1fr)", gap: 12, alignItems: "center" }}>
+      <div style={{ position: "relative", width: "100%", height: 240, minHeight: 240 }}><canvas ref={canvasRef} /></div>
+      <div>
+        <div style={{ display: "grid", gap: 8 }}>
+          {legendItems.map((item) => (
+            <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: item.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                {item.value} ({item.pct}%)
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e2e8f0", fontSize: 12, color: "#94a3b8" }}>
+          Total: <strong style={{ color: "#0f172a" }}>{total}</strong>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ── Leaderboard helpers ───────────────────────────────────────────────────────
@@ -625,11 +844,6 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
     return () => { supabase.removeChannel(channel); };
   }, [upsertById, load]);
 
-  useEffect(() => {
-    const id = setInterval(() => { void load(); }, 30000);
-    return () => clearInterval(id);
-  }, [load]);
-
   const handleRefresh = async () => {
     setRefreshed(true);
     await load();
@@ -762,7 +976,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
               title="Tickets This Week"
               right={<span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Last 7 days</span>}
             />
-            <Sparkline data={data.weeklyTickets} color="#0a4c86" />
+            <WeeklyMixedChart weeklyTickets={data.weeklyTickets} />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: "1px solid #f1f5f9" }}>
               {[
                 { label: "Total this week", value: data.weeklyTickets.reduce((a, b) => a + b, 0), color: "#0a4c86" },
@@ -801,7 +1015,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             />
             {data.deptRows.length === 0
               ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No department data yet.</p>
-              : <DeptBarChart deptRows={data.deptRows} />}
+              : <DeptPieChart deptRows={data.deptRows} />}
           </div>
         </div>
 

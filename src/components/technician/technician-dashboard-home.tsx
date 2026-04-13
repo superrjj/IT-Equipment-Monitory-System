@@ -371,7 +371,11 @@ const TicketStatusPieChart: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<{ destroy: () => void } | null>(null);
   const total = assigned + inProg + resolved;
-  const resolveRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+  const legendItems = [
+    { label: "Assigned", value: assigned, color: STATUS_COLORS.assigned },
+    { label: "In Progress", value: inProg, color: STATUS_COLORS.inProg },
+    { label: "Resolved", value: resolved, color: STATUS_COLORS.resolved },
+  ];
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -402,8 +406,7 @@ const TicketStatusPieChart: React.FC<{
           layout: { padding: 4 },
           plugins: {
             legend: {
-              position: "right",
-              labels: { font: { family: "'DM Sans',sans-serif", size: 11 }, color: "#475569", padding: 10, usePointStyle: true },
+              display: false,
             },
             tooltip: {
               backgroundColor: "#0f172a",
@@ -439,33 +442,29 @@ const TicketStatusPieChart: React.FC<{
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-      <div style={{ position: "relative", width: 220, height: 220, flexShrink: 0 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) minmax(180px, 1fr)", gap: 12, alignItems: "center" }}>
+      <div style={{ position: "relative", width: "100%", height: 230, minHeight: 230 }}>
         <canvas ref={canvasRef} />
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 160 }}>
-        {[
-          { label: "Resolved", value: resolved, color: STATUS_COLORS.resolved },
-          { label: "In Progress", value: inProg, color: STATUS_COLORS.inProg },
-          { label: "Assigned", value: assigned, color: STATUS_COLORS.assigned },
-        ].map(d => {
-          const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
-          return (
-            <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#475569", fontWeight: 500 }}>{d.label}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginLeft: "auto" }}>
-                {d.value} <span style={{ color: "#64748b", fontWeight: 600 }}>({pct}%)</span>
-              </span>
-            </div>
-          );
-        })}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>
-            Total assigned: <strong style={{ color: "#0f172a" }}>{total}</strong>
-            {" · "}
-            <strong style={{ color: "#0f172a" }}>{resolveRate}%</strong> resolved
-          </span>
+      <div>
+        <div style={{ display: "grid", gap: 8 }}>
+          {legendItems.map((item) => {
+            const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+            return (
+              <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 999, background: item.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                  {item.value} ({pct}%)
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e2e8f0", fontSize: 12, color: "#94a3b8" }}>
+          Total: <strong style={{ color: "#0f172a" }}>{total}</strong>
         </div>
       </div>
     </div>
@@ -510,7 +509,31 @@ const BreakdownPieChart: React.FC<{
           plugins: {
             legend: {
               position: "bottom",
-              labels: { font: { family: "'DM Sans',sans-serif", size: 11 }, color: "#475569", padding: 12, usePointStyle: true },
+              labels: {
+                font: { family: "'DM Sans',sans-serif", size: 11 },
+                color: "#475569",
+                padding: 12,
+                usePointStyle: true,
+                generateLabels: (chart) => {
+                  const labels = chart.data.labels ?? [];
+                  const ds = chart.data.datasets?.[0];
+                  const vals = (ds?.data ?? []) as number[];
+                  const sum = vals.reduce((a, b) => a + (Number(b) || 0), 0);
+                  return labels.map((raw, i) => {
+                    const v = Number(vals[i]) || 0;
+                    const p = sum > 0 ? Math.round((v / sum) * 100) : 0;
+                    const color = Array.isArray(ds?.backgroundColor) ? String(ds.backgroundColor[i]) : String(ds?.backgroundColor ?? "#64748b");
+                    return {
+                      text: `${String(raw)}: ${v} (${p}%)`,
+                      fillStyle: color,
+                      strokeStyle: color,
+                      pointStyle: "circle" as const,
+                      hidden: false,
+                      index: i,
+                    };
+                  });
+                },
+              },
             },
             tooltip: {
               backgroundColor: "#0f172a",
@@ -542,8 +565,13 @@ const BreakdownPieChart: React.FC<{
   if (total === 0) return null;
 
   return (
-    <div style={{ position: "relative", width: "100%", height: 220, maxWidth: 320, margin: "0 auto" }}>
-      <canvas ref={canvasRef} />
+    <div>
+      <div style={{ position: "relative", width: "100%", height: 220, maxWidth: 320, margin: "0 auto" }}>
+        <canvas ref={canvasRef} />
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11, color: "#94a3b8", textAlign: "right" }}>
+        Total: <strong style={{ color: "#0f172a" }}>{total}</strong>
+      </div>
     </div>
   );
 };
