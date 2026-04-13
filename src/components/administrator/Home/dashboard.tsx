@@ -829,6 +829,7 @@ const Dashboard: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [headerAvatarUrl, setHeaderAvatarUrl]   = useState("");
   const [assignJobBadgeCount, setAssignJobBadgeCount] = useState(0);
+  const [myTicketsBadgeCount, setMyTicketsBadgeCount] = useState(0);
 
   const navigate = useNavigate();
 
@@ -858,27 +859,52 @@ const Dashboard: React.FC = () => {
     setAssignJobBadgeCount(n);
   }, [userRole]);
 
+  /** Open (non-resolved) tickets assigned to this technician — matches My Tickets list. */
+  const refreshMyTicketsBadge = useCallback(async () => {
+    if (userRole !== "IT Technician" || !userId) {
+      setMyTicketsBadgeCount(0);
+      return;
+    }
+    const { count, error } = await supabase
+      .from("file_reports")
+      .select("id", { count: "exact", head: true })
+      .contains("assigned_to", [userId])
+      .not("status", "eq", "Resolved");
+    if (error) return;
+    setMyTicketsBadgeCount(count ?? 0);
+  }, [userRole, userId]);
+
   useEffect(() => {
     void refreshAssignJobPendingBadge();
   }, [refreshAssignJobPendingBadge]);
 
   useEffect(() => {
-    if (userRole !== "Administrator") return;
+    void refreshMyTicketsBadge();
+  }, [refreshMyTicketsBadge]);
+
+  useEffect(() => {
+    if (userRole !== "Administrator" && userRole !== "IT Technician") return;
     const ch = supabase
       .channel(`adm_nav_badges_${Date.now()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "file_reports" },
-        () => { void refreshAssignJobPendingBadge(); }
+        () => {
+          void refreshAssignJobPendingBadge();
+          void refreshMyTicketsBadge();
+        }
       )
       .subscribe();
-    const onEvt = () => { void refreshAssignJobPendingBadge(); };
+    const onEvt = () => {
+      void refreshAssignJobPendingBadge();
+      void refreshMyTicketsBadge();
+    };
     window.addEventListener(NAV_BADGES_CHANGED_EVENT, onEvt);
     return () => {
       window.removeEventListener(NAV_BADGES_CHANGED_EVENT, onEvt);
       void supabase.removeChannel(ch);
     };
-  }, [userRole, refreshAssignJobPendingBadge]);
+  }, [userRole, refreshAssignJobPendingBadge, refreshMyTicketsBadge]);
 
   useEffect(() => {
     const token  = localStorage.getItem("session_token");
@@ -965,7 +991,13 @@ const Dashboard: React.FC = () => {
           activeLabel={activeLabel}
           onNavigate={setActiveLabel}
           userRole={userRole}
-          badgeByLabel={isAdmin ? { "Assign Job": assignJobBadgeCount } : undefined}
+          badgeByLabel={
+            isAdmin
+              ? { "Assign Job": assignJobBadgeCount }
+              : isTechnician
+                ? { "My Tickets": myTicketsBadgeCount }
+                : undefined
+          }
         />
       </div>
 

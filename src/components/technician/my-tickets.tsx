@@ -2,12 +2,14 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Eye, Search, X, AlertTriangle, Ticket,
   Clock, Loader, Building2, User, CheckCircle2, Timer,
+  ClipboardList,
 } from "lucide-react";
 import {
   getSessionUserId,
   insertActivityLog,
   notifyAdminsTicketStatusChanged,
   notifyTicketRequesterStatusChanged,
+  dispatchNavBadgesChanged,
 } from "../../lib/audit-notifications";
 import { supabase } from "../../lib/supabaseClient";
 import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
@@ -19,7 +21,8 @@ type TicketRow = {
   id: string;
   ticket_number: string | null;
   title: string;
-  status: Status;
+  /** From DB (`Pending` / `Assigned` / `In Progress` / …); not resolved rows only. */
+  status: string;
   employee_name: string;
   department_id: string;
   issue_type: string;
@@ -99,6 +102,7 @@ const fmtDate = (iso: string | null | undefined) =>
 
 const statusStyle: Record<string, { bg: string; color: string; dot: string }> = {
   Pending:       { bg: "rgba(59,130,246,0.08)",  color: "#3b5bdb", dot: "#3b82f6" },
+  Assigned:      { bg: "rgba(59,130,246,0.08)",  color: "#3b5bdb", dot: "#3b82f6" },
   "In Progress": { bg: "rgba(234,179,8,0.10)",   color: "#a16207", dot: "#eab308" },
   Resolved:      { bg: "rgba(22,163,74,0.10)",   color: "#15803d", dot: "#22c55e" },
 };
@@ -189,6 +193,7 @@ const MyTickets: React.FC = () => {
     (dlist ?? []).forEach((d: { id: string; name: string }) => { dm[d.id] = d.name; });
     setDepts(dm);
     setLoading(false);
+    dispatchNavBadgesChanged();
   };
 
   useEffect(() => { fetchAll(); }, [userId]);
@@ -223,6 +228,16 @@ const MyTickets: React.FC = () => {
         .join(" ").toLowerCase().includes(q)
     );
   }, [rows, search]);
+
+  const statCounts = useMemo(() => {
+    let assigned = 0;
+    let inProg = 0;
+    for (const r of rows) {
+      if (r.status === "In Progress") inProg += 1;
+      else assigned += 1;
+    }
+    return { total: rows.length, assigned, inProg };
+  }, [rows]);
 
   // ── Modal helpers ────────────────────────────────────────────────────────
   const openView = (r: TicketRow) => {
@@ -428,6 +443,65 @@ const MyTickets: React.FC = () => {
           <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>
             Tickets assigned to you — update status, action taken, and dates.
           </p>
+        </div>
+
+        {/* ── Stat cards (same pattern as Repairs) ── */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "0.75rem",
+            marginBottom: "1.2rem",
+          }}
+        >
+          {[
+            { label: "Total", value: statCounts.total, color: BRAND, icon: <Ticket size={16} /> },
+            { label: "Assigned", value: statCounts.assigned, color: "#475569", icon: <ClipboardList size={16} /> },
+            { label: "In Progress", value: statCounts.inProg, color: "#a16207", icon: <Loader size={16} /> },
+          ].map(c => (
+            <div
+              key={c.label}
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                padding: "0.9rem 1rem",
+                border: "1px solid #e8edf2",
+                boxShadow: "0 4px 16px rgba(10,76,134,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: `${c.color}15`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: c.color,
+                  }}
+                >
+                  {c.icon}
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: c.color }}>{c.value}</div>
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "#64748b",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {c.label}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* ── Search bar ── */}

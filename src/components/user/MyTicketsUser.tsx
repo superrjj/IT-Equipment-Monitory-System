@@ -4,8 +4,9 @@ import { supabase } from "../../lib/supabaseClient";
 import { ShimmerKeyframes, Skeleton } from "@/components/ui/skeleton";
 
 const BRAND = "#0a4c86";
+const PAGE_SIZE = 8;
 
-type TicketStatus = "Pending" | "In Progress" | "Resolved";
+type TicketStatus = "Pending" | "Assigned" | "In Progress" | "Resolved";
 type EffectiveStatus = "Pending" | "Assigned" | "In Progress" | "Resolved";
 type TicketRow = {
   id: string;
@@ -43,6 +44,7 @@ const stepIndex = (status: EffectiveStatus) => statusSteps.indexOf(status);
 const effectiveStatusFor = (ticket: TicketRow): EffectiveStatus => {
   if (ticket.status === "Resolved") return "Resolved";
   if (ticket.status === "In Progress") return "In Progress";
+  if (ticket.status === "Assigned") return "Assigned";
   // file_reports.status === "Pending"
   const assigned = Array.isArray(ticket.assigned_to) ? ticket.assigned_to : [];
   return assigned.length > 0 ? "Assigned" : "Pending";
@@ -223,6 +225,7 @@ const MyTicketsUser: React.FC = () => {
   const [selected, setSelected]   = useState<TicketRow | null>(null);
   const [fbTicket, setFbTicket]   = useState<TicketRow | null>(null);
   const [deptMap, setDeptMap]     = useState<Record<string, string>>({});
+  const [page, setPage]           = useState(1);
 
   const userId   = localStorage.getItem("session_user_id")        || "";
   const fullName = localStorage.getItem("session_user_full_name") || "";
@@ -303,6 +306,30 @@ const MyTicketsUser: React.FC = () => {
     return base;
   }, [rows, search]);
 
+  useEffect(() => { setPage(1); }, [search]);
+
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    copy.sort((a, b) => {
+      const sa = effectiveStatusFor(a);
+      const sb = effectiveStatusFor(b);
+      const ia = stepIndex(sa);
+      const ib = stepIndex(sb);
+      if (ia !== ib) return ia - ib; // ascending by stage
+      const ta = a.date_submitted ? new Date(a.date_submitted).getTime() : 0;
+      const tb = b.date_submitted ? new Date(b.date_submitted).getTime() : 0;
+      return tb - ta; // newest first within the same stage
+    });
+    return copy;
+  }, [filtered]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginated = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, safePage]);
+
   return (
     <>
       <ShimmerKeyframes />
@@ -316,11 +343,16 @@ const MyTicketsUser: React.FC = () => {
         .mtu-search-wrap { position: relative; max-width: 360px; width: 100%; }
         .mtu-ticket-card { border-radius: 14px; border: 1px solid #e2e8f0; background: #ffffff; box-shadow: 0 1px 6px rgba(15,23,42,0.08); overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
         .mtu-ticket-card:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,23,42,0.12); border-color: #cbd5e1; }
-        .mtu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.75rem; }
+        .mtu-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+        .mtu-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+        .mtu-pager-btn { border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; padding: 0.45rem 0.7rem; font-size: 12px; font-weight: 700; cursor: pointer; color: #0f172a; }
+        .mtu-pager-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .mtu-pager-meta { font-size: 12px; color: #64748b; font-weight: 600; }
         .mtu-action-btn { border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0.42rem 0.65rem; font-size: 11.5px; font-weight: 600; transition: background 0.15s, border-color 0.15s; font-family: 'Poppins', sans-serif; }
         .mtu-action-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
         .mtu-tracker-line { position: absolute; left: 11px; top: 12px; bottom: 12px; width: 2px; background: #e2e8f0; }
-        @media (max-width: 860px) { .mtu-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); } }
+        @media (max-width: 1080px) { .mtu-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 860px)  { .mtu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 640px)  { .mtu-grid { grid-template-columns: 1fr; } }
       `}</style>
 
@@ -336,7 +368,7 @@ const MyTicketsUser: React.FC = () => {
             </p>
           </div>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 999, padding: "0.35rem 0.7rem", fontSize: 11, fontWeight: 600, color: "#64748b", background: "#f8fafc" }}>
-            {filtered.length} ticket{filtered.length === 1 ? "" : "s"}
+            {sorted.length} ticket{sorted.length === 1 ? "" : "s"}
           </div>
         </div>
 
@@ -359,7 +391,7 @@ const MyTicketsUser: React.FC = () => {
           <div style={{ padding: "1.1rem 1.2rem" }}>
             {loading ? (
               <div className="mtu-grid">
-                {[0, 1, 2, 3, 4, 5].map(i => (
+                {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
                   <div
                     key={i}
                     className="mtu-ticket-card"
@@ -387,13 +419,14 @@ const MyTicketsUser: React.FC = () => {
                   </div>
                 ))}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <div style={{ padding: "1.3rem 0.2rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
                 No submitted tickets found.
               </div>
             ) : (
-              <div className="mtu-grid">
-                {filtered.map(r => (
+              <>
+                <div className="mtu-grid">
+                {paginated.map(r => (
                   <div key={r.id} className="mtu-ticket-card">
                     {/* Card header */}
                     <div style={{
@@ -472,7 +505,33 @@ const MyTicketsUser: React.FC = () => {
                     </div>
                   </div>
                 ))}
-              </div>
+                </div>
+
+                <div className="mtu-pager" role="navigation" aria-label="Ticket pages">
+                  <button
+                    type="button"
+                    className="mtu-pager-btn"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="mtu-pager-meta">
+                    Page {safePage} / {totalPages} • Showing{" "}
+                    {sorted.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}
+                    –
+                    {Math.min(safePage * PAGE_SIZE, sorted.length)} of {sorted.length}
+                  </div>
+                  <button
+                    type="button"
+                    className="mtu-pager-btn"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={safePage >= totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>

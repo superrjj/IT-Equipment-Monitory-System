@@ -17,7 +17,7 @@ type TechStat = {
   avatar_url: string;
   resolved: number;
   inProgress: number;
-  pending: number;
+  assigned: number;
   avgRating: number;
   totalRatings: number;
 };
@@ -366,11 +366,11 @@ const pieSlicePercentPlugin: Plugin<"pie"> = {
 
 /** Chart.js pie — My Ticket Status with % on each slice. */
 const TicketStatusPieChart: React.FC<{
-  pending: number; inProg: number; resolved: number;
-}> = ({ pending, inProg, resolved }) => {
+  assigned: number; inProg: number; resolved: number;
+}> = ({ assigned, inProg, resolved }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<{ destroy: () => void } | null>(null);
-  const total = pending + inProg + resolved;
+  const total = assigned + inProg + resolved;
   const resolveRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
   useEffect(() => {
@@ -389,7 +389,7 @@ const TicketStatusPieChart: React.FC<{
         data: {
           labels: ["Assigned", "In Progress", "Resolved"],
           datasets: [{
-            data: [pending, inProg, resolved],
+            data: [assigned, inProg, resolved],
             backgroundColor: [STATUS_COLORS.assigned, STATUS_COLORS.inProg, STATUS_COLORS.resolved],
             borderWidth: 2,
             borderColor: "#fff",
@@ -430,7 +430,7 @@ const TicketStatusPieChart: React.FC<{
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [pending, inProg, resolved, total]);
+  }, [assigned, inProg, resolved, total]);
 
   if (total === 0) {
     return (
@@ -447,7 +447,7 @@ const TicketStatusPieChart: React.FC<{
         {[
           { label: "Resolved", value: resolved, color: STATUS_COLORS.resolved },
           { label: "In Progress", value: inProg, color: STATUS_COLORS.inProg },
-          { label: "Assigned", value: pending, color: STATUS_COLORS.assigned },
+          { label: "Assigned", value: assigned, color: STATUS_COLORS.assigned },
         ].map(d => {
           const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
           return (
@@ -474,11 +474,11 @@ const TicketStatusPieChart: React.FC<{
 
 /** Chart.js pie — Breakdown (same three slices). */
 const BreakdownPieChart: React.FC<{
-  pending: number; inProg: number; resolved: number;
-}> = ({ pending, inProg, resolved }) => {
+  assigned: number; inProg: number; resolved: number;
+}> = ({ assigned, inProg, resolved }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<{ destroy: () => void } | null>(null);
-  const total = pending + inProg + resolved;
+  const total = assigned + inProg + resolved;
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -496,7 +496,7 @@ const BreakdownPieChart: React.FC<{
         data: {
           labels: ["Assigned", "In Progress", "Resolved"],
           datasets: [{
-            data: [pending, inProg, resolved],
+            data: [assigned, inProg, resolved],
             backgroundColor: [STATUS_COLORS.assigned, STATUS_COLORS.inProg, STATUS_COLORS.resolved],
             borderWidth: 2,
             borderColor: "#fff",
@@ -537,7 +537,7 @@ const BreakdownPieChart: React.FC<{
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [pending, inProg, resolved, total]);
+  }, [assigned, inProg, resolved, total]);
 
   if (total === 0) return null;
 
@@ -566,7 +566,7 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
         const badge   = getPerformanceBadge(tech.avgRating, i);
         const isFirst = i === 0;
         const isMe    = tech.id === currentUserId;
-        const total   = tech.resolved + tech.inProgress + tech.pending;
+        const total   = tech.resolved + tech.inProgress + tech.assigned;
         const bg      = AVATAR_BG[i]   ?? "#f1f5f9";
         const textCol = AVATAR_TEXT[i] ?? "#475569";
 
@@ -634,7 +634,7 @@ const LeaderboardCards: React.FC<{ techs: TechStat[]; currentUserId: string }> =
               {[
                 { num: tech.resolved,   lbl: "Resolved", col: "#065f46", bg: "#d1fae5" },
                 { num: tech.inProgress, lbl: "Active",   col: "#1e40af", bg: "#dbeafe" },
-                { num: tech.pending,    lbl: "Assigned",  col: "#92400e", bg: "#fef3c7" },
+                { num: tech.assigned,    lbl: "Assigned",  col: "#92400e", bg: "#fef3c7" },
               ].map(s => (
                 <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "7px 4px", textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
@@ -841,7 +841,7 @@ const TechnicianDashboardHome: React.FC = () => {
   const [refreshing, setRefreshing]   = useState(false);
   const [animKey, setAnimKey]         = useState(0);
   const [myTickets, setMyTickets]     = useState<any[]>([]);
-  const [tickets, setTickets]         = useState({ total: 0, pending: 0, inProg: 0, resolved: 0 });
+  const [tickets, setTickets]         = useState({ total: 0, assigned: 0, inProg: 0, resolved: 0 });
   const [leaderboard, setLeaderboard] = useState<TechStat[]>([]);
 
   const stampAvatar = (t: any) => ({
@@ -853,7 +853,7 @@ const TechnicianDashboardHome: React.FC = () => {
 
   const load = useCallback(async (isRefresh = false) => {
     if (!userId) { setLoading(false); return; }
-    if (isRefresh) setTickets({ total: 0, pending: 0, inProg: 0, resolved: 0 });
+    if (isRefresh) setTickets({ total: 0, assigned: 0, inProg: 0, resolved: 0 });
 
     try {
       const [
@@ -879,15 +879,14 @@ const TechnicianDashboardHome: React.FC = () => {
       if (e4) console.error("feedbacks query error:", e4);
 
       const feedbackList      = feedbacks ?? [];
-      const feedbackReportIds = new Set(feedbackList.map((f: any) => String(f.report_id)));
 
       const t = myTix ?? [];
       setMyTickets(t);
       setTickets({
         total:    t.length,
-        pending:  t.filter((x: any) => x.status === "Pending").length,
+        assigned: t.filter((x: any) => x.status === "Assigned").length,
         inProg:   t.filter((x: any) => x.status === "In Progress").length,
-        resolved: t.filter((x: any) => x.status === "Resolved" && feedbackReportIds.has(String(x.id))).length,
+        resolved: t.filter((x: any) => x.status === "Resolved").length,
       });
 
       const techRatingsMap: Record<string, number[]> = {};
@@ -921,9 +920,9 @@ const TechnicianDashboardHome: React.FC = () => {
             id:           tech.id,
             full_name:    tech.full_name,
             avatar_url:   tech.avatar_url ?? "",
-            resolved:     techTickets.filter((x: any) => x.status === "Resolved" && feedbackReportIds.has(String(x.id))).length,
+            resolved:     techTickets.filter((x: any) => x.status === "Resolved").length,
             inProgress:   techTickets.filter((x: any) => x.status === "In Progress").length,
-            pending:      techTickets.filter((x: any) => x.status === "Pending").length,
+            assigned:     techTickets.filter((x: any) => x.status === "Assigned").length,
             avgRating:    Math.round(avgRating * 10) / 10,
             totalRatings: ratings.length,
           };
@@ -1070,7 +1069,7 @@ const TechnicianDashboardHome: React.FC = () => {
               style={{ animationDelay: "50ms", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.7rem", marginBottom: "0.85rem" }}
             >
               <KpiCard label="My Tickets"  value={tickets.total}    sub="Assigned to you"  icon={<Ticket size={15} />}       accent={BRAND}   delay={0}   animKey={animKey} />
-              <KpiCard label="Assigned"     value={tickets.pending}  sub="Awaiting action"  icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
+              <KpiCard label="Assigned"     value={tickets.assigned}  sub="Awaiting action"  icon={<Clock size={15} />}         accent="#f59e0b" delay={50}  animKey={animKey} />
               <KpiCard label="In Progress" value={tickets.inProg}   sub="Currently active" icon={<CircleDot size={15} />}     accent="#3b82f6" delay={100} animKey={animKey} />
               <KpiCard label="Resolved"    value={tickets.resolved} sub="Closed tickets"   icon={<CheckCircle2 size={15} />}  accent="#10b981" delay={150} animKey={animKey} />
             </div>
@@ -1087,7 +1086,7 @@ const TechnicianDashboardHome: React.FC = () => {
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>My Ticket Status</span>
                 </div>
-                <TicketStatusPieChart pending={tickets.pending} inProg={tickets.inProg} resolved={tickets.resolved} />
+                <TicketStatusPieChart assigned={tickets.assigned} inProg={tickets.inProg} resolved={tickets.resolved} />
               </div>
 
               <div style={{ background: "#fff", borderRadius: 16, padding: "1.1rem", border: "1px solid #e8edf5", boxShadow: "0 2px 10px rgba(10,76,134,0.04)" }}>
@@ -1142,12 +1141,12 @@ const TechnicianDashboardHome: React.FC = () => {
                 {tickets.total > 0 ? (
                   <>
                     <div style={{ marginBottom: "0.85rem" }}>
-                      <BreakdownPieChart pending={tickets.pending} inProg={tickets.inProg} resolved={tickets.resolved} />
+                      <BreakdownPieChart assigned={tickets.assigned} inProg={tickets.inProg} resolved={tickets.resolved} />
                     </div>
                     <div style={{ display: "flex", gap: "1.2rem", paddingTop: "0.75rem", borderTop: "1px solid #f1f5f9" }}>
                       {[
                         { label: "Total",    value: tickets.total,                    color: BRAND     },
-                        { label: "Open",     value: tickets.pending + tickets.inProg, color: "#f59e0b" },
+                        { label: "Open",     value: tickets.assigned + tickets.inProg, color: "#f59e0b" },
                         { label: "Resolved", value: tickets.resolved,                 color: "#10b981" },
                       ].map(s => (
                         <div key={s.label}>
