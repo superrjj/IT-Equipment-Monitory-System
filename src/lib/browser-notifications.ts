@@ -38,6 +38,15 @@ export function shouldShowBrowserPushForRole(notificationType: string, userRole:
   return false;
 }
 
+export function isNotificationOwnedByUser(
+  notificationUserId: unknown,
+  currentUserId: string
+): boolean {
+  if (!currentUserId?.trim()) return false;
+  if (typeof notificationUserId !== "string") return false;
+  return notificationUserId.trim() === currentUserId.trim();
+}
+
 export async function requestBrowserNotificationPermission(): Promise<NotificationPermission> {
   if (typeof window === "undefined" || typeof Notification === "undefined") return "denied";
   if (Notification.permission === "granted" || Notification.permission === "denied") {

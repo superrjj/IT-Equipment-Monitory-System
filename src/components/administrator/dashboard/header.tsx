@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { LogOut, Menu, Bell, Settings, ChevronDown, CheckCheck } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
 import {
+  isNotificationOwnedByUser,
   requestBrowserNotificationPermission,
   shouldShowBrowserPushForRole,
   showBrowserNotification,
@@ -550,6 +551,7 @@ const Header: React.FC<HeaderProps> = ({
         (payload: { new?: Record<string, unknown> }) => {
           const row = payload.new;
           if (!row || typeof row !== "object") return;
+          if (!isNotificationOwnedByUser(row.user_id, uid)) return;
           const type = typeof row.type === "string" ? row.type : "";
           if (!shouldShowBrowserPushForRole(type, userRole)) return;
           const title = typeof row.title === "string" ? row.title : "Notification";
