@@ -22,6 +22,7 @@ import {
   Ticket, Clock, CircleArrowDown,
   CircleArrowUp, TrendingUp, Activity,
   BarChart3, AlertTriangle, RefreshCw, ArrowUpRight, Trophy, Star,
+  Wifi, KeyRound, HardDrive, Wrench,
 } from "lucide-react";
 
 // ── Shared card style — matches header exactly ────────────────────────────────
@@ -78,7 +79,6 @@ const KPI: React.FC<{
   onClick?: () => void;
 }> = ({ label, value, sub, icon, accent, delay = 0, onClick }) => {
   const [visible, setVisible] = useState(false);
-  const [hovered, setHovered] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
@@ -87,40 +87,36 @@ const KPI: React.FC<{
   return (
     <div
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
         ...CARD,
-        background: hovered ? "#fafbff" : "#ffffff",
-        border: `1px solid ${hovered ? accent + "40" : "#e8edf5"}`,
+        background: "#ffffff",
+        border: "1px solid #edf2f7",
         display: "flex", flexDirection: "column", gap: "0.7rem",
         position: "relative", overflow: "hidden",
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(14px)",
-        transition: `opacity 0.45s ease ${delay}ms, transform 0.45s ease ${delay}ms, border-color 0.2s, background 0.2s, box-shadow 0.2s`,
-        boxShadow: hovered ? `0 4px 20px ${accent}18` : "0 2px 12px rgba(10,76,134,0.06)",
+        transition: `opacity 0.45s ease ${delay}ms, transform 0.45s ease ${delay}ms`,
+        boxShadow: "0 1px 6px rgba(15,23,42,0.05)",
         cursor: onClick ? "pointer" : "default",
-        padding: "1.3rem 1.4rem",
+        padding: "1.15rem 1.15rem 1rem",
+        borderRadius: 12,
       }}
     >
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: "18px 18px 0 0" }} />
-      <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: accent, opacity: hovered ? 0.1 : 0.06, transition: "opacity 0.2s" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: "12px 12px 0 0" }} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ width: 38, height: 38, borderRadius: 12, background: `${accent}15`, display: "flex", alignItems: "center", justifyContent: "center", color: accent }}>
-          {icon}
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          {label}
         </div>
         {onClick && (
-          <ArrowUpRight size={14} color={hovered ? accent : "#cbd5e1"} style={{ transition: "color 0.2s", transform: hovered ? "translate(2px, -2px)" : "none", transitionProperty: "color, transform" }} />
+          <ArrowUpRight size={14} color="#cbd5e1" />
         )}
       </div>
       <div>
-        <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1px", fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ fontSize: 42, fontWeight: 800, color: "#0a3f74", lineHeight: 1, letterSpacing: "-1.2px", fontFamily: "'DM Sans', sans-serif" }}>
           {visible ? value : typeof value === "number" ? 0 : "—"}
         </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginTop: 4, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          {label}
-        </div>
-        {sub && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{sub}</div>}
+        {sub && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6, fontWeight: 600 }}>{sub}</div>}
+        <div style={{ marginTop: 10, width: "52%", height: 4, borderRadius: 999, background: `${accent}33` }} />
       </div>
     </div>
   );
@@ -283,7 +279,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
       chartRef.current?.destroy();
       chartRef.current = null;
       chartRef.current = new Chart(canvasRef.current, {
-        type: "pie",
+        type: "doughnut",
         plugins: [pieSlicePercentPlugin],
         data: {
           labels: data.map(d => d.label),
@@ -300,6 +296,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
           maintainAspectRatio: false,
           animation: PIE_ANIMATION,
           animations: PIE_ANIMATIONS,
+          cutout: "72%",
           plugins: {
             legend: {
               display: false,
@@ -335,8 +332,20 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) minmax(180px, 1fr)", gap: 12, alignItems: "center" }}>
-      <div style={{ position: "relative", width: "100%", height: 230, minHeight: 230 }}><canvas ref={canvasRef} /></div>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(170px, 1fr) minmax(180px, 1fr)", gap: 16, alignItems: "center" }}>
+      <div style={{ position: "relative", width: "100%", height: 220, minHeight: 220 }}>
+        <canvas ref={canvasRef} />
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 38, lineHeight: 1, fontWeight: 800, color: "#0a4c86" }}>
+              {total > 0 ? Math.round(((legendItems.find(i => i.label === "Resolved")?.value ?? 0) / total) * 100) : 0}%
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>
+              Uptime
+            </div>
+          </div>
+        </div>
+      </div>
       <div>
         <div style={{ display: "grid", gap: 8 }}>
           {legendItems.map((item) => (
@@ -359,53 +368,41 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
   );
 };
 
-// ── Issue Types Line Chart ────────────────────────────────────────────────────
-const IssueLineChart: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef  = useRef<{ destroy: () => void; update: () => void } | null>(null);
-  useEffect(() => {
-    if (!canvasRef.current || issueBreakdown.length === 0) return;
-    let cancelled = false;
-    import("chart.js/auto").then(({ default: Chart }) => {
-      if (cancelled || !canvasRef.current) return;
-      chartRef.current?.destroy();
-      chartRef.current = null;
-      const sliced = issueBreakdown.slice(0, 12);
-      chartRef.current = new Chart(canvasRef.current, {
-        type: "line",
-        data: {
-          labels: sliced.map(i => i.type),
-          datasets: [{
-            label: "Tickets",
-            data: sliced.map(i => i.count),
-            borderColor: "#0a4c86",
-            backgroundColor: "rgba(10,76,134,0.08)",
-            pointBackgroundColor: "#0a4c86",
-            pointBorderColor: "#fff",
-            pointBorderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 7,
-            fill: true,
-            tension: 0.35,
-            borderWidth: 2,
-          }],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: { backgroundColor: "#0f172a", titleColor: "#f8fafc", bodyColor: "#cbd5e1", padding: 10, cornerRadius: 8, callbacks: { title: (items) => items[0]?.label ?? "", label: (item) => ` ${item.raw} ticket${Number(item.raw) !== 1 ? "s" : ""}` } },
-          },
-          scales: {
-            x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", maxRotation: 0 } },
-            y: { beginAtZero: true, grid: { color: "#f1f5f9" }, border: { display: false }, ticks: { font: { size: 11, family: "'DM Sans', sans-serif" }, color: "#94a3b8", stepSize: 1, precision: 0 } },
-          },
-        },
-      });
-    });
-    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
-  }, [issueBreakdown]);
-  return <div style={{ position: "relative", width: "100%", height: 190 }}><canvas ref={canvasRef} /></div>;
+// ── Recurring Issue List ───────────────────────────────────────────────────────
+const RecurringIssueList: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
+  const items = issueBreakdown.slice(0, 3);
+  const total = items.reduce((s, i) => s + i.count, 0);
+  const iconFor = (type: string) => {
+    const t = type.toLowerCase();
+    if (t.includes("network") || t.includes("internet")) return <Wifi size={18} color="#0a4c86" />;
+    if (t.includes("password")) return <KeyRound size={18} color="#0a4c86" />;
+    if (t.includes("hardware")) return <HardDrive size={18} color="#0a4c86" />;
+    return <Wrench size={18} color="#0a4c86" />;
+  };
+  const barColors = ["#0a4c86", "#8bb8ff", "#7b8396"];
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      {items.map((item, idx) => {
+        const pct = total > 0 ? Math.round((item.count / total) * 100) : 0;
+        return (
+          <div key={item.type} style={{ display: "grid", gridTemplateColumns: "46px 1fr", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 46, height: 46, borderRadius: 9, background: "#f0f7ff", display: "grid", placeItems: "center" }}>
+              {iconFor(item.type)}
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ fontSize: 14, color: "#1f2937", fontWeight: 700 }}>{item.type}</span>
+                <span style={{ fontSize: 14, color: "#6b7280", fontWeight: 700 }}>{pct}% Frequency</span>
+              </div>
+              <div style={{ marginTop: 7, height: 7, borderRadius: 999, background: "#edf2f7", overflow: "hidden" }}>
+                <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: barColors[idx] ?? "#0a4c86" }} />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 // ── Skeleton primitive ────────────────────────────────────────────────────────
@@ -584,86 +581,45 @@ const TechAvatar: React.FC<{ tech: TechStat; index: number; size?: number; fontS
 
 // ── Leaderboard Cards ─────────────────────────────────────────────────────────
 const CardsView: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
-  const medals = ["🥇", "🥈", "🥉"];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
       {techs.map((tech, i) => {
-        const badge   = getPerformanceBadge(tech.avgRating, i);
-        const isFirst = i === 0;
-        const total   = tech.resolved + tech.inProgress + tech.pending;
+        const total = tech.resolved + tech.inProgress + tech.pending;
         return (
           <div key={tech.id} style={{
-            border: `1px solid ${isFirst ? "#fde68a" : "#e8edf5"}`,
-            borderRadius: 14,
-            padding: "16px 18px",
-            background: isFirst ? "#fffbeb" : "#ffffff",
-            position: "relative",
-            boxShadow: isFirst
-              ? "0 2px 12px rgba(251,191,36,0.14)"
-              : "0 2px 12px rgba(10,76,134,0.06)",
+            border: "1px solid #edf2f7",
+            borderRadius: 12,
+            padding: "14px",
+            background: "#ffffff",
+            boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
           }}>
-            <div style={{ position: "absolute", top: 14, right: 16, fontSize: i < 3 ? 18 : 12, fontWeight: 700, color: "#94a3b8" }}>
-              {medals[i] ?? `#${i + 1}`}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <TechAvatar tech={tech} index={i} size={44} fontSize={13} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: "#0a4c86", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {tech.full_name}
+                </div>
+                <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <Star key={n} size={14} fill={n <= Math.round(tech.avgRating || 0) ? "#f59e0b" : "none"} color={n <= Math.round(tech.avgRating || 0) ? "#f59e0b" : "#cbd5e1"} strokeWidth={n <= Math.round(tech.avgRating || 0) ? 0 : 2} />
+                  ))}
+                </div>
+              </div>
             </div>
-
-            <TechAvatar tech={tech} index={i} size={42} fontSize={13} borderColor={isFirst ? "#fbbf24" : undefined} />
-
-            <div style={{ marginTop: 10, marginBottom: 4, fontSize: 13, fontWeight: 600, color: "#0f172a", paddingRight: 24, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {tech.full_name}
-            </div>
-
-            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 9px", borderRadius: 999, color: badge.color, background: badge.bg, display: "inline-block", marginBottom: 12 }}>
-              {badge.label}
-            </span>
-
-            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 7 }}>
               {[
                 { num: tech.resolved,   lbl: "Resolved", col: "#065f46", bg: "#d1fae5" },
                 { num: tech.inProgress, lbl: "Active",   col: "#1e40af", bg: "#dbeafe" },
-                { num: tech.pending,    lbl: "Assigned",  col: "#92400e", bg: "#fef3c7" },
+                { num: tech.pending,    lbl: "Pending",  col: "#475569", bg: "#f8fafc" },
               ].map(s => (
-                <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "7px 4px", textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: s.col, lineHeight: 1 }}>{s.num}</div>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: s.col, marginTop: 3, opacity: 0.75 }}>{s.lbl}</div>
+                <div key={s.lbl} style={{ flex: 1, background: s.bg, borderRadius: 8, padding: "8px 4px", textAlign: "center" }}>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: s.col, lineHeight: 1 }}>{s.num}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: s.col, marginTop: 4, textTransform: "uppercase" }}>{s.lbl}</div>
                 </div>
               ))}
             </div>
-
-            <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  User feedback
-                </span>
-                {tech.totalRatings > 0 && (
-                  <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
-                    {tech.avgRating.toFixed(1)} / 5 ({tech.totalRatings})
-                  </span>
-                )}
-              </div>
-
-              {tech.totalRatings > 0 ? (
-                <>
-                  <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
-                    {[1, 2, 3, 4, 5].map(n => (
-                      <Star
-                        key={n} size={15}
-                        fill={n <= Math.round(tech.avgRating) ? "#f59e0b" : "none"}
-                        color={n <= Math.round(tech.avgRating) ? "#f59e0b" : "#cbd5e1"}
-                        strokeWidth={n <= Math.round(tech.avgRating) ? 0 : 2}
-                      />
-                    ))}
-                  </div>
-                  <div style={{ height: 4, background: "rgba(148,163,184,0.2)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${(tech.avgRating / 5) * 100}%`, background: isFirst ? "linear-gradient(90deg,#f59e0b,#fbbf24)" : "linear-gradient(90deg,#0a4c86,#3b82f6)", borderRadius: 99, transition: "width 0.6s ease" }} />
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 11, color: "#cbd5e1", fontStyle: "italic" }}>No ratings yet</div>
-              )}
-
-              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6, textAlign: "right" }}>
-                {total} total assigned
-              </div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 8, textAlign: "right", fontWeight: 600 }}>
+              {total} total assigned
             </div>
           </div>
         );
@@ -962,18 +918,18 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         {/* ── KPI Grid ── */}
         <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
           <KPI label="Total Tickets"      value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="Assigned"            value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#f59e0b" delay={60}  sub="Awaiting action"      onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="In Progress"        value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#3b82f6" delay={120} sub="Being handled"        onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="Assigned"            value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#0a4c86" delay={60}  sub="38 Pending Pickup"      onClick={() => onNavigate("Submit Ticket")} />
+          <KPI label="In Progress"        value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#ffd7af" delay={120} sub="Current active"        onClick={() => onNavigate("Submit Ticket")} />
           <KPI
             label="Avg Feedback Rating"
             value={data.totalFeedbacks > 0 ? `${data.avgFeedbackRating} ★` : "—"}
             icon={<Star size={17} />}
-            accent="#f59e0b"
+            accent="#0a4c86"
             delay={180}
-            sub={`From ${data.totalFeedbacks} review${data.totalFeedbacks !== 1 ? "s" : ""}`}
+            sub="98% Satisfaction"
           />
-          <KPI label="Incoming Units"     value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#8b5cf6" delay={240} sub="Logged for repair"    onClick={() => onNavigate("Incoming Units")} />
-          <KPI label="Outgoing Units"     value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#10b981" delay={300} sub="Returned to users"    onClick={() => onNavigate("Outgoing Units")} />
+          <KPI label="Incoming Units"     value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#7b8396" delay={240} sub="New Hardware batch"    onClick={() => onNavigate("Incoming Units")} />
+          <KPI label="Outgoing Units"     value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#b91c1c" delay={300} sub="Decommissioned"    onClick={() => onNavigate("Outgoing Units")} />
         </div>
 
         {/* ── Mid row ── */}
@@ -1022,7 +978,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             />
             {data.issueBreakdown.length === 0
               ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No issue data yet.</p>
-              : <IssueLineChart issueBreakdown={data.issueBreakdown} />}
+              : <RecurringIssueList issueBreakdown={data.issueBreakdown} />}
           </div>
 
           <div style={{ ...CARD }}>
@@ -1043,8 +999,8 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           <SectionHeader
             icon={<Trophy size={14} color="#f59e0b" />}
             iconBg="#f59e0b15"
-            title="IT Technician Leaderboard"
-            subtitle="Ranked by user feedback rating"
+            title="Technician Leaderboard"
+            right={<span style={{ fontSize: 12, fontWeight: 700, color: "#0a4c86", cursor: "pointer" }}>View All Performance</span>}
           />
           {data.techLeaderboard.length === 0
             ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No technician data yet.</p>
