@@ -34,7 +34,14 @@ type OutgoingUnitRow = {
 };
 
 type UserOption = { id: string; full_name: string; role: string };
-type DepartmentOption = { id: string; name: string };
+type DepartmentOption = { id: string; name: string; parent_id?: string | null };
+type IncomingSourceOption = {
+  id: string;
+  unit_name: string;
+  reported_by: string;
+  department_id: string | null;
+  is_archived?: boolean;
+};
 
 type FormState = {
   date_released: string;
@@ -81,9 +88,6 @@ function validateForm(form: FormState): FieldErrors {
 
   if (!form.department_id.trim())
     errors.department_id = "Office / Department is required.";
-
-  if (!form.released_by_user_id.trim())
-    errors.released_by_user_id = "Please select the IT Technician member who released the unit.";
 
   const notes = form.release_notes.trim();
   if (!notes) errors.release_notes = "Release notes are required.";
@@ -218,6 +222,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const [rows, setRows]               = useState<OutgoingUnitRow[]>([]);
   const [itStaff, setItStaff]         = useState<UserOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [incomingSources, setIncomingSources] = useState<IncomingSourceOption[]>([]);
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [sortField, setSortField]     = useState<SortField>("date_released");
@@ -233,6 +238,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportMonth, setExportMonth] = useState<string>("");
   const [toast, setToast]             = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [selectedIncomingId, setSelectedIncomingId] = useState<string>("");
 
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -264,6 +270,15 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return m;
   }, [departments]);
 
+  const deptDisplayMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    departments.forEach((d) => {
+      const parentName = d.parent_id ? (deptMap[d.parent_id]?.name ?? "") : "";
+      m[d.id] = parentName ? `${parentName} - ${d.name}` : d.name;
+    });
+    return m;
+  }, [departments, deptMap]);
+
   const deptStrMap = useMemo(() => {
     const m: Record<string, string> = {};
     departments.forEach(d => { m[d.id] = d.name; });
@@ -278,10 +293,30 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const monthOptions        = useMemo(() => buildMonthOptions(rows), [rows]);
   const resolvedMonthFilter = exportMonth || null;
+  const outgoingKeys = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => {
+      const key = `${r.unit_name}::${r.collected_by}`.toLowerCase();
+      s.add(key);
+    });
+    return s;
+  }, [rows]);
+
+  const availableIncomingSources = useMemo(() => {
+    return incomingSources.filter((src) => {
+      const key = `${src.unit_name}::${src.reported_by}`.toLowerCase();
+      const isCurrentEditSelection =
+        modalMode === "edit" &&
+        !!selected &&
+        src.unit_name === selected.unit_name &&
+        src.reported_by === selected.collected_by;
+      return isCurrentEditSelection || !outgoingKeys.has(key);
+    });
+  }, [incomingSources, outgoingKeys, modalMode, selected]);
 
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: unitData, error: unitError }, { data: staff }, { data: depts }] = await Promise.all([
+    const [{ data: unitData, error: unitError }, { data: staff }, { data: depts }, { data: incoming }] = await Promise.all([
       supabase.from("outgoing_units").select("*").order(sortField, { ascending: sortDir === "asc" }).eq("is_archived", false),
       supabase
         .from("user_accounts")
@@ -290,10 +325,12 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         .eq("is_archived", false)
         .eq("role", "IT Technician")
         .order("full_name"),
-      supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
+      supabase.from("departments").select("id, name, parent_id").eq("is_archived", false).order("name"),
+      supabase.from("incoming_units").select("id, unit_name, reported_by, department_id, is_archived").eq("is_archived", false).order("date_received", { ascending: false }),
     ]);
     setItStaff((staff ?? []) as UserOption[]);
     setDepartments((depts ?? []) as DepartmentOption[]);
+    setIncomingSources((incoming ?? []) as IncomingSourceOption[]);
     if (unitError) { showToast(friendlyError(unitError.message), "error"); setRows([]); }
     else setRows((unitData ?? []) as OutgoingUnitRow[]);
     setLoading(false);
@@ -327,9 +364,9 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     () => rows.map(r => ({
       ...r,
       releaser_name:   r.released_by_user_id ? (userMap[r.released_by_user_id]?.full_name ?? "—") : "—",
-      department_name: r.department_id        ? (deptMap[r.department_id]?.name            ?? "—") : "—",
+      department_name: r.department_id        ? (deptDisplayMap[r.department_id]            ?? "—") : "—",
     })),
-    [rows, userMap, deptMap]
+    [rows, userMap, deptDisplayMap]
   );
 
   const filtered = useMemo(() => {
@@ -363,6 +400,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setModalMode(null);
     setSelected(null);
     setForm(emptyForm());
+    setSelectedIncomingId("");
     setFieldErrors({});
     setSubmitting(false);
   };
@@ -380,6 +418,8 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       release_notes:       r.release_notes,
       department_id:       r.department_id ?? "",
     });
+    const match = incomingSources.find(src => src.unit_name === r.unit_name && src.reported_by === r.collected_by);
+    setSelectedIncomingId(match?.id ?? "");
     setModalMode("edit");
   };
 
@@ -397,7 +437,6 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       date_released:       new Date(form.date_released).toISOString(),
       unit_name:           sanitize(form.unit_name),
       collected_by:        sanitize(form.collected_by),
-      released_by_user_id: form.released_by_user_id || null,
       release_notes:       sanitize(form.release_notes),
       department_id:       form.department_id || null,
     };
@@ -744,7 +783,6 @@ const OutgoingRowSkeleton: React.FC = () => (
                     { label: "Unit",             field: "unit_name"     as SortField },
                     { label: "Name of Employee", field: "collected_by"  as SortField },
                     { label: "Office",           field: null },
-                    { label: "Released by",      field: null },
                     { label: "Solution",         field: null },
                     { label: "Actions",          field: null },
                   ] as { label: string; field: SortField | null }[]).map(col => (
@@ -759,14 +797,13 @@ const OutgoingRowSkeleton: React.FC = () => (
                 {loading ? (
                   Array.from({ length: PAGE_SIZE }).map((_, i) => <OutgoingRowSkeleton key={i} />)
                 ) : paginated.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No outgoing units found.</td></tr>
+                  <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No outgoing units found.</td></tr>
                 ) : paginated.map(r => (
                   <tr key={r.id} className="ou-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>{fmtDate(r.date_released)}</td>
                     <td style={{ padding: "0.75rem 1rem", fontWeight: 600, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.unit_name}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.collected_by}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>{r.department_name}</td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.releaser_name}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.release_notes}</td>
                     <td style={{ padding: "0.75rem 1rem" }}>
                       <div style={{ display: "flex", gap: 6 }}>
@@ -846,10 +883,35 @@ const OutgoingRowSkeleton: React.FC = () => (
                 {/* Unit */}
                 <div>
                   <label style={labelStyle}>Unit name <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input value={form.unit_name}
-                    onChange={e => { setForm(f => ({ ...f, unit_name: e.target.value })); clearError("unit_name"); }}
-                    placeholder="e.g. Dell Latitude 5420 — Asset tag AT-1024" maxLength={200}
-                    style={inputStyle(!!fieldErrors.unit_name)} />
+                  <select
+                    value={selectedIncomingId}
+                    onChange={e => {
+                      const id = e.target.value;
+                      setSelectedIncomingId(id);
+                      const picked = incomingSources.find(src => src.id === id);
+                      if (!picked) {
+                        setForm(f => ({ ...f, unit_name: "", collected_by: "", department_id: "" }));
+                      } else {
+                        setForm(f => ({
+                          ...f,
+                          unit_name: picked.unit_name,
+                          collected_by: picked.reported_by,
+                          department_id: picked.department_id ?? "",
+                        }));
+                      }
+                      clearError("unit_name");
+                      clearError("collected_by");
+                      clearError("department_id");
+                    }}
+                    style={{ ...inputStyle(!!fieldErrors.unit_name), cursor: "pointer" }}
+                  >
+                    <option value="">— Select from incoming units —</option>
+                    {availableIncomingSources.map(src => (
+                      <option key={src.id} value={src.id}>
+                        {src.unit_name} - {src.reported_by}
+                      </option>
+                    ))}
+                  </select>
                   <FieldError msg={fieldErrors.unit_name} />
                 </div>
 
@@ -872,23 +934,9 @@ const OutgoingRowSkeleton: React.FC = () => (
                     onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
                     style={{ ...inputStyle(!!fieldErrors.department_id), cursor: "pointer" }}>
                     <option value="">— Select department —</option>
-                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {departments.map(d => <option key={d.id} value={d.id}>{deptDisplayMap[d.id] ?? d.name}</option>)}
                   </select>
                   <FieldError msg={fieldErrors.department_id} />
-                </div>
-
-                {/* Released by */}
-                <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Users size={13} color="#475569" /> Released by (IT Technician) <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <StaffSinglePicker
-                    users={itStaff}
-                    selectedId={form.released_by_user_id}
-                    onChange={id => { setForm(f => ({ ...f, released_by_user_id: id })); clearError("released_by_user_id"); }}
-                    hasError={!!fieldErrors.released_by_user_id}
-                  />
-                  <FieldError msg={fieldErrors.released_by_user_id} />
                 </div>
 
                 {/* Release Notes */}
@@ -936,8 +984,7 @@ const OutgoingRowSkeleton: React.FC = () => (
                 {([
                   { label: "Date released",      value: fmtDate(selected.date_released),                                                               icon: <Clock     size={12} /> },
                   { label: "Name of Employee",    value: selected.collected_by,                                                                         icon: <User      size={12} /> },
-                  { label: "Office / Department", value: selected.department_id ? (deptMap[selected.department_id]?.name ?? "—") : "—",                 icon: <Building2 size={12} /> },
-                  { label: "Released by",         value: selected.released_by_user_id ? (userMap[selected.released_by_user_id]?.full_name ?? "—") : "—", icon: <Users     size={12} /> },
+                  { label: "Office / Department", value: selected.department_id ? (deptDisplayMap[selected.department_id] ?? "—") : "—",                 icon: <Building2 size={12} /> },
                 ] as { label: string; value: string; icon: React.ReactNode }[]).map(row => (
                   <div key={row.label} className="ou-detail-row">
                     <span className="ou-detail-label">{row.icon} {row.label}</span>

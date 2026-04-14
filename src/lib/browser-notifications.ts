@@ -37,7 +37,7 @@ export function shouldShowBrowserPushForRole(notificationType: string, userRole:
 
   return false;
 }
-
+  
 export function isNotificationOwnedByUser(
   notificationUserId: unknown,
   currentUserId: string

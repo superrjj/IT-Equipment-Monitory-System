@@ -3,7 +3,7 @@ import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
   ChevronLeft, ChevronRight, Package,
-  Clock, User, Users, Inbox, Building2,
+  Clock, User, Inbox, Building2,
   FileSpreadsheet, FileText, Loader, Calendar, Archive
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
@@ -24,6 +24,7 @@ type IncomingUnitRow = {
   unit_name: string;
   unit_cable: string | null;
   reported_by: string;
+  contact_number: string | null;
   received_by_user_id: string | null;
   issue_description: string;
   department_id: string | null;
@@ -38,12 +39,13 @@ type EnrichedRow = IncomingUnitRow & {
 };
 
 type UserOption       = { id: string; full_name: string; role: string };
-type DepartmentOption = { id: string; name: string };
+type DepartmentOption = { id: string; name: string; parent_id?: string | null };
 
 type FormState = {
   date_received: string;
   unit_name: string;
   reported_by: string;
+  contact_number: string;
   received_by_user_id: string;
   issue_description: string;
   department_id: string;
@@ -83,11 +85,15 @@ function validateForm(form: FormState): FieldErrors {
   if (!reporter)                errors.reported_by = "Employee name is required.";
   else if (reporter.length > 100) errors.reported_by = "Must be 100 characters or less.";
 
+  const phone = form.contact_number.trim();
+  if (phone) {
+    if (!/^[0-9+\-\s()]{7,20}$/.test(phone)) {
+      errors.contact_number = "Please enter a valid phone number.";
+    }
+  }
+
   if (!form.department_id.trim())
     errors.department_id = "Office / Department is required.";
-
-  if (!form.received_by_user_id.trim())
-    errors.received_by_user_id = "Please select the IT Technician member who received the unit.";
 
   const desc = form.issue_description.trim();
   if (!desc)                errors.issue_description = "Issue description is required.";
@@ -116,6 +122,7 @@ const emptyForm = (): FormState => ({
   date_received:       new Date().toISOString().slice(0, 10),
   unit_name:           "",
   reported_by:         "",
+  contact_number:      "",
   received_by_user_id: "",
   issue_description:   "",
   department_id:       "",
@@ -142,49 +149,6 @@ const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   }}>
     <AlertTriangle size={10} />
     {msg ?? "placeholder"}
-  </div>
-);
-
-const StaffSinglePicker: React.FC<{
-  users: UserOption[];
-  selectedId: string;
-  onChange: (id: string) => void;
-  hasError: boolean;
-}> = ({ users, selectedId, onChange, hasError }) => (
-  <div style={{
-    border: `1px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`,
-    borderRadius: 8, background: hasError ? "#fff8f8" : "#f8fafc",
-    maxHeight: 160, overflowY: "auto",
-    padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2,
-  }}>
-    {users.length === 0 ? (
-      <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Technician found.</div>
-    ) : (
-      users.map(u => {
-        const active = selectedId === u.id;
-        return (
-          <button key={u.id} type="button" onClick={() => onChange(u.id)} style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
-            background: active ? `${BRAND}10` : "transparent",
-            cursor: "pointer", textAlign: "left", width: "100%", transition: "background 0.12s",
-          }}>
-            <span style={{
-              width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
-              border: `1.5px solid ${active ? BRAND : "#cbd5e1"}`,
-              background: active ? BRAND : "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
-            </span>
-            <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
-              {u.full_name}
-            </span>
-            <span style={{ fontSize: 11, color: "#0a4c86", marginLeft: "auto", fontFamily: "'Poppins', sans-serif", letterSpacing: 0.50, fontWeight: 500 }}>{u.role}</span>
-          </button>
-        );
-      })
-    )}
   </div>
 );
 
@@ -250,6 +214,15 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return m;
   }, [departments]);
 
+  const deptDisplayMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    departments.forEach((d) => {
+      const parentName = d.parent_id ? (deptMap[d.parent_id]?.name ?? "") : "";
+      m[d.id] = parentName ? `${parentName} - ${d.name}` : d.name;
+    });
+    return m;
+  }, [departments, deptMap]);
+
   const monthOptions = useMemo(() => buildMonthOptions(rows), [rows]);
 
   const fetchAll = async () => {
@@ -267,7 +240,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         .eq("is_archived", false)
         .eq("role", "IT Technician")
         .order("full_name"),
-      supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
+      supabase.from("departments").select("id, name, parent_id").eq("is_archived", false).order("name"),
     ]);
     setItStaff((staff ?? []) as UserOption[]);
     setDepartments((depts ?? []) as DepartmentOption[]);
@@ -312,9 +285,9 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     rows.map(r => ({
       ...r,
       receiver_name:   r.received_by_user_id ? (userMap[r.received_by_user_id]?.full_name ?? "—") : "—",
-      department_name: r.department_id       ? (deptMap[r.department_id]?.name            ?? "—") : "—",
+      department_name: r.department_id       ? (deptDisplayMap[r.department_id]            ?? "—") : "—",
     })),
-    [rows, userMap, deptMap]
+    [rows, userMap, deptDisplayMap]
   );
 
   const rowsSorted = useMemo((): EnrichedRow[] =>
@@ -331,7 +304,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     const q = search.trim().toLowerCase();
     return rowsSorted.filter(r => {
       if (!q) return true;
-      return [r.unit_name, r.reported_by, r.issue_description, r.receiver_name, r.department_name]
+      return [r.unit_name, r.reported_by, r.contact_number ?? "", r.issue_description, r.receiver_name, r.department_name]
         .join(" ").toLowerCase().includes(q);
     });
   }, [rowsSorted, search]);
@@ -372,6 +345,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       date_received:       base.date_received.slice(0, 10),
       unit_name:           base.unit_name,
       reported_by:         base.reported_by,
+      contact_number:      base.contact_number ?? "",
       received_by_user_id: base.received_by_user_id ?? "",
       issue_description:   base.issue_description,
       department_id:       base.department_id ?? "",
@@ -398,7 +372,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       unit_name:           sanitize(form.unit_name),
       unit_cable:          null,
       reported_by:         sanitize(form.reported_by),
-      received_by_user_id: form.received_by_user_id || null,
+      contact_number:      form.contact_number.trim() ? sanitize(form.contact_number) : null,
       issue_description:   sanitize(form.issue_description),
       department_id:       form.department_id || null,
     };
@@ -535,6 +509,7 @@ const IncomingRowSkeleton: React.FC = () => (
     <td style={{ padding: "0.75rem 1rem" }}><Skeleton width={100} height={12} radius={4} /></td>
     <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="75%" height={13} radius={5} /></td>
     <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="80%" height={12} radius={4} /></td>
+    <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="70%" height={12} radius={4} /></td>
     <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="70%" height={12} radius={4} /></td>
     <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="65%" height={12} radius={4} /></td>
     <td style={{ padding: "0.75rem 1rem" }}><Skeleton width="85%" height={12} radius={4} /></td>
@@ -737,8 +712,8 @@ const IncomingRowSkeleton: React.FC = () => (
                     { label: "Date",             field: "date_received" as SortField },
                     { label: "Unit",             field: "unit_name"     as SortField },
                     { label: "Name of Employee", field: "reported_by"   as SortField },
+                    { label: "Phone Number",     field: null },
                     { label: "Office",           field: null },
-                    { label: "Person In Charge", field: null },
                     { label: "Problem",          field: null },
                     { label: "Actions",          field: null },
                   ] as { label: string; field: SortField | null }[]).map(col => (
@@ -759,8 +734,8 @@ const IncomingRowSkeleton: React.FC = () => (
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>{fmtDate(r.date_received)}</td>
                     <td style={{ padding: "0.75rem 1rem", fontWeight: 600, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.unit_name}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.reported_by}</td>
+                    <td style={{ padding: "0.75rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>{r.contact_number ?? "—"}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>{r.department_name}</td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.receiver_name}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "#64748b", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.issue_description}</td>
                     <td style={{ padding: "0.75rem 1rem" }}>
                       <div style={{ display: "flex", gap: 6 }}>
@@ -856,6 +831,16 @@ const IncomingRowSkeleton: React.FC = () => (
                   <FieldError msg={fieldErrors.reported_by} />
                 </div>
 
+                {/* Contact number */}
+                <div style={{ gridColumn: "span 2" }}>
+                  <label style={labelStyle}>Phone Number</label>
+                  <input value={form.contact_number}
+                    onChange={e => { setForm(f => ({ ...f, contact_number: e.target.value })); clearError("contact_number"); }}
+                    placeholder="e.g. 0917 123 4567" maxLength={20}
+                    style={inputStyle(!!fieldErrors.contact_number)} />
+                  <FieldError msg={fieldErrors.contact_number} />
+                </div>
+
                 {/* Department */}
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
@@ -865,23 +850,9 @@ const IncomingRowSkeleton: React.FC = () => (
                     onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
                     style={{ ...inputStyle(!!fieldErrors.department_id), cursor: "pointer" }}>
                     <option value="">— Select department —</option>
-                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {departments.map(d => <option key={d.id} value={d.id}>{deptDisplayMap[d.id] ?? d.name}</option>)}
                   </select>
                   <FieldError msg={fieldErrors.department_id} />
-                </div>
-
-                {/* Received by */}
-                <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Users size={13} color="#475569" /> Received by (IT Technician) <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <StaffSinglePicker
-                    users={itStaff}
-                    selectedId={form.received_by_user_id}
-                    onChange={id => { setForm(f => ({ ...f, received_by_user_id: id })); clearError("received_by_user_id"); }}
-                    hasError={!!fieldErrors.received_by_user_id}
-                  />
-                  <FieldError msg={fieldErrors.received_by_user_id} />
                 </div>
 
                 {/* Issue description */}
@@ -928,8 +899,8 @@ const IncomingRowSkeleton: React.FC = () => (
                 {([
                   { label: "Date received",      value: fmtDate(selected.date_received),                                                               icon: <Clock     size={12} /> },
                   { label: "Name of Employee",    value: selected.reported_by,                                                                          icon: <User      size={12} /> },
-                  { label: "Office / Department", value: selected.department_id ? (deptMap[selected.department_id]?.name ?? "—") : "—",                 icon: <Building2 size={12} /> },
-                  { label: "Received by",         value: selected.received_by_user_id ? (userMap[selected.received_by_user_id]?.full_name ?? "—") : "—", icon: <Users     size={12} /> },
+                  { label: "Phone number",        value: selected.contact_number?.trim() || "—",                                                      icon: <User      size={12} /> },
+                  { label: "Office / Department", value: selected.department_id ? (deptDisplayMap[selected.department_id] ?? "—") : "—",                 icon: <Building2 size={12} /> },
                 ] as { label: string; value: string; icon: React.ReactNode }[]).map(row => (
                   <div key={row.label} className="iu-detail-row">
                     <span className="iu-detail-label">{row.icon} {row.label}</span>

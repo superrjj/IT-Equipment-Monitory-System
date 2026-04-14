@@ -14,6 +14,7 @@ type Department = {
   name: string;
   description: string;
   location: string;
+  parent_id: string | null;
   created_at: string;
   ticket_count?: number;
   is_archived: boolean;
@@ -38,6 +39,7 @@ type DeptFormErrors = {
   name?: string;
   description?: string;
   location?: string;
+  parent_id?: string;
 };
 
 const brandBlue = "#0D518C";
@@ -128,26 +130,52 @@ const Departments: React.FC = () => {
   const [selected, setSelected]         = useState<Department | null>(null);
   const [toast, setToast]               = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
-  const [form, setForm]                 = useState({ name: "", description: "", location: "" });
+  const [form, setForm]                 = useState({ name: "", description: "", location: "", parent_id: "" });
   // ── Per-field errors (replaces single formError string) ─────────────────────
   const [formErrors, setFormErrors]     = useState<DeptFormErrors>({});
   const [submitting, setSubmitting]     = useState(false);
+  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
 
   // ── Fetch departments with ticket count ──────────────────────────────────────
   const fetchDepartments = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("departments")
-      .select(`id, name, description, location, created_at, file_reports(count)`)
+      .select("id, name, description, location, parent_id, created_at, is_archived")
       .eq("is_archived", false)  
       .order(sortField, { ascending: sortDir === "asc" });
 
     if (error) { showToast(friendlyError(error.message), "error"); setLoading(false); return; }
 
-    const mapped: Department[] = (data ?? []).map((d: any) => ({
-      ...d,
-      ticket_count: d.file_reports?.[0]?.count ?? 0,
-    }));
+    const deptRows = (data ?? []) as Department[];
+    const deptIds = deptRows.map(d => d.id);
+    const { data: ticketRows } = await supabase
+      .from("file_reports")
+      .select("department_id")
+      .in("department_id", deptIds);
+
+    const directCounts: Record<string, number> = {};
+    (ticketRows ?? []).forEach((t: any) => {
+      const key = String(t.department_id ?? "");
+      if (!key) return;
+      directCounts[key] = (directCounts[key] ?? 0) + 1;
+    });
+
+    const childrenByParent: Record<string, string[]> = {};
+    deptRows.forEach((d) => {
+      if (!d.parent_id) return;
+      if (!childrenByParent[d.parent_id]) childrenByParent[d.parent_id] = [];
+      childrenByParent[d.parent_id].push(d.id);
+    });
+
+    const mapped: Department[] = deptRows.map((d) => {
+      const childIds = childrenByParent[d.id] ?? [];
+      const branchCount = childIds.reduce((sum, id) => sum + (directCounts[id] ?? 0), 0);
+      return {
+        ...d,
+        ticket_count: (directCounts[d.id] ?? 0) + branchCount,
+      };
+    });
     setDepartments(mapped);
     setLoading(false);
   };
@@ -181,13 +209,36 @@ const Departments: React.FC = () => {
   };
 
   // ── Filtered + paginated ─────────────────────────────────────────────────────
-  const filtered = departments.filter(d =>
-    d.name.toLowerCase().includes(search.toLowerCase()) ||
-    d.description?.toLowerCase().includes(search.toLowerCase()) ||
-    d.location?.toLowerCase().includes(search.toLowerCase())
+  const childrenByParent = useMemo(() => {
+    const m: Record<string, Department[]> = {};
+    departments.forEach((d) => {
+      if (!d.parent_id) return;
+      if (!m[d.parent_id]) m[d.parent_id] = [];
+      m[d.parent_id].push(d);
+    });
+    return m;
+  }, [departments]);
+
+  const searchable = (d: Department) =>
+    `${d.name} ${d.description ?? ""} ${d.location ?? ""}`.toLowerCase();
+
+  const q = search.trim().toLowerCase();
+  const roots = useMemo(
+    () => departments.filter((d) => !d.parent_id || !departments.some((x) => x.id === d.parent_id)),
+    [departments]
   );
+
+  const filtered = useMemo(() => {
+    if (!q) return roots;
+    return roots.filter((parent) => {
+      const parentMatch = searchable(parent).includes(q);
+      const childMatch = (childrenByParent[parent.id] ?? []).some((c) => searchable(c).includes(q));
+      return parentMatch || childMatch;
+    });
+  }, [q, roots, childrenByParent]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => { setPage(1); }, [search]);
 
@@ -199,14 +250,14 @@ const Departments: React.FC = () => {
 
   // ── Open modals ──────────────────────────────────────────────────────────────
   const openAdd = () => {
-    setForm({ name: "", description: "", location: "" });
+    setForm({ name: "", description: "", location: "", parent_id: "" });
     setFormErrors({});
     setModalMode("add");
   };
 
   const openEdit = (d: Department) => {
     setSelected(d);
-    setForm({ name: d.name, description: d.description ?? "", location: d.location ?? "" });
+    setForm({ name: d.name, description: d.description ?? "", location: d.location ?? "", parent_id: d.parent_id ?? "" });
     setFormErrors({});
     setModalMode("edit");
   };
@@ -215,10 +266,14 @@ const Departments: React.FC = () => {
     setSelected(d);
     setModalMode("view");
     setTicketLoading(true);
+
+    const childIds = departments.filter(dep => dep.parent_id === d.id).map(dep => dep.id);
+    const targetDeptIds = [d.id, ...childIds];
+
     const { data, error } = await supabase
       .from("file_reports")
       .select("id, ticket_number, title, employee_name, issue_type, status, date_submitted")
-      .eq("department_id", d.id)
+      .in("department_id", targetDeptIds)
       .order("date_submitted", { ascending: false });
     if (error) showToast(friendlyError(error.message), "error");
     setTickets((data ?? []) as TicketRow[]);
@@ -241,10 +296,12 @@ const Departments: React.FC = () => {
     }
 
     // Uniqueness check — report on the name field
-    const dupQuery = supabase.from("departments").select("id").ilike("name", form.name.trim());
+    const dupQuery = supabase.from("departments").select("id, parent_id").ilike("name", form.name.trim());
     if (modalMode === "edit" && selected) dupQuery.neq("id", selected.id);
     const { data: dup } = await dupQuery;
-    if (dup && dup.length > 0) {
+    const targetParentId = form.parent_id.trim() || null;
+    const hasDupSameParent = (dup ?? []).some((row: any) => (row.parent_id ?? null) === targetParentId);
+    if (hasDupSameParent) {
       setFormErrors({ name: "Please use a different department name." });
       return;
     }
@@ -255,6 +312,7 @@ const Departments: React.FC = () => {
         name: form.name.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
+        parent_id: form.parent_id.trim() || null,
       };
       const { data: inserted, error } = await supabase.from("departments").insert(payload).select("id").single();
       if (error) {
@@ -275,6 +333,7 @@ const Departments: React.FC = () => {
         name: form.name.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
+        parent_id: form.parent_id.trim() || null,
       };
       const { error } = await supabase.from("departments").update(payload).eq("id", selected.id);
       if (error) {
@@ -358,6 +417,11 @@ const Departments: React.FC = () => {
     new Date(iso).toLocaleDateString("en-PH", {
       year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Manila",
     });
+
+  const parentCandidates = useMemo(() => {
+    const selectedId = selected?.id ?? "";
+    return departments.filter((d) => !d.parent_id && d.id !== selectedId);
+  }, [departments, selected]);
 
     // ── Skeleton ──────────────────────────────────────────────────────────────────
 const Skeleton: React.FC<{
@@ -486,48 +550,101 @@ const TableRowSkeleton: React.FC = () => (
                    Array.from({ length: PAGE_SIZE }).map((_, i) => <TableRowSkeleton key={i} />)
                 ) : paginated.length === 0 ? (
                   <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No departments found.</td></tr>
-                ) : paginated.map(d => (
-                  <tr key={d.id} className="dept-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
-                    <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "#0f172a" }}>{d.name}</td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#475569", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {d.description || <span style={{ color: "#cbd5e1" }}>—</span>}
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>
-                      {d.location || <span style={{ color: "#cbd5e1" }}>—</span>}
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 4,
-                        padding: "2px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600,
-                        background: "rgba(10,76,134,0.08)", color: brandBlue,
-                      }}>
-                        <Ticket size={11} /> {d.ticket_count ?? 0}
-                      </span>
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                      {fmtDate(d.created_at)}
-                    </td>
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {[
-                          { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(d),     color: brandBlue  },
-                          { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(d),     color: brandBlue  },
-                          { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(d), color: "#dc2626" },
-                        ].map((btn, i) => (
-                          <button key={i} title={btn.title} className="icon-btn icon-btn-ou" onClick={btn.fn}
-                            style={{
-                              width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2",
-                              background: "#fff", cursor: "pointer", display: "flex",
-                              alignItems: "center", justifyContent: "center", color: btn.color,
-                              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                            }}>
-                            {btn.icon}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                ) : paginated.flatMap((d) => {
+                  const children = (childrenByParent[d.id] ?? []).filter((c) => !q || searchable(c).includes(q) || searchable(d).includes(q));
+                  const isExpanded = !!expandedParents[d.id];
+                  const baseRow = (
+                    <tr key={d.id} className="dept-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
+                      <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "#0f172a" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {children.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedParents((prev) => ({ ...prev, [d.id]: !prev[d.id] }))}
+                              style={{ border: "none", background: "transparent", cursor: "pointer", color: "#64748b", display: "inline-flex", alignItems: "center", padding: 0 }}
+                              title={isExpanded ? "Hide branches" : "Show branches"}
+                            >
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </button>
+                          )}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span>{d.name}</span>
+                            <span style={{ fontSize: 10, color: "#0a4c86", fontWeight: 600 }}>
+                              {children.length > 0 ? `${children.length} branch${children.length > 1 ? "es" : ""}` : "Main Office"}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#475569", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {d.description || <span style={{ color: "#cbd5e1" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>
+                        {d.location || <span style={{ color: "#cbd5e1" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: "rgba(10,76,134,0.08)", color: brandBlue }}>
+                          <Ticket size={11} /> {d.ticket_count ?? 0}
+                        </span>
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
+                        {fmtDate(d.created_at)}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[
+                            { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(d),     color: brandBlue  },
+                            { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(d),     color: brandBlue  },
+                            { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(d), color: "#dc2626" },
+                          ].map((btn, i) => (
+                            <button key={i} title={btn.title} className="icon-btn icon-btn-ou" onClick={btn.fn}
+                              style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                              {btn.icon}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+
+                  const childRows = isExpanded
+                    ? children.map((c) => (
+                        <tr key={`${d.id}-${c.id}`} style={{ background: "#f8fbff", borderBottom: "1px solid #edf2f7" }}>
+                          <td style={{ padding: "0.65rem 1rem 0.65rem 2.2rem", color: "#1f2937", fontWeight: 600 }}>
+                            {d.name} - {c.name}
+                          </td>
+                          <td style={{ padding: "0.65rem 1rem", color: "#64748b", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {c.description || <span style={{ color: "#cbd5e1" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "0.65rem 1rem", color: "#64748b" }}>
+                            {c.location || <span style={{ color: "#cbd5e1" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "0.65rem 1rem" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: "rgba(100,116,139,0.10)", color: "#334155" }}>
+                              <Ticket size={11} /> {c.ticket_count ?? 0}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.65rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
+                            {fmtDate(c.created_at)}
+                          </td>
+                          <td style={{ padding: "0.65rem 1rem" }}>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {[
+                                { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(c),     color: brandBlue  },
+                                { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(c),     color: brandBlue  },
+                                { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(c), color: "#dc2626" },
+                              ].map((btn, i) => (
+                                <button key={i} title={btn.title} className="icon-btn icon-btn-ou" onClick={btn.fn}
+                                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                                  {btn.icon}
+                                </button>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    : [];
+                  return [baseRow, ...childRows];
+                })}
               </tbody>
             </table>
           </div>
@@ -615,6 +732,24 @@ const TableRowSkeleton: React.FC = () => (
                     style={formErrors.location ? inputErrorStyle : inputStyle}
                   />
                   <FieldError msg={formErrors.location} />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Parent Department <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>(optional)</span></label>
+                  <select
+                    value={form.parent_id}
+                    onChange={e => {
+                      setForm(f => ({ ...f, parent_id: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, parent_id: undefined }));
+                    }}
+                    style={formErrors.parent_id ? inputErrorStyle : inputStyle}
+                  >
+                    <option value="">— None (Main Department) —</option>
+                    {parentCandidates.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <FieldError msg={formErrors.parent_id} />
                 </div>
               </div>
 
