@@ -292,10 +292,25 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const rowsSorted = useMemo((): EnrichedRow[] =>
     [...rowsEnriched].sort((a, b) => {
-      const aVal = (a[sortField] as string) ?? "";
-      const bVal = (b[sortField] as string) ?? "";
-      const cmp  = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
+      const cmp = (() => {
+        if (sortField === "date_received") {
+          const aMs = new Date(a.date_received).getTime();
+          const bMs = new Date(b.date_received).getTime();
+          if (aMs < bMs) return -1;
+          if (aMs > bMs) return 1;
+          return 0;
+        }
+        const aVal = String(a[sortField] ?? "");
+        const bVal = String(b[sortField] ?? "");
+        return aVal.localeCompare(bVal, undefined, { sensitivity: "base" });
+      })();
+
+      if (cmp !== 0) return sortDir === "asc" ? cmp : -cmp;
+
+      // Stable tie-breaker: newest record first by "date added".
+      const aCreated = new Date(a.created_at).getTime();
+      const bCreated = new Date(b.created_at).getTime();
+      return bCreated - aCreated;
     }),
     [rowsEnriched, sortField, sortDir]
   );
