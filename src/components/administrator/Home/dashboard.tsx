@@ -77,7 +77,7 @@ const KPI: React.FC<{
   accent: string;
   delay?: number;
   onClick?: () => void;
-}> = ({ label, value, sub, icon, accent, delay = 0, onClick }) => {
+}> = ({ label, value, sub, accent, delay = 0, onClick }) => {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), delay);
@@ -558,14 +558,6 @@ const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
 const AVATAR_BG   = ["#fef9c3","#e0e7ff","#d1fae5","#fce7f3","#e0f2fe","#fce7f3","#e0e7ff"];
 const AVATAR_TEXT = ["#92400e","#3730a3","#065f46","#9d174d","#0c4a6e","#9d174d","#3730a3"];
 function getInitials(name: string): string { return name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase(); }
-function getPerformanceBadge(avgRating: number, rank: number) {
-  if (rank === 0 && avgRating > 0) return { label: "Top rated",        color: "#92400e", bg: "#fef9c3" };
-  if (avgRating >= 4.5)            return { label: "Excellent",         color: "#065f46", bg: "#d1fae5" };
-  if (avgRating >= 4.0)            return { label: "Great",             color: "#1e40af", bg: "#dbeafe" };
-  if (avgRating >= 3.0)            return { label: "Good",              color: "#475569", bg: "#f1f5f9" };
-  if (avgRating > 0)               return { label: "Needs improvement", color: "#92400e", bg: "#fef3c7" };
-  return                                  { label: "No ratings yet",    color: "#94a3b8", bg: "#f8fafc" };
-}
 
 const TechAvatar: React.FC<{ tech: TechStat; index: number; size?: number; fontSize?: number; borderColor?: string }> = ({ tech, index, size = 38, fontSize = 12, borderColor }) => {
   const bg   = AVATAR_BG[index]   ?? "#f1f5f9";
