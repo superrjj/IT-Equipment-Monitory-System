@@ -3,7 +3,7 @@ import {
   Plus, Pencil, Trash2, Eye, Search,
   ChevronUp, ChevronDown, X, AlertTriangle,
   ChevronLeft, ChevronRight, Package,
-  Clock, User, Users, CircleArrowUp, Building2,
+  Clock, User, CircleArrowUp, Building2,
   FileSpreadsheet, FileText, Loader, Calendar,
   Archive,
 } from "lucide-react";
@@ -153,70 +153,6 @@ const FieldError: React.FC<{ msg?: string }> = ({ msg }) => (
   </div>
 );
 
-const StaffSinglePicker: React.FC<{
-  users: UserOption[];
-  selectedId: string;
-  onChange: (id: string) => void;
-  hasError: boolean;
-}> = ({ users, selectedId, onChange, hasError }) => (
-  <div style={{
-    border: `1px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`,
-    borderRadius: 8,
-    background: hasError ? "#fff8f8" : "#f8fafc",
-    maxHeight: 160,
-    overflowY: "auto",
-    padding: "0.4rem",
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  }}>
-    {users.length === 0 ? (
-      <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active IT Technician found.</div>
-    ) : (
-      users.map(u => {
-        const active = selectedId === u.id;
-        return (
-          <button
-            key={u.id}
-            type="button"
-            onClick={() => onChange(u.id)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "0.45rem 0.6rem",
-              borderRadius: 6,
-              border: "none",
-              background: active ? `${BRAND}10` : "transparent",
-              cursor: "pointer",
-              textAlign: "left",
-              width: "100%",
-              transition: "background 0.12s",
-            }}
-          >
-            <span style={{
-              width: 16,
-              height: 16,
-              borderRadius: "50%",
-              flexShrink: 0,
-              border: `1.5px solid ${active ? BRAND : "#cbd5e1"}`,
-              background: active ? BRAND : "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}>
-              {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
-            </span>
-            <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
-              {u.full_name}
-            </span>
-            <span style={{  fontSize: 11, color: "#0a4c86", marginLeft: "auto", fontFamily: "'Poppins', sans-serif", letterSpacing: 0.50, fontWeight: 500  }}>{u.role}</span>
-          </button>
-        );
-      })
-    )}
-  </div>
-);
 
 const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
   const [rows, setRows]               = useState<OutgoingUnitRow[]>([]);
