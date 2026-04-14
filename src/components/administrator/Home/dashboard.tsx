@@ -22,7 +22,7 @@ import {
   Ticket, Clock, CircleArrowDown,
   CircleArrowUp, TrendingUp, Activity,
   BarChart3, AlertTriangle, RefreshCw, ArrowUpRight, Trophy, Star,
-  Wifi, KeyRound, HardDrive, Wrench,
+  Wifi, KeyRound, HardDrive, Wrench, Users,
 } from "lucide-react";
 
 // ── Shared card style — matches header exactly ────────────────────────────────
@@ -54,6 +54,10 @@ type DashData = {
   resolvedTickets:   number;
   incomingUnits:     number;
   outgoingUnits:     number;
+  activeAccounts:    number;
+  incomingByMonth:   number[];
+  outgoingByMonth:   number[];
+  accountsByMonth:   number[];
   avgFeedbackRating: number;
   totalFeedbacks:    number;
   issueBreakdown:    IssueCount[];
@@ -405,6 +409,73 @@ const RecurringIssueList: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueB
   );
 };
 
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const SingleMetricLineChart: React.FC<{ label: string; monthlyValues: number[]; color: string }> = ({ label, monthlyValues, color }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<{ destroy: () => void } | null>(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let cancelled = false;
+    import("chart.js/auto").then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      chartRef.current?.destroy();
+      chartRef.current = null;
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "line",
+        data: {
+          labels: MONTH_LABELS,
+          datasets: [{
+            label,
+            data: monthlyValues,
+            backgroundColor: `${color}1f`,
+            borderColor: color,
+            borderWidth: 2.2,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: color,
+            pointBorderColor: "#fff",
+            pointBorderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#f8fafc",
+              bodyColor: "#cbd5e1",
+              padding: 10,
+              cornerRadius: 8,
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: { color: "#64748b", font: { family: "'DM Sans', sans-serif", size: 11 } },
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+              ticks: { color: "#94a3b8", precision: 0, stepSize: 1 },
+              suggestedMax: Math.max(5, Math.max(...monthlyValues, 0) + 2),
+            },
+          },
+        },
+      });
+    });
+    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
+  }, [label, monthlyValues, color]);
+
+  return <div style={{ position: "relative", width: "100%", height: 170 }}><canvas ref={canvasRef} /></div>;
+};
+
 // ── Skeleton primitive ────────────────────────────────────────────────────────
 const Skeleton: React.FC<{
   width?: string | number; height?: number; radius?: number;
@@ -630,10 +701,24 @@ function buildDashData(
   tickets:   any[],
   incoming:  any[],
   outgoing:  any[],
+  accounts:  any[],
   depts:     any[],
   techs:     any[],
   feedbacks: any[],
 ): DashData {
+  const nowYear = new Date().getFullYear();
+  const monthlyCount = (rows: any[], key: string): number[] => {
+    const counts = Array(12).fill(0);
+    rows.forEach((row) => {
+      const iso = row?.[key];
+      if (!iso) return;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime()) || d.getFullYear() !== nowYear) return;
+      counts[d.getMonth()] += 1;
+    });
+    return counts;
+  };
+
   const today = new Date();
   const weeklyTickets = Array(7).fill(0);
   tickets.forEach(t => {
@@ -709,6 +794,10 @@ function buildDashData(
     inProgressTickets: tickets.filter(t => t.status === "In Progress").length,
     incomingUnits:     incoming.length,
     outgoingUnits:     outgoing.length,
+    activeAccounts:    accounts.filter((a: any) => a.is_active === true).length,
+    incomingByMonth:   monthlyCount(incoming, "date_received"),
+    outgoingByMonth:   monthlyCount(outgoing, "date_released"),
+    accountsByMonth:   monthlyCount(accounts, "created_at"),
     avgFeedbackRating,
     totalFeedbacks,
     issueBreakdown,
@@ -750,6 +839,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   const ticketsRef   = useRef<any[]>([]);
   const incomingRef  = useRef<any[]>([]);
   const outgoingRef  = useRef<any[]>([]);
+  const accountsRef  = useRef<any[]>([]);
   const deptsRef     = useRef<any[]>([]);
   const techsRef     = useRef<any[]>([]);
   const feedbacksRef = useRef<any[]>([]);
@@ -758,7 +848,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   recomputeRef.current = () =>
     setData(buildDashData(
       ticketsRef.current, incomingRef.current, outgoingRef.current,
-      deptsRef.current, techsRef.current, feedbacksRef.current,
+      accountsRef.current, deptsRef.current, techsRef.current, feedbacksRef.current,
     ));
 
   const upsertById = useCallback((rows: any[], next: any) => {
@@ -773,13 +863,15 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
       { data: tickets },
       { data: incoming },
       { data: outgoing },
+      { data: accounts },
       { data: depts },
       { data: techs },
       { data: feedbacks },
     ] = await Promise.all([
       supabase.from("file_reports").select("status, issue_type, date_submitted, department_id, id, assigned_to"),
-      supabase.from("incoming_units").select("id"),
-      supabase.from("outgoing_units").select("id"),
+      supabase.from("incoming_units").select("id, date_received"),
+      supabase.from("outgoing_units").select("id, date_released"),
+      supabase.from("user_accounts").select("id, created_at, is_active").eq("is_archived", false),
       supabase.from("departments").select("id, name").order("name"),
       supabase.from("user_accounts").select("id, full_name, avatar_url, updated_at").eq("role", "IT Technician").eq("is_active", true).eq("is_archived", false).order("full_name"),
       supabase.from("ticket_feedback").select("id, report_id, rating"),
@@ -787,6 +879,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
     ticketsRef.current   = tickets   ?? [];
     incomingRef.current  = incoming  ?? [];
     outgoingRef.current  = outgoing  ?? [];
+    accountsRef.current  = accounts  ?? [];
     deptsRef.current     = depts     ?? [];
     techsRef.current     = (techs ?? []).map(stampAvatar);
     feedbacksRef.current = feedbacks ?? [];
@@ -842,6 +935,9 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         <PanelSkeleton height={260} lines={2} />
         <PanelSkeleton height={260} lines={2} />
       </div>
+      <div className="dash-ua-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1rem" }}>
+        {[0, 1, 2].map((i) => <PanelSkeleton key={i} height={210} lines={1} />)}
+      </div>
 
       {/* Leaderboard skeleton */}
       <div style={{ ...CARD }}>
@@ -879,6 +975,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           .dash-kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
           .dash-mid-grid { grid-template-columns: 1fr !important; }
           .dash-bot-grid { grid-template-columns: 1fr !important; }
+          .dash-ua-grid { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 580px) { .dash-kpi-grid { grid-template-columns: 1fr !important; } }
         @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
@@ -983,6 +1080,21 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
             {data.deptRows.length === 0
               ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No department data yet.</p>
               : <DeptPieChart key={`admin-dept-pie-${pieAnimKey}`} deptRows={data.deptRows} />}
+          </div>
+        </div>
+
+        <div className="dash-ua-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1rem" }}>
+          <div style={{ ...CARD }}>
+            <SectionHeader icon={<CircleArrowDown size={14} color="#8b5cf6" />} iconBg="#8b5cf615" title="Incoming Units" />
+            <SingleMetricLineChart label="Incoming Units" monthlyValues={data.incomingByMonth} color="#8b5cf6" />
+          </div>
+          <div style={{ ...CARD }}>
+            <SectionHeader icon={<CircleArrowUp size={14} color="#10b981" />} iconBg="#10b98115" title="Outgoing Units" />
+            <SingleMetricLineChart label="Outgoing Units" monthlyValues={data.outgoingByMonth} color="#10b981" />
+          </div>
+          <div style={{ ...CARD }}>
+            <SectionHeader icon={<Users size={14} color="#0a4c86" />} iconBg="#0a4c8615" title="Accounts" subtitle="Active users" />
+            <SingleMetricLineChart label="Accounts" monthlyValues={data.accountsByMonth} color="#0a4c86" />
           </div>
         </div>
 
