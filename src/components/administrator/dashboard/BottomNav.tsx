@@ -66,8 +66,8 @@ const technicianMenuSections: MenuSection[] = [
   },
 ];
 
-// Default 4 menus (plus "More"): Dashboard, Submit Ticket, Assign, Resolved Tickets
-const adminPrimaryLabels      = ["Dashboard", "Submit Ticket", "Assign Job", "Resolved Tickets", "More"];
+// Default 4 menus (plus "More"): Dashboard, Assign Job, Incoming Units, Outgoing Units
+const adminPrimaryLabels      = ["Dashboard", "Assign Job", "Incoming Units", "Outgoing Units", "More"];
 const technicianPrimaryLabels = ["Dashboard", "My Tickets",    "Incoming Units", "Outgoing Units", "More"];
 
 type BottomNavProps = {

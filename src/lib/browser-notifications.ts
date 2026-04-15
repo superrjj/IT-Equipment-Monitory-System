@@ -1,7 +1,3 @@
-/**
- * OS/browser notifications for new `app_notifications` rows (Web Notifications API).
- * Permission is requested when the user opens the bell (user gesture).
- */
 
 /** Served from `public/masaya-sa-tarlac-city-logo.png` (Vite root URL). */
 export const BROWSER_NOTIFICATION_ICON_PATH = "/masaya-sa-tarlac-city-logo.png";
