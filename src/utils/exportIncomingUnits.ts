@@ -20,8 +20,8 @@ export type IncomingUnitRow = {
   updated_at: string;
 };
 
-export type DeptMap = Record<string, string>;
-export type UserMap = Record<string, string>; // id → full_name
+/** department_id → display label (e.g. "Parent Office - Sub branch") */
+export type DeptDisplayMap = Record<string, string>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ORG_NAME        = "Tarlac City Government";
@@ -67,8 +67,7 @@ const filterByMonth = (rows: IncomingUnitRow[], monthFilter: string | null): Inc
 // ═══════════════════════════════════════════════════════════════════════════════
 export function exportIncomingUnitsToExcel(
   rows: IncomingUnitRow[],
-  depts: DeptMap,
-  userMap: UserMap,
+  deptDisplayMap: DeptDisplayMap,
   monthFilter: string | null = null
 ): void {
   const filtered = filterByMonth(rows, monthFilter);
@@ -102,9 +101,8 @@ export function exportIncomingUnitsToExcel(
     { label: "Date Received",    wch: 18 },
     { label: "Unit",             wch: 30 },
     { label: "Name of Employee", wch: 26 },
-    { label: "Office",           wch: 30 },
-    { label: "Person In Charge", wch: 26 },
-    { label: "Problem / Issue",  wch: 44 },
+    { label: "Office",           wch: 40 },
+    { label: "Problem / Issue",  wch: 48 },
   ];
   const NC = COLS.length;
 
@@ -130,9 +128,8 @@ export function exportIncomingUnitsToExcel(
   ]);
   aoa.push([
     C(`Period: ${monthLabel}`, font(true, BRAND_HEX, 10), fill(LIGHT_HEX), align("center"), noBorder),
-    ...Array(1).fill(blank(fill(LIGHT_HEX))),
-    C(`Total Records: ${filtered.length}`, font(true, BRAND_HEX, 10), fill(LIGHT_HEX), align("center"), noBorder),
     blank(fill(LIGHT_HEX)),
+    C(`Total Records: ${filtered.length}`, font(true, BRAND_HEX, 10), fill(LIGHT_HEX), align("center"), noBorder),
     blank(fill(LIGHT_HEX)),
     C(`Generated: ${todayLong()}`, font(false, "475569", 10), fill(LIGHT_HEX), align("right"), noBorder),
   ]);
@@ -148,8 +145,7 @@ export function exportIncomingUnitsToExcel(
       C(fmtDate(r.date_received),                             font(false, "475569", 10), fi, align("center"), thin),
       C(r.unit_name,                                          font(true,  BRAND_HEX, 10), fi, align("left"),   thin),
       C(r.reported_by,                                        font(false, "1F2937", 10), fi, align("left"),   thin),
-      C(depts[r.department_id ?? ""] ?? "—",                 font(false, "1F2937", 10), fi, align("left"),   thin),
-      C(userMap[r.received_by_user_id ?? ""] ?? "—",         font(false, "1F2937", 10), fi, align("left"),   thin),
+      C(deptDisplayMap[r.department_id ?? ""] ?? "—",         font(false, "1F2937", 10), fi, align("left"),   thin),
       C(r.issue_description || "—",                          font(false, "1F2937", 10), fi, align("left"),   thin),
     ]);
   });
@@ -164,7 +160,6 @@ export function exportIncomingUnitsToExcel(
     { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } },
     { s: { r: 5, c: 2 }, e: { r: 5, c: 3 } },
     { s: { r: 5, c: 4 }, e: { r: 5, c: 4 } },
-    { s: { r: 5, c: NC - 1 }, e: { r: 5, c: NC - 1 } },
     { s: { r: 6, c: 0 }, e: { r: 6, c: NC - 1 } },
   ];
   ws["!rows"] = [
@@ -186,8 +181,7 @@ export function exportIncomingUnitsToExcel(
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function exportIncomingUnitsToWord(
   rows: IncomingUnitRow[],
-  depts: DeptMap,
-  userMap: UserMap,
+  deptDisplayMap: DeptDisplayMap,
   monthFilter: string | null = null
 ): Promise<void> {
   const filtered = filterByMonth(rows, monthFilter);
@@ -217,9 +211,9 @@ export async function exportIncomingUnitsToWord(
 
   // ── Layout ──────────────────────────────────────────────────────────────────
   // Landscape A4 — total usable width at 600 twip margins = 15840 twips
-  // Columns: Date | Unit | Name of Employee | Office | Person In Charge | Problem/Issue
+  // Columns: Date | Unit | Name of Employee | Office | Problem/Issue
   const TABLE_W = 15840;
-  const COL_W   = [1600, 2000, 2400, 3900, 2400, 2800];
+  const COL_W   = [1600, 2000, 2600, 4200, 5440];
 
   // ── Cell builders ───────────────────────────────────────────────────────────
   const hCell = (text: string, width: number) =>
@@ -378,8 +372,7 @@ export async function exportIncomingUnitsToWord(
                 hCell("Unit",             COL_W[1]),
                 hCell("Name of Employee", COL_W[2]),
                 hCell("Office",           COL_W[3]),
-                hCell("Person In Charge", COL_W[4]),
-                hCell("Problem / Issue",  COL_W[5]),
+                hCell("Problem / Issue",  COL_W[4]),
               ],
             }),
             // ── Data rows ────────────────────────────────────────────────────
@@ -389,9 +382,8 @@ export async function exportIncomingUnitsToWord(
                   dCell(fmtDate(r.date_received),                         COL_W[0], { center: true }),
                   dCell(r.unit_name,                                       COL_W[1], { bold: false, color: BRAND_HEX, center: true }),
                   dCell(r.reported_by,                                     COL_W[2], { center: true}),
-                  dCell(depts[r.department_id ?? ""]         ?? "—",      COL_W[3], { center: true}),
-                  dCell(userMap[r.received_by_user_id ?? ""] ?? "—",      COL_W[4], {center: true}),
-                  dCell(r.issue_description || "—",                        COL_W[5], {center: true}),
+                  dCell(deptDisplayMap[r.department_id ?? ""] ?? "—",      COL_W[3], { center: true}),
+                  dCell(r.issue_description || "—",                        COL_W[4], {center: true}),
                 ],
               })
             ),

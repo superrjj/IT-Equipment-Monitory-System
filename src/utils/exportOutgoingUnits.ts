@@ -19,8 +19,8 @@ export type OutgoingUnitRow = {
   updated_at: string;
 };
 
-export type DeptMap = Record<string, string>;
-export type UserMap = Record<string, string>; // id → full_name
+/** department_id → display label (e.g. "Parent Office - Sub branch") */
+export type DeptDisplayMap = Record<string, string>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ORG_NAME        = "Tarlac City Government";
@@ -66,8 +66,7 @@ const filterByMonth = (rows: OutgoingUnitRow[], monthFilter: string | null): Out
 // ═══════════════════════════════════════════════════════════════════════════════
 export function exportOutgoingUnitsToExcel(
   rows: OutgoingUnitRow[],
-  depts: DeptMap,
-  userMap: UserMap,
+  deptDisplayMap: DeptDisplayMap,
   monthFilter: string | null = null
 ): void {
   const filtered = filterByMonth(rows, monthFilter);
@@ -101,9 +100,8 @@ export function exportOutgoingUnitsToExcel(
     { label: "Date Released",    wch: 18 },
     { label: "Unit",             wch: 30 },
     { label: "Name of Employee", wch: 26 },
-    { label: "Office",           wch: 30 },
-    { label: "Released By", wch: 26 },
-    { label: "Release Notes",  wch: 44 },
+    { label: "Office",           wch: 40 },
+    { label: "Release Notes",  wch: 48 },
   ];
   const NC = COLS.length;
 
@@ -124,14 +122,13 @@ export function exportOutgoingUnitsToExcel(
   ]);
   aoa.push(Array(NC).fill(blank(fill("E2E8F0"))));
   aoa.push([
-    C("INCOMING UNITS LOG", font(true, WHITE_HEX, 14), fill(ACCENT_HEX), align("center"), noBorder),
+    C("OUTGOING UNITS LOG", font(true, WHITE_HEX, 14), fill(ACCENT_HEX), align("center"), noBorder),
     ...Array(NC - 1).fill(C("", font(true, WHITE_HEX, 14), fill(ACCENT_HEX), align("center"), noBorder)),
   ]);
   aoa.push([
     C(`Period: ${monthLabel}`, font(true, BRAND_HEX, 10), fill(LIGHT_HEX), align("center"), noBorder),
-    ...Array(1).fill(blank(fill(LIGHT_HEX))),
-    C(`Total Records: ${filtered.length}`, font(true, BRAND_HEX, 10), fill(LIGHT_HEX), align("center"), noBorder),
     blank(fill(LIGHT_HEX)),
+    C(`Total Records: ${filtered.length}`, font(true, BRAND_HEX, 10), fill(LIGHT_HEX), align("center"), noBorder),
     blank(fill(LIGHT_HEX)),
     C(`Generated: ${todayLong()}`, font(false, "475569", 10), fill(LIGHT_HEX), align("right"), noBorder),
   ]);
@@ -147,8 +144,7 @@ export function exportOutgoingUnitsToExcel(
       C(fmtDate(r.date_released),                             font(false, "475569", 10), fi, align("center"), thin),
       C(r.unit_name,                                          font(true,  BRAND_HEX, 10), fi, align("left"),   thin),
       C(r.collected_by,                                        font(false, "1F2937", 10), fi, align("left"),   thin),
-      C(depts[r.department_id ?? ""] ?? "—",                 font(false, "1F2937", 10), fi, align("left"),   thin),
-      C(userMap[r.released_by_user_id ?? ""] ?? "—",         font(false, "1F2937", 10), fi, align("left"),   thin),
+      C(deptDisplayMap[r.department_id ?? ""] ?? "—",          font(false, "1F2937", 10), fi, align("left"),   thin),
       C(r.release_notes || "—",                          font(false, "1F2937", 10), fi, align("left"),   thin),
     ]);
   });
@@ -163,7 +159,6 @@ export function exportOutgoingUnitsToExcel(
     { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } },
     { s: { r: 5, c: 2 }, e: { r: 5, c: 3 } },
     { s: { r: 5, c: 4 }, e: { r: 5, c: 4 } },
-    { s: { r: 5, c: NC - 1 }, e: { r: 5, c: NC - 1 } },
     { s: { r: 6, c: 0 }, e: { r: 6, c: NC - 1 } },
   ];
   ws["!rows"] = [
@@ -173,10 +168,10 @@ export function exportOutgoingUnitsToExcel(
   ];
   ws["!cols"] = COLS.map(({ wch }) => ({ wch }));
 
-  XLSX.utils.book_append_sheet(wb, ws, "Incoming Units");
+  XLSX.utils.book_append_sheet(wb, ws, "Outgoing Units");
 
   const suffix = monthFilter ? `_${monthFilter}` : `_${todayLong().replace(/\//g, "-")}`;
-  const filename = `Incoming_Units_Log${suffix}.xlsx`;
+  const filename = `Outgoing_Units_Log${suffix}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
@@ -185,8 +180,7 @@ export function exportOutgoingUnitsToExcel(
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function exportOutgoingUnitsToWord(
   rows: OutgoingUnitRow[],
-  depts: DeptMap,
-  userMap: UserMap,
+  deptDisplayMap: DeptDisplayMap,
   monthFilter: string | null = null
 ): Promise<void> {
   const filtered = filterByMonth(rows, monthFilter);
@@ -216,9 +210,9 @@ export async function exportOutgoingUnitsToWord(
 
   // ── Layout ──────────────────────────────────────────────────────────────────
   // Landscape A4 — total usable width at 600 twip margins = 15840 twips
-  // Columns: Date | Unit | Name of Employee | Office | Person In Charge | Problem/Issue
+  // Columns: Date | Unit | Name of Employee | Office | Release Notes
   const TABLE_W = 15840;
-  const COL_W   = [1600, 2000, 2400, 3900, 2400, 2800];
+  const COL_W   = [1600, 2000, 2600, 4200, 5440];
 
   // ── Cell builders ───────────────────────────────────────────────────────────
   const hCell = (text: string, width: number) =>
@@ -337,7 +331,7 @@ export async function exportOutgoingUnitsToWord(
         spacing: { after: 180 },
         children: [
           new TextRun({
-            text: `No incoming units recorded${monthFilter ? ` for ${monthLabel}` : ""}.`,
+            text: `No outgoing units recorded${monthFilter ? ` for ${monthLabel}` : ""}.`,
             italics: true, size: 18, color: "9CA3AF", font: "Poppins",
           }),
         ],
@@ -377,8 +371,7 @@ export async function exportOutgoingUnitsToWord(
                 hCell("Unit",             COL_W[1]),
                 hCell("Name of Employee", COL_W[2]),
                 hCell("Office",           COL_W[3]),
-                hCell("Released By", COL_W[4]),
-                hCell("Release Notes",  COL_W[5]),
+                hCell("Release Notes",  COL_W[4]),
               ],
             }),
             // ── Data rows ────────────────────────────────────────────────────
@@ -388,9 +381,8 @@ export async function exportOutgoingUnitsToWord(
                   dCell(fmtDate(r.date_released),                         COL_W[0], { center: true }),
                   dCell(r.unit_name,                                       COL_W[1], { bold: false, color: BRAND_HEX, center: true }),
                   dCell(r.collected_by,                                     COL_W[2], { center: true}),
-                  dCell(depts[r.department_id ?? ""]         ?? "—",      COL_W[3], { center: true}),
-                  dCell(userMap[r.released_by_user_id ?? ""] ?? "—",      COL_W[4], {center: true}),
-                  dCell(r.release_notes || "—",                        COL_W[5], {center: true}),
+                  dCell(deptDisplayMap[r.department_id ?? ""] ?? "—",      COL_W[3], { center: true}),
+                  dCell(r.release_notes || "—",                        COL_W[4], {center: true}),
                 ],
               })
             ),

@@ -196,18 +196,6 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     return m;
   }, [itStaff]);
 
-  const deptStrMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    departments.forEach(d => { m[d.id] = d.name; });
-    return m;
-  }, [departments]);
-
-  const userStrMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    itStaff.forEach(u => { m[u.id] = u.full_name; });
-    return m;
-  }, [itStaff]);
-
   const deptMap = useMemo(() => {
     const m: Record<string, DepartmentOption> = {};
     departments.forEach(d => { m[d.id] = d; });
@@ -449,7 +437,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     if (rows.length === 0) { showToast("No records to export.", "error"); return; }
     setExporting("excel");
     try {
-      exportIncomingUnitsToExcel(rows, deptStrMap, userStrMap, resolvedMonthFilter);
+      exportIncomingUnitsToExcel(rows, deptDisplayMap, resolvedMonthFilter);
       showToast(
         resolvedMonthFilter
           ? `Excel exported for ${fmtMonthLabel(resolvedMonthFilter)}.`
@@ -468,7 +456,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     if (rows.length === 0) { showToast("No records to export.", "error"); return; }
     setExporting("word");
     try {
-      await exportIncomingUnitsToWord(rows, deptStrMap, userStrMap, resolvedMonthFilter);
+      await exportIncomingUnitsToWord(rows, deptDisplayMap, resolvedMonthFilter);
       showToast(
         resolvedMonthFilter
           ? `Word document exported for ${fmtMonthLabel(resolvedMonthFilter)}.`

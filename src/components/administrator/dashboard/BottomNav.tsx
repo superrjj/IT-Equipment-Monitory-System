@@ -31,7 +31,7 @@ const adminMenuSections: MenuSection[] = [
     heading: "Management",
     items: [
       { label: "Departments",   icon: Building2 },
-      { label: "User Accounts", icon: User      },
+      { label: "Users", icon: User      },
     ],
   },
   {

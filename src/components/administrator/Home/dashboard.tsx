@@ -1021,6 +1021,19 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           <KPI label="Outgoing Units"     value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#b91c1c" delay={300} sub="Decommissioned"    onClick={() => onNavigate("Outgoing Units")} />
         </div>
 
+        {/* ── Leaderboard ── */}
+        <div style={{ ...CARD, marginBottom: "1rem", paddingBottom: "2rem" }}>
+          <SectionHeader
+            icon={<Trophy size={14} color="#f59e0b" />}
+            iconBg="#f59e0b15"
+            title="Technician Leaderboard"
+            right={<span style={{ fontSize: 12, fontWeight: 700, color: "#0a4c86", cursor: "pointer" }}>View All Performance</span>}
+          />
+          {data.techLeaderboard.length === 0
+            ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No technician data yet.</p>
+            : <CardsView techs={data.techLeaderboard} />}
+        </div>
+
         {/* ── Mid row ── */}
         <div className="dash-mid-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "1rem", marginBottom: "1rem" }}>
 
@@ -1098,18 +1111,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </div>
         </div>
 
-        {/* ── Leaderboard ── */}
-        <div style={{ ...CARD }}>
-          <SectionHeader
-            icon={<Trophy size={14} color="#f59e0b" />}
-            iconBg="#f59e0b15"
-            title="Technician Leaderboard"
-            right={<span style={{ fontSize: 12, fontWeight: 700, color: "#0a4c86", cursor: "pointer" }}>View All Performance</span>}
-          />
-          {data.techLeaderboard.length === 0
-            ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No technician data yet.</p>
-            : <CardsView techs={data.techLeaderboard} />}
-        </div>
+
 
       </div>
     </>
@@ -1238,7 +1240,7 @@ const Dashboard: React.FC = () => {
       case "Incoming Units":      return <IncomingUnits readOnly={isTechnician} />;
       case "Outgoing Units":      return <OutgoingUnits readOnly={isTechnician} />;
       case "Departments":         return <Departments />;
-      case "User Accounts":       return isAdmin ? <UserAccounts /> : dashHomeNode.current;
+      case "Users":       return isAdmin ? <UserAccounts /> : dashHomeNode.current;
       case "Reports & Analytics": return isAdmin ? <ReportAnalytics /> : dashHomeNode.current;
       case "Activity Log":        return <ActivityLogPanel isAdmin={isAdmin} />;
       default:                    return dashHomeNode.current;
