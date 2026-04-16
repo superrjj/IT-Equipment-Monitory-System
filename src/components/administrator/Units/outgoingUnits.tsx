@@ -75,17 +75,17 @@ function validateForm(form: FormState): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!form.date_released) {
-    errors.date_released = "Date released is required.";
+    errors.date_released = "Release date is required.";
   } else {
     const today = new Date().toISOString().slice(0, 10);
     if (form.date_released !== today)
-      errors.date_released = "Date released must be today's date.";
+      errors.date_released = "Release date must be today or earlier.";
   }
 
   const unit = form.unit_name.trim();
-  if (!unit) errors.unit_name = "Unit name is required.";
-  else if (unit.length < 2) errors.unit_name = "Unit name must be at least 2 characters.";
-  else if (unit.length > 200) errors.unit_name = "Unit name must be 200 characters or less.";
+  if (!unit) errors.unit_name = "Unit is required.";
+  else if (unit.length < 2) errors.unit_name = "Unit must be at least 2 characters.";
+  else if (unit.length > 200) errors.unit_name = "Unit must be 200 characters or less.";
 
   const collector = form.collected_by.trim();
   if (!collector) errors.collected_by = "Employee name is required.";
