@@ -57,6 +57,11 @@ type FieldErrors = Partial<Record<keyof FormState, string>>;
 const BRAND = "#0D518C";
 const GREEN = "#16a34a";
 const PAGE_SIZE = 10;
+const EMPLOYEE_NAME_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/;
+
+function makeOutgoingMatchKey(unitName: string, departmentId?: string | null): string {
+  return `${unitName.trim().toLowerCase()}::${(departmentId ?? "").trim().toLowerCase()}`;
+}
 
 function sanitize(val: string): string {
   return val
@@ -84,6 +89,7 @@ function validateForm(form: FormState): FieldErrors {
 
   const collector = form.collected_by.trim();
   if (!collector) errors.collected_by = "Employee name is required.";
+  else if (!EMPLOYEE_NAME_REGEX.test(collector)) errors.collected_by = "Employee name must contain letters only.";
   else if (collector.length > 100) errors.collected_by = "Must be 100 characters or less.";
 
   if (!form.department_id.trim())
@@ -220,7 +226,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   const outgoingKeys = useMemo(() => {
     const s = new Set<string>();
     rows.forEach((r) => {
-      const key = `${r.unit_name}::${r.collected_by}`.toLowerCase();
+      const key = makeOutgoingMatchKey(r.unit_name, r.department_id);
       s.add(key);
     });
     return s;
@@ -228,12 +234,12 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
 
   const availableIncomingSources = useMemo(() => {
     return incomingSources.filter((src) => {
-      const key = `${src.unit_name}::${src.reported_by}`.toLowerCase();
+      const key = makeOutgoingMatchKey(src.unit_name, src.department_id);
       const isCurrentEditSelection =
         modalMode === "edit" &&
         !!selected &&
         src.unit_name === selected.unit_name &&
-        src.reported_by === selected.collected_by;
+        (src.department_id ?? "") === (selected.department_id ?? "");
       return isCurrentEditSelection || !outgoingKeys.has(key);
     });
   }, [incomingSources, outgoingKeys, modalMode, selected]);
@@ -342,7 +348,11 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
       release_notes:       r.release_notes,
       department_id:       r.department_id ?? "",
     });
-    const match = incomingSources.find(src => src.unit_name === r.unit_name && src.reported_by === r.collected_by);
+    const match = incomingSources.find(
+      src =>
+        makeOutgoingMatchKey(src.unit_name, src.department_id) ===
+        makeOutgoingMatchKey(r.unit_name, r.department_id)
+    );
     setSelectedIncomingId(match?.id ?? "");
     setModalMode("edit");
   };
@@ -854,12 +864,17 @@ const OutgoingRowSkeleton: React.FC = () => (
                   <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                     <Building2 size={13} color="#475569" /> Office / Department <span style={{ color: "#dc2626" }}>*</span>
                   </label>
-                  <select value={form.department_id}
-                    onChange={e => { setForm(f => ({ ...f, department_id: e.target.value })); clearError("department_id"); }}
-                    style={{ ...inputStyle(!!fieldErrors.department_id), cursor: "pointer" }}>
-                    <option value="">— Select department —</option>
-                    {departments.map(d => <option key={d.id} value={d.id}>{deptDisplayMap[d.id] ?? d.name}</option>)}
-                  </select>
+                  <input
+                    value={form.department_id ? (deptDisplayMap[form.department_id] ?? "—") : ""}
+                    readOnly
+                    placeholder="Auto-filled from selected incoming unit"
+                    style={{
+                      ...inputStyle(!!fieldErrors.department_id),
+                      background: "#f1f5f9",
+                      color: "#64748b",
+                      cursor: "not-allowed",
+                    }}
+                  />
                   <FieldError msg={fieldErrors.department_id} />
                 </div>
 

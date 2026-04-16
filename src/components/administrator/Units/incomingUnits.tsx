@@ -56,6 +56,7 @@ type FieldErrors = Partial<Record<keyof FormState, string>>;
 const BRAND     = "#0D518C";
 const GREEN     = "#16a34a";
 const PAGE_SIZE = 10;
+const EMPLOYEE_NAME_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/;
 
 function sanitize(val: string): string {
   return val
@@ -83,6 +84,7 @@ function validateForm(form: FormState): FieldErrors {
 
   const reporter = form.reported_by.trim();
   if (!reporter)                errors.reported_by = "Employee name is required.";
+  else if (!EMPLOYEE_NAME_REGEX.test(reporter)) errors.reported_by = "Employee name must contain letters only.";
   else if (reporter.length > 100) errors.reported_by = "Must be 100 characters or less.";
 
   const phone = form.contact_number.trim();
