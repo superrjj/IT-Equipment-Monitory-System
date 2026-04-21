@@ -17,7 +17,7 @@ import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 type SortField = "status" | "date_submitted" | "created_at" | "title";
 type SortDir = "asc" | "desc";
-type ModalMode = "assign" | "view" | null;
+type ModalMode = "assign" | "bulk_assign" | "view" | null;
 
 /** Open ticket row from `file_reports` (non-resolved, non-archived). */
 type TicketRow = {
@@ -36,11 +36,26 @@ type TicketRow = {
   technician_names?: string[];
 };
 
-type UserOption = { id: string; full_name: string; role: string };
+type UserOption = { id: string; full_name: string; role: string; avatar_url?: string | null };
 type DepartmentOption = { id: string; name: string };
 
 const BRAND = "#0a4c86";
 const PAGE_SIZE = 10;
+
+const getAvatarUrl = (u: UserOption): string | null => {
+  if (u.avatar_url) return u.avatar_url;
+  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/profile-avatar/${u.id}/avatar.jpg`;
+};
+
+const initials = (name: string): string =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? "")
+    .join("") || "?";
 
 function parseAssignedTo(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
@@ -204,6 +219,38 @@ const TechnicianPicker: React.FC<{
                 </svg>
               )}
             </span>
+            <span
+              title={u.full_name}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                border: "1px solid #dbe3ef",
+                background: "#dbeafe",
+                color: BRAND,
+                fontSize: 10,
+                fontWeight: 700,
+                overflow: "hidden",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {getAvatarUrl(u) ? (
+                <img
+                  src={getAvatarUrl(u) ?? ""}
+                  alt={u.full_name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                    const next = e.currentTarget.nextElementSibling as HTMLSpanElement | null;
+                    if (next) next.style.display = "inline";
+                  }}
+                />
+              ) : null}
+              <span style={{ display: getAvatarUrl(u) ? "none" : "inline" }}>{initials(u.full_name)}</span>
+            </span>
             <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
               {u.full_name}
             </span>
@@ -215,19 +262,79 @@ const TechnicianPicker: React.FC<{
   );
 };
 
-const TechnicianChips: React.FC<{ names: string[] }> = ({ names }) => {
-  if (!names || names.length === 0)
+const TechnicianAvatarStack: React.FC<{
+  ids: string[];
+  userMap: Record<string, UserOption>;
+  compact?: boolean;
+}> = ({ ids, userMap, compact = false }) => {
+  if (!ids || ids.length === 0)
     return <span style={{ color: "#cbd5e1" }}>—</span>;
+
+  const users = ids.map(id => userMap[id]).filter(Boolean) as UserOption[];
+  const shown = users.slice(0, compact ? 3 : 5);
+  const extra = users.length - shown.length;
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-      {names.map((name, i) => (
-        <span key={i} style={{
-          fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
-          background: "rgba(10,76,134,0.07)", color: BRAND, whiteSpace: "nowrap",
-        }}>
-          {name}
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: compact ? "nowrap" : "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", marginRight: 2 }}>
+        {shown.map((u, i) => (
+          <span
+            key={u.id}
+            title={u.full_name}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: "50%",
+              border: "1.5px solid #fff",
+              background: "#dbeafe",
+              color: BRAND,
+              fontSize: 10,
+              fontWeight: 700,
+              marginLeft: i === 0 ? 0 : -8,
+              overflow: "hidden",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 0 0 1px #cbd5e1",
+            }}
+          >
+            {getAvatarUrl(u) ? (
+              <img
+                src={getAvatarUrl(u) ?? ""}
+                alt={u.full_name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                  const next = e.currentTarget.nextElementSibling as HTMLSpanElement | null;
+                  if (next) next.style.display = "inline";
+                }}
+              />
+            ) : null}
+            <span style={{ display: getAvatarUrl(u) ? "none" : "inline" }}>{initials(u.full_name)}</span>
+          </span>
+        ))}
+      </div>
+      {shown[0] && (
+        <span
+          style={{
+            fontSize: 12,
+            color: "#334155",
+            fontWeight: 600,
+            maxWidth: compact ? 120 : "none",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={shown[0].full_name}
+        >
+          {shown[0].full_name}
         </span>
-      ))}
+      )}
+      {extra > 0 && (
+        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: `${BRAND}12`, color: BRAND }}>
+          +{extra}
+        </span>
+      )}
     </div>
   );
 };
@@ -244,6 +351,7 @@ const Repairs: React.FC = () => {
   const [page, setPage] = useState(1);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selected, setSelected] = useState<TicketRow | null>(null);
+  const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [assignIds, setAssignIds] = useState<string[]>([]);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -295,7 +403,7 @@ const Repairs: React.FC = () => {
     const [{ data: ua }, { data: depts }] = await Promise.all([
       supabase
         .from("user_accounts")
-        .select("id, full_name, role")
+        .select("id, full_name, role, avatar_url")
         .eq("is_active", true)
         .eq("is_archived", false)
         .eq("role", "IT Technician")
@@ -398,8 +506,29 @@ const Repairs: React.FC = () => {
     setModalMode("assign");
   };
 
+  const openBulkAssign = () => {
+    const ids = selectedTicketIds.filter(id => {
+      const found = tickets.find(t => t.id === id);
+      return !!found && isUnassignedTicket(found);
+    });
+    if (ids.length === 0) {
+      showToast("Select at least one unassigned ticket.", "error");
+      return;
+    }
+    setSelected(null);
+    setAssignIds([]);
+    setFormError("");
+    setModalMode("bulk_assign");
+  };
+
   const handleAssignSubmit = async () => {
-    if (!selected) return;
+    const targets =
+      modalMode === "bulk_assign"
+        ? tickets.filter(t => selectedTicketIds.includes(t.id) && isUnassignedTicket(t))
+        : selected
+          ? [selected]
+          : [];
+    if (targets.length === 0) return;
     if (assignIds.length === 0) {
       setFormError("Please assign at least one technician.");
       return;
@@ -407,11 +536,15 @@ const Repairs: React.FC = () => {
     setFormError("");
     setSubmitting(true);
 
-    const { error } = await supabase.from("file_reports").update({
+    const updateBuilder = supabase.from("file_reports").update({
       assigned_to: assignIds,
       status: "Assigned",
       updated_at: new Date().toISOString(),
-    }).eq("id", selected.id);
+    });
+    const { error } =
+      modalMode === "bulk_assign"
+        ? await updateBuilder.in("id", targets.map(t => t.id))
+        : await updateBuilder.eq("id", targets[0].id);
 
     if (error) {
       showToast(friendlyError(error.message), "error");
@@ -419,30 +552,58 @@ const Repairs: React.FC = () => {
       return;
     }
 
-    await notifyTicketAssignees(supabase, assignIds, {
-      ticketId: selected.id,
-      ticketTitle: selected.title,
-      ticketNumber: selected.ticket_number ?? null,
-      actorUserId: localStorage.getItem("session_user_id"),
-    });
+    await Promise.all(
+      targets.map(async (t) => {
+        await notifyTicketAssignees(supabase, assignIds, {
+          ticketId: t.id,
+          ticketTitle: t.title,
+          ticketNumber: t.ticket_number ?? null,
+          actorUserId: localStorage.getItem("session_user_id"),
+        });
+        await insertActivityLog(supabase, {
+          actorUserId: getSessionUserId(),
+          action: "ticket_updated",
+          entityType: "file_report",
+          entityId: t.id,
+          meta: {
+            source: modalMode === "bulk_assign" ? "assign_jobs_bulk" : "assign_jobs",
+            ticket_number: t.ticket_number ?? null,
+            assignees: assignIds.length,
+          },
+        });
+      })
+    );
 
-    await insertActivityLog(supabase, {
-      actorUserId: getSessionUserId(),
-      action: "ticket_updated",
-      entityType: "file_report",
-      entityId: selected.id,
-      meta: {
-        source: "assign_jobs",
-        ticket_number: selected.ticket_number ?? null,
-        assignees: assignIds.length,
-      },
-    });
-
-    showToast("Technicians assigned successfully.", "success");
+    showToast(
+      modalMode === "bulk_assign"
+        ? `Assigned technicians to ${targets.length} tickets.`
+        : "Technicians assigned successfully.",
+      "success"
+    );
     dispatchNavBadgesChanged();
     setSubmitting(false);
+    if (modalMode === "bulk_assign") setSelectedTicketIds([]);
     closeModal();
     void fetchTickets();
+  };
+
+  const paginatedUnassignedIds = useMemo(
+    () => paginated.filter(isUnassignedTicket).map(t => t.id),
+    [paginated]
+  );
+  const allVisibleSelected =
+    paginatedUnassignedIds.length > 0 &&
+    paginatedUnassignedIds.every(id => selectedTicketIds.includes(id));
+
+  const toggleSelectVisible = () => {
+    setSelectedTicketIds(prev => {
+      if (allVisibleSelected) return prev.filter(id => !paginatedUnassignedIds.includes(id));
+      return Array.from(new Set([...prev, ...paginatedUnassignedIds]));
+    });
+  };
+
+  const toggleTicketSelection = (id: string) => {
+    setSelectedTicketIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
   const inputStyle: React.CSSProperties = {
@@ -544,6 +705,24 @@ const Repairs: React.FC = () => {
               <option value="Assigned">Assigned</option>
               <option value="In Progress">In Progress</option>
             </select>
+            <button
+              type="button"
+              onClick={openBulkAssign}
+              disabled={selectedTicketIds.length === 0}
+              style={{
+                padding: "0.45rem 0.8rem",
+                borderRadius: 8,
+                border: `1px solid ${BRAND}`,
+                background: selectedTicketIds.length === 0 ? "#e2e8f0" : BRAND,
+                color: selectedTicketIds.length === 0 ? "#64748b" : "#fff",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: selectedTicketIds.length === 0 ? "not-allowed" : "pointer",
+                fontFamily: "'Poppins', sans-serif",
+              }}
+            >
+              Bulk assign ({selectedTicketIds.length})
+            </button>
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
               Page {page}/{totalPages}
             </div>
@@ -553,6 +732,16 @@ const Repairs: React.FC = () => {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ padding: "0.7rem 1rem", width: 38 }}>
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleSelectVisible}
+                      disabled={paginatedUnassignedIds.length === 0}
+                      style={{ cursor: paginatedUnassignedIds.length === 0 ? "not-allowed" : "pointer" }}
+                      title="Select all visible unassigned tickets"
+                    />
+                  </th>
                   {([
                     { label: "Ticket No.",     field: null },
                     { label: "Issue",          field: "title"          as SortField },
@@ -578,12 +767,22 @@ const Repairs: React.FC = () => {
               </thead>
               <tbody>
                 {paginated.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No tickets to assign.</td></tr>
+                  <tr><td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No tickets to assign.</td></tr>
                 ) : paginated.map(t => {
                   const unassigned = isUnassignedTicket(t);
                   const statusLabel = displayTicketRowStatus(t);
+                  const checked = selectedTicketIds.includes(t.id);
                   return (
                     <tr key={t.id} className="rp-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
+                      <td style={{ padding: "0.75rem 1rem", width: 38 }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!unassigned}
+                          onChange={() => toggleTicketSelection(t.id)}
+                          style={{ cursor: unassigned ? "pointer" : "not-allowed" }}
+                        />
+                      </td>
                       <td style={{ padding: "0.75rem 1rem" }}>
                         {t.ticket_number
                           ? <span style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 700, background: "rgba(10,76,134,0.07)", color: BRAND, padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
@@ -600,7 +799,7 @@ const Repairs: React.FC = () => {
                         {deptMap[t.department_id] ?? "—"}
                       </td>
                       <td style={{ padding: "0.75rem 1rem", maxWidth: 200 }}>
-                        <TechnicianChips names={t.technician_names ?? []} />
+                        <TechnicianAvatarStack ids={parseAssignedTo(t.assigned_to)} userMap={userMap} compact />
                       </td>
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <TicketStatusBadge label={statusLabel} />
@@ -690,7 +889,7 @@ const Repairs: React.FC = () => {
         </div>
 
         {/* Assign modal */}
-        {modalMode === "assign" && selected && (
+        {(modalMode === "assign" || modalMode === "bulk_assign") && (selected || modalMode === "bulk_assign") && (
           <div className="modal-overlay-rp" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
             <div className="modal-box-rp" style={{ background: "#fff", borderRadius: 18, padding: "1.6rem", width: "100%", maxWidth: 520, maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
@@ -700,16 +899,26 @@ const Repairs: React.FC = () => {
                 <button type="button" onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={18} /></button>
               </div>
 
-              <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Ticket</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  {selected.ticket_number && (
-                    <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: BRAND, background: "rgba(10,76,134,0.08)", padding: "2px 8px", borderRadius: 6 }}>{selected.ticket_number}</span>
-                  )}
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{selected.title}</span>
+              {modalMode === "assign" && selected && (
+                <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Ticket</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {selected.ticket_number && (
+                      <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: BRAND, background: "rgba(10,76,134,0.08)", padding: "2px 8px", borderRadius: 6 }}>{selected.ticket_number}</span>
+                    )}
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{selected.title}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>{selected.employee_name}</div>
                 </div>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>{selected.employee_name}</div>
-              </div>
+              )}
+              {modalMode === "bulk_assign" && (
+                <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Bulk assignment</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
+                    {selectedTicketIds.length} unassigned tickets selected
+                  </div>
+                </div>
+              )}
 
               <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
                 <Users size={13} color="#475569" /> IT Technician(s) <span style={{ color: "#dc2626" }}>*</span>
@@ -737,7 +946,7 @@ const Repairs: React.FC = () => {
                   Cancel
                 </button>
                 <button type="button" onClick={() => void handleAssignSubmit()} disabled={submitting} style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "'Poppins', sans-serif", opacity: submitting ? 0.7 : 1 }}>
-                  {submitting ? "Saving…" : "Save assignment"}
+                  {submitting ? "Saving…" : modalMode === "bulk_assign" ? "Assign selected tickets" : "Save assignment"}
                 </button>
               </div>
             </div>
@@ -779,11 +988,7 @@ const Repairs: React.FC = () => {
                 <div className="rp-detail-row">
                   <span className="rp-detail-label"><Users size={12} /> Technicians</span>
                   <div style={{ flex: 1 }}>
-                    <TechnicianChips names={
-                      parseAssignedTo(selected.assigned_to)
-                        .map(id => userMap[id]?.full_name)
-                        .filter(Boolean) as string[]
-                    } />
+                    <TechnicianAvatarStack ids={parseAssignedTo(selected.assigned_to)} userMap={userMap} />
                   </div>
                 </div>
                 <div className="rp-detail-row">
