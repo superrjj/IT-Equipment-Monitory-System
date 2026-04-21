@@ -56,7 +56,7 @@ type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 const BRAND = "#0D518C";
 const GREEN = "#16a34a";
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 const EMPLOYEE_NAME_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/;
 
 function makeOutgoingMatchKey(unitName: string, departmentId?: string | null): string {

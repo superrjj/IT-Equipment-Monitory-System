@@ -66,7 +66,7 @@ type FormErrors = {
 };
 
 const BRAND     = "#0D518C";
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 const MAX_ACTIVE_TICKETS = 1;
 
 const getAvatarUrl = (u: UserOption): string | null => {

@@ -55,7 +55,7 @@ type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 const BRAND     = "#0D518C";
 const GREEN     = "#16a34a";
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 
 function sanitize(val: string): string {
   return val

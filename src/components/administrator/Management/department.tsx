@@ -43,7 +43,7 @@ type DeptFormErrors = {
 };
 
 const brandBlue = "#0D518C";
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 6;
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 const TicketStatusBadge: React.FC<{ status: string }> = ({ status }) => {
