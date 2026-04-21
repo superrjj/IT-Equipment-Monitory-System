@@ -209,6 +209,68 @@ const css = `
   height: 1px; background: #f1f5f9; margin: 1.1rem 0;
 }
 
+.pm-crop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(15, 23, 42, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.pm-crop-modal {
+  width: 100%;
+  max-width: 520px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 1rem;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28), 0 2px 8px rgba(15,23,42,0.12);
+}
+.pm-crop-area {
+  width: 320px;
+  height: 320px;
+  margin: 0 auto;
+  border-radius: 12px;
+  background: #0f172a;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.pm-crop-area:active { cursor: grabbing; }
+.pm-crop-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pm-crop-mask::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 44%, rgba(15,23,42,0.55) 45%);
+}
+.pm-crop-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 0 0 999px rgba(15,23,42,0.45) inset;
+}
+.pm-crop-controls {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pm-crop-slider {
+  flex: 1;
+}
+
 .pm-field-group {
   display: flex; flex-direction: column; gap: 12px;
   width: 100%;
@@ -258,6 +320,7 @@ const css = `
 export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange }) => {
   const userId = getSessionUserId();
   const overlayRef = useRef<HTMLDivElement>(null);
+  const cropAreaRef = useRef<HTMLDivElement>(null);
 
   const [tab, setTab] = useState<Tab>("account");
   const [loading, setLoading] = useState(true);
@@ -266,6 +329,15 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const [form, setForm] = useState({ username: "", full_name: "", email: "" });
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarDirty, setAvatarDirty] = useState(false);
+  const [pendingAvatarBlob, setPendingAvatarBlob] = useState<Blob | null>(null);
+  const [cropSrc, setCropSrc] = useState("");
+  const [cropMeta, setCropMeta] = useState<{ w: number; h: number; baseScale: number } | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
@@ -310,6 +382,13 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
       email: row.email ?? "",
     });
     setAvatarUrl(row.avatar_url ? `${row.avatar_url}?t=${encodeURIComponent(row.updated_at ?? "")}` : "");
+    setAvatarDirty(false);
+    setPendingAvatarBlob(null);
+    setShowCropper(false);
+    setCropSrc("");
+    setCropMeta(null);
+    setCropOffset({ x: 0, y: 0 });
+    setCropZoom(1);
     localStorage.removeItem("session_user_avatar");
     setLoading(false);
   }, [userId]);
@@ -326,12 +405,100 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    return () => {
+      if (avatarUrl.startsWith("blob:")) URL.revokeObjectURL(avatarUrl);
+    };
+  }, [avatarUrl]);
+
+  const startDrag = (clientX: number, clientY: number) => {
+    dragStartRef.current = { x: clientX, y: clientY, ox: cropOffset.x, oy: cropOffset.y };
+    setDragging(true);
+  };
+  const onDragMove = (clientX: number, clientY: number) => {
+    if (!dragging) return;
+    const dx = clientX - dragStartRef.current.x;
+    const dy = clientY - dragStartRef.current.y;
+    setCropOffset({ x: dragStartRef.current.ox + dx, y: dragStartRef.current.oy + dy });
+  };
+  const stopDrag = () => setDragging(false);
+
+  const buildCroppedAvatarBlob = useCallback(async (): Promise<Blob | null> => {
+    if (!cropSrc) return null;
+    const img = new Image();
+    img.src = cropSrc;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to load selected image."));
+    });
+
+    const cropSize = 220;
+    const baseScale = cropMeta?.baseScale ?? Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight);
+    const scale = baseScale * cropZoom;
+
+    const sw = cropSize / scale;
+    const sh = cropSize / scale;
+    const sx = img.naturalWidth / 2 - sw / 2 - cropOffset.x / scale;
+    const sy = img.naturalHeight / 2 - sh / 2 - cropOffset.y / scale;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(256, 256, 256, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(
+      img,
+      sx,
+      sy,
+      sw,
+      sh,
+      0,
+      0,
+      512,
+      512
+    );
+    ctx.restore();
+
+    return await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/png", 0.95);
+    });
+  }, [cropMeta?.baseScale, cropSrc, cropZoom, cropOffset.x, cropOffset.y]);
+
+  const applyCrop = async () => {
+    try {
+      setUploadingAvatar(true);
+      const blob = await buildCroppedAvatarBlob();
+      if (!blob) {
+        setProfileError("Unable to crop image. Please try again.");
+        return;
+      }
+      if (avatarUrl.startsWith("blob:")) URL.revokeObjectURL(avatarUrl);
+      const preview = URL.createObjectURL(blob);
+      setAvatarUrl(preview);
+      setPendingAvatarBlob(blob);
+      setAvatarDirty(true);
+      setShowCropper(false);
+      setCropSrc("");
+      setCropMeta(null);
+      setCropOffset({ x: 0, y: 0 });
+      setCropZoom(1);
+      setProfileError("");
+    } catch {
+      setProfileError("Unable to crop image. Please try again.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   /* ── avatar upload ── */
   const handleAvatarFile = async (file: File) => {
-    if (!userId) {
-      showToast("No active session. Please sign in again.", "error");
-      return;
-    }
     const looksLikeImage =
       file.type.startsWith("image/")
       || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name);
@@ -343,42 +510,24 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     if (file.size > 25 * 1024 * 1024) { setProfileError("Image must be 25 MB or smaller."); return; }
     setProfileError("");
 
-    setUploadingAvatar(true);
-    try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${userId}/avatar.${ext}`;
-
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, file, { upsert: true, contentType: file.type || "image/*" });
-      if (upErr) {
-        setProfileError(`Upload failed: ${upErr.message}`);
-        showToast("Upload failed.", "error");
-        return;
-      }
-
-      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      const avatar_url = urlData.publicUrl;
-      const updated_at = new Date().toISOString();
-
-      const { error: dbErr } = await supabase
-        .from("user_accounts")
-        .update({ avatar_url, updated_at })
-        .eq("id", userId);
-      if (dbErr) {
-        setProfileError(`Failed to save avatar: ${dbErr.message}`);
-        showToast("Failed to save avatar.", "error");
-        return;
-      }
-
-      const fresh = `${avatar_url}?t=${encodeURIComponent(updated_at)}`;
-      setAvatarUrl(fresh);
-      setProfile((p) => (p ? { ...p, avatar_url, updated_at } : p));
-      onAvatarChange?.(fresh);
-      showToast("Profile picture updated.", "success");
-    } finally {
-      setUploadingAvatar(false);
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result ?? "");
+      const img = new Image();
+      img.onload = () => {
+        const baseScale = Math.max(220 / img.naturalWidth, 220 / img.naturalHeight);
+        setCropMeta({ w: img.naturalWidth, h: img.naturalHeight, baseScale });
+        setCropSrc(src);
+        setCropOffset({ x: 0, y: 0 });
+        setCropZoom(1);
+        setShowCropper(true);
+      };
+      img.onerror = () => {
+        setProfileError("Unable to read selected image.");
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
   };
 
   /* ── save profile ── */
@@ -411,12 +560,26 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
       return;
     }
 
-    const updatePayload: { email: string; username: string; full_name: string; updated_at: string } = {
+    const updatePayload: { email: string; username: string; full_name: string; updated_at: string; avatar_url?: string } = {
       email,
       username,
       full_name,
       updated_at: new Date().toISOString(),
     };
+
+    if (avatarDirty && pendingAvatarBlob) {
+      const path = `${userId}/avatar.png`;
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, pendingAvatarBlob, { upsert: true, contentType: "image/png" });
+      if (upErr) {
+        setProfileError(`Upload failed: ${upErr.message}`);
+        setSavingProfile(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      updatePayload.avatar_url = urlData.publicUrl;
+    }
 
     const { error } = await supabase
       .from("user_accounts")
@@ -442,6 +605,25 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
       meta: { email, username, full_name },
     });
     localStorage.removeItem("session_user_avatar");
+    if (avatarUrl.startsWith("blob:")) URL.revokeObjectURL(avatarUrl);
+    setAvatarDirty(false);
+    setPendingAvatarBlob(null);
+    setProfile((p) => (p ? { ...p, ...refreshed } : p));
+    setAvatarUrl(
+      refreshed.avatar_url
+        ? `${refreshed.avatar_url}?t=${encodeURIComponent(refreshed.updated_at ?? "")}`
+        : ""
+    );
+    setForm({
+      username: refreshed.username ?? "",
+      full_name: refreshed.full_name ?? "",
+      email: refreshed.email ?? "",
+    });
+    onAvatarChange?.(
+      refreshed.avatar_url
+        ? `${refreshed.avatar_url}?t=${encodeURIComponent(refreshed.updated_at ?? "")}`
+        : ""
+    );
     showToast("Profile saved.", "success");
     setSavingProfile(false);
   };
@@ -488,6 +670,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
     form.full_name.trim() !== (profile.full_name ?? "") ||
     form.email.trim() !== (profile.email ?? "")
   );
+  const hasAccountChanges = profileDirty || avatarDirty;
 
   const pwRuleErr = pwForm.next ? validatePassword(pwForm.next) : "";
   const pwValid =
@@ -665,7 +848,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                 <button
                   className="pm-btn"
                   onClick={() => void saveProfile()}
-                  disabled={savingProfile || uploadingAvatar || !profileDirty}
+                  disabled={savingProfile || uploadingAvatar || !hasAccountChanges}
                 >
                   {savingProfile
                     ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
@@ -730,6 +913,83 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
             )}
           </div>
         </div>
+
+        {showCropper && (
+          <div className="pm-crop-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowCropper(false); }}>
+            <div className="pm-crop-modal">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Crop Profile Picture</div>
+                <button className="pm-close" onClick={() => setShowCropper(false)} aria-label="Close cropper">
+                  <X size={15} strokeWidth={2.2} />
+                </button>
+              </div>
+              <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 12 }}>
+                Drag to reposition and use the slider to zoom.
+              </p>
+              <div
+                ref={cropAreaRef}
+                className="pm-crop-area"
+                onMouseDown={(e) => startDrag(e.clientX, e.clientY)}
+                onMouseMove={(e) => onDragMove(e.clientX, e.clientY)}
+                onMouseUp={stopDrag}
+                onMouseLeave={stopDrag}
+                onTouchStart={(e) => {
+                  const t = e.touches[0];
+                  if (!t) return;
+                  startDrag(t.clientX, t.clientY);
+                }}
+                onTouchMove={(e) => {
+                  const t = e.touches[0];
+                  if (!t) return;
+                  onDragMove(t.clientX, t.clientY);
+                }}
+                onTouchEnd={stopDrag}
+              >
+                {cropSrc && (
+                  <img
+                    src={cropSrc}
+                    alt="Crop preview"
+                    draggable={false}
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      top: "50%",
+                      transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropZoom})`,
+                      width: cropMeta ? `${cropMeta.w * cropMeta.baseScale}px` : "220px",
+                      height: cropMeta ? `${cropMeta.h * cropMeta.baseScale}px` : "220px",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                    }}
+                  />
+                )}
+                <div className="pm-crop-mask">
+                  <div className="pm-crop-ring" />
+                </div>
+              </div>
+              <div className="pm-crop-controls">
+                <span style={{ fontSize: 11, color: "#64748b", minWidth: 34 }}>Zoom</span>
+                <input
+                  className="pm-crop-slider"
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.05}
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(Number(e.target.value))}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="pm-btn" style={{ marginTop: 0, background: "#f1f5f9", color: "#334155" }} onClick={() => setShowCropper(false)}>
+                  Cancel
+                </button>
+                <button className="pm-btn" style={{ marginTop: 0 }} onClick={() => void applyCrop()} disabled={uploadingAvatar}>
+                  {uploadingAvatar ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Save size={14} />}
+                  {uploadingAvatar ? "Applying..." : "Apply Crop"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* inline spin keyframe */}
