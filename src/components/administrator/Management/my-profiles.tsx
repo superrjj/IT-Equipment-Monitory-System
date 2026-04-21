@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import bcrypt from "bcryptjs";
 import {
   X, Camera, KeyRound, Save, UserCircle2,
-  Eye, EyeOff, AlertCircle, Loader2,
+  Eye, EyeOff, AlertCircle, Loader2, Check,
 } from "lucide-react";
 import { getSessionUserId, insertActivityLog } from "../../../lib/audit-notifications";
 import { supabase } from "../../../lib/supabaseClient";
@@ -10,6 +10,13 @@ import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 const BUCKET = "profile-avatar";
 const Blue = "#0a4c86";
+const PW_RULES = [
+  { id: "len", label: "At least 8 characters", test: (p: string) => p.length >= 8 },
+  { id: "upper", label: "One uppercase letter (A-Z)", test: (p: string) => /[A-Z]/.test(p) },
+  { id: "lower", label: "One lowercase letter (a-z)", test: (p: string) => /[a-z]/.test(p) },
+  { id: "num", label: "One number (0-9)", test: (p: string) => /[0-9]/.test(p) },
+  { id: "sym", label: "One special character (!@#$...)", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+];
 type ProfileRow = {
   id: string;
   username: string;
@@ -42,10 +49,9 @@ function validateUsername(u: string): string {
   return "";
 }
 function validatePassword(pw: string): string {
-  if (pw.length < 8) return "At least 8 characters required.";
+  if (pw.length < 8) return "Must be at least 8 characters.";
   if (pw.length > 72) return "Max 72 characters.";
-  const checks = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(pw));
-  if (checks.length < 2) return "Use at least 2 of: uppercase, lowercase, number, symbol.";
+  if (!PW_RULES.every((r) => r.test(pw))) return "Password does not meet all requirements.";
   return "";
 }
 
@@ -151,6 +157,64 @@ const css = `
   transition: color .15s;
 }
 .pm-pw-eye:hover { color: #475569; }
+
+.pm-inline-error {
+  min-height: 17px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pm-pw-req-box {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+.pm-pw-req-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.pm-pw-req-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.pm-pw-req-item.met { color: #16a34a; }
+.pm-pw-req-item.unmet { color: #94a3b8; }
+.pm-pw-req-icon {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+}
+.pm-pw-req-item.met .pm-pw-req-icon {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.pm-pw-req-item.unmet .pm-pw-req-icon {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
 
 .pm-btn {
   display: inline-flex; align-items: center; gap: 7px;
@@ -345,7 +409,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [profileError, setProfileError] = useState("");
-  const [pwError, setPwError] = useState("");
+  const [pwErrors, setPwErrors] = useState<{ current?: string; next?: string; confirm?: string }>({});
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -394,7 +458,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   }, [userId]);
 
   useEffect(() => {
-    if (open) { loadProfile(); setTab("account"); setProfileError(""); setPwError(""); }
+    if (open) { loadProfile(); setTab("account"); setProfileError(""); setPwErrors({}); }
   }, [open, loadProfile]);
 
   /* ── close on overlay click / Escape ── */
@@ -631,34 +695,40 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   /* ── save password ── */
   const savePassword = async () => {
     if (!profile || !userId) return;
-    setPwError("");
-    if (!pwForm.current || !pwForm.next || !pwForm.confirm) { setPwError("Fill in all password fields."); return; }
+    setPwErrors({});
+    const nextErrors: { current?: string; next?: string; confirm?: string } = {};
+    if (!pwForm.current) nextErrors.current = "Current password is required.";
+    if (!pwForm.next) nextErrors.next = "New password is required.";
+    if (!pwForm.confirm) nextErrors.confirm = "Please confirm your new password.";
+    if (Object.keys(nextErrors).length > 0) { setPwErrors(nextErrors); return; }
+
     const ruleErr = validatePassword(pwForm.next);
-    if (ruleErr) { setPwError(ruleErr); return; }
-    if (pwForm.next !== pwForm.confirm) { setPwError("New passwords do not match."); return; }
-    if (pwForm.current === pwForm.next) { setPwError("New password must differ from current."); return; }
+    if (ruleErr) { setPwErrors({ next: ruleErr }); return; }
+    if (pwForm.next !== pwForm.confirm) { setPwErrors({ confirm: "New passwords do not match." }); return; }
+    if (pwForm.current === pwForm.next) { setPwErrors({ next: "New password must differ from current." }); return; }
 
     setSavingPassword(true);
     const { data: authRow, error: authErr } = await supabase
       .from("user_accounts").select("password_hash").eq("id", userId).single();
     if (authErr || !authRow?.password_hash) {
-      setPwError("Unable to verify current password."); setSavingPassword(false); return;
+      setPwErrors({ current: "Unable to verify current password." }); setSavingPassword(false); return;
     }
     const ok = await bcrypt.compare(pwForm.current, String(authRow.password_hash));
-    if (!ok) { setPwError("Current password is incorrect."); setSavingPassword(false); return; }
+    if (!ok) { setPwErrors({ current: "Current password is incorrect." }); setSavingPassword(false); return; }
 
     const password_hash = await bcrypt.hash(pwForm.next, 10);
     const { error } = await supabase
       .from("user_accounts")
       .update({ password_hash, updated_at: new Date().toISOString() })
       .eq("id", userId);
-    if (error) { setPwError(error.message); setSavingPassword(false); return; }
+    if (error) { setPwErrors({ next: error.message }); setSavingPassword(false); return; }
 
     await insertActivityLog(supabase, {
       actorUserId: userId, action: "user_password_changed",
       entityType: "user_account", entityId: userId, meta: {},
     });
     setPwForm({ current: "", next: "", confirm: "" });
+    setPwErrors({});
     showToast("Password updated.", "success");
     setSavingPassword(false);
   };
@@ -673,6 +743,8 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
   const hasAccountChanges = profileDirty || avatarDirty;
 
   const pwRuleErr = pwForm.next ? validatePassword(pwForm.next) : "";
+  const passwordRulesMet = PW_RULES.every((rule) => rule.test(pwForm.next));
+  const showPasswordRequirements = !!pwForm.next && !passwordRulesMet;
   const pwValid =
     !!pwForm.current &&
     !!pwForm.next &&
@@ -874,7 +946,10 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                             className="pm-input pm-input--pw"
                             type={showPw[field] ? "text" : "password"}
                             value={pwForm[field]}
-                            onChange={(e) => { setPwForm((p) => ({ ...p, [field]: e.target.value })); setPwError(""); }}
+                            onChange={(e) => {
+                              setPwForm((p) => ({ ...p, [field]: e.target.value }));
+                              setPwErrors((prev) => ({ ...prev, [field]: undefined }));
+                            }}
                             placeholder={field === "current" ? "Enter current password" : field === "next" ? "Min 8 characters" : "Repeat new password"}
                           />
                           <button
@@ -886,17 +961,29 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                             {showPw[field] ? <EyeOff size={14} /> : <Eye size={14} />}
                           </button>
                         </div>
+                        {field === "next" && showPasswordRequirements && (
+                          <div className="pm-pw-req-box">
+                            <div className="pm-pw-req-title">Password Requirements</div>
+                            {PW_RULES.map((rule) => {
+                              const met = rule.test(pwForm.next);
+                              return (
+                                <div key={rule.id} className={`pm-pw-req-item ${met ? "met" : "unmet"}`}>
+                                  <span className="pm-pw-req-icon">
+                                    {met ? <Check size={9} strokeWidth={3.5} /> : <X size={9} strokeWidth={3.5} />}
+                                  </span>
+                                  {rule.label}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="pm-inline-error">
+                          {pwErrors[field] ? <><AlertCircle size={11} /> {pwErrors[field]}</> : null}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-
-                {pwError && (
-                  <div className="pm-error">
-                    <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-                    {pwError}
-                  </div>
-                )}
 
                 <button
                   className="pm-btn"

@@ -688,7 +688,7 @@ export default function LoginPage() {
         {/* ── Login Card ── */}
         <div className="lp-card">
           <div className="lp-brand">
-            <img src="./tarlac-city-logo-masaya.png" alt="Masaya sa Tarlac City" className="lp-city-logo" />
+            <img src="./masaya-sa-tarlac-city.png" alt="Masaya sa Tarlac City" className="lp-city-logo" />
             <p className="lp-subtitle">IT Helpdesk Ticketing System</p>
           </div>
 
