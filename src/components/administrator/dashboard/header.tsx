@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Menu, Bell, Settings, ChevronDown, CheckCheck } from "lucide-react";
+import { LogOut, Menu, Bell, Settings, ChevronDown, CheckCheck, Clock3 } from "lucide-react";
 import { NOTIFICATIONS_CHANGED_EVENT } from "../../../lib/audit-notifications";
 import {
   isNotificationOwnedByUser,
@@ -775,8 +775,22 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* Clock */}
           <div className="hdr-datetime">
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#ffffff", letterSpacing: "0.02em" }}>{timeStr}</div>
-            <div className="hdr-date" style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{dateStr}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Clock3 size={18} color="rgba(255,255,255,0.9)" />
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 900,
+                  color: "#ffffff",
+                  letterSpacing: "0.06em",
+                  fontFamily: "'JetBrains Mono', 'Consolas', 'Courier New', monospace",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {timeStr}
+              </div>
+            </div>
+            <div className="hdr-date" style={{ fontSize: 15, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{dateStr}</div>
           </div>
         </div>
         {/* Right: bell + user */}

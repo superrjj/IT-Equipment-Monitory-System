@@ -19,7 +19,7 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type IssueType = "Hardware" | "Software" | "Internet";
-type Status    = "Pending" | "In Progress" | "Resolved";
+type Status    = "Pending" | "Assigned" | "In Progress" | "Resolved";
 type SortField = "title" | "issue_type" | "status" | "date_submitted";
 type SortDir   = "asc" | "desc";
 type ModalMode = "add" | "edit" | "view" | null;
@@ -44,7 +44,7 @@ type FileReport = {
 };
 
 type Department = { id: string; name: string };
-type UserOption  = { id: string; full_name: string; role: string };
+type UserOption  = { id: string; full_name: string; role: string; avatar_url?: string | null };
 
 type AdminForm = {
   employee_name:  string;
@@ -69,19 +69,34 @@ const BRAND     = "#0D518C";
 const PAGE_SIZE = 10;
 const MAX_ACTIVE_TICKETS = 1;
 
+const getAvatarUrl = (u: UserOption): string | null => {
+  if (u.avatar_url) return u.avatar_url;
+  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/profile-avatar/${u.id}/avatar.jpg`;
+};
+
+const initialsFromName = (name: string): string =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+
 const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
-const STATUSES:    Status[]    = ["Pending", "In Progress", "Resolved"];
+const STATUSES:    Status[]    = ["Pending", "Assigned", "In Progress", "Resolved"];
 
 // ── Moved outside component so useMemo can access it ──────────────────────────
 const STATUS_ORDER: Record<Status, number> = {
   "Pending":     0,
-  "In Progress": 1,
-  "Resolved":    2,
+  "Assigned":    1,
+  "In Progress": 2,
+  "Resolved":    3,
 };
 
-/** DB value remains `"Pending"`; users see **Assigned**. */
 function displayFileReportStatus(s: string): string {
-  return s === "Pending" ? "Assigned" : s;
+  return s;
 }
 
 const ISSUE_TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; activeBg: string; color: string; border: string }> = {
@@ -101,7 +116,8 @@ const ISSUE_TYPE_BADGE_CONFIG: Record<
 };
 
 const STATUS_CONFIG: Record<Status, { icon: React.ReactNode; bg: string; color: string }> = {
-  "Pending":     { icon: <AlertCircle size={11} />, bg: "rgba(59,130,246,0.10)", color: "#475569" },
+  "Pending":     { icon: <AlertCircle size={11} />, bg: "rgba(148,163,184,0.14)", color: "#475569" },
+  "Assigned":    { icon: <FileText size={11} />,    bg: "rgba(59,130,246,0.10)", color: "#1d4ed8" },
   "In Progress": { icon: <Loader size={11} />,      bg: "rgba(234,179,8,0.11)",  color: "#a16207" },
   "Resolved":    { icon: <CheckCircle size={11} />, bg: "rgba(22,163,74,0.10)",  color: "#15803d" },
 };
@@ -187,16 +203,51 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-const TechnicianCell: React.FC<{ names: string[] }> = ({ names }) => {
-  if (!names || names.length === 0) return <span style={{ color: "#cbd5e1" }}>—</span>;
+const TechnicianCell: React.FC<{ ids: string[]; userMap: Record<string, UserOption> }> = ({ ids, userMap }) => {
+  if (!ids || ids.length === 0) return <span style={{ color: "#cbd5e1" }}>—</span>;
+  const users = ids.map(id => userMap[id]).filter(Boolean) as UserOption[];
+  if (users.length === 0) return <span style={{ color: "#cbd5e1" }}>—</span>;
+  const first = users[0];
   return (
-    <div style={{ display: "flex", flexWrap: "nowrap", gap: 4, overflow: "hidden" }}>
-      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: "rgba(10,76,134,0.07)", color: BRAND, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: names.length > 1 ? 140 : 200 }}>
-        {names[0]}
+    <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+      <span
+        title={first.full_name}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          border: "1px solid #dbe3ef",
+          background: "#dbeafe",
+          color: BRAND,
+          fontSize: 10,
+          fontWeight: 700,
+          overflow: "hidden",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        {getAvatarUrl(first) ? (
+          <img
+            src={getAvatarUrl(first) ?? ""}
+            alt={first.full_name}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+              const next = e.currentTarget.nextElementSibling as HTMLSpanElement | null;
+              if (next) next.style.display = "inline";
+            }}
+          />
+        ) : null}
+        <span style={{ display: getAvatarUrl(first) ? "none" : "inline" }}>{initialsFromName(first.full_name)}</span>
       </span>
-      {names.length > 1 && (
+      <span style={{ fontSize: 11, fontWeight: 600, color: BRAND, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }}>
+        {first.full_name}
+      </span>
+      {users.length > 1 && (
         <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: `${BRAND}18`, color: BRAND, whiteSpace: "nowrap", flexShrink: 0 }}>
-          +{names.length - 1}
+          +{users.length - 1}
         </span>
       )}
     </div>
@@ -288,6 +339,38 @@ const TechnicianPicker: React.FC<{
                 </svg>
               )}
             </span>
+            <span
+              title={u.full_name}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                border: "1px solid #dbe3ef",
+                background: "#dbeafe",
+                color: BRAND,
+                fontSize: 10,
+                fontWeight: 700,
+                overflow: "hidden",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {getAvatarUrl(u) ? (
+                <img
+                  src={getAvatarUrl(u) ?? ""}
+                  alt={u.full_name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                    const next = e.currentTarget.nextElementSibling as HTMLSpanElement | null;
+                    if (next) next.style.display = "inline";
+                  }}
+                />
+              ) : null}
+              <span style={{ display: getAvatarUrl(u) ? "none" : "inline" }}>{initialsFromName(u.full_name)}</span>
+            </span>
             <span style={{
               fontSize: 13, fontWeight: isSelected ? 600 : 400,
               color: isSelected ? BRAND : isOverloaded ? "#94a3b8" : "#374151",
@@ -352,7 +435,7 @@ const SubmitTicket: React.FC = () => {
   const technicianLoadMap = useMemo(() => {
     const map: Record<string, number> = {};
     reports.forEach(r => {
-      if (r.status === "Pending" || r.status === "In Progress") {
+      if (r.status === "Pending" || r.status === "Assigned" || r.status === "In Progress") {
         (r.assigned_to ?? []).forEach(id => {
           map[id] = (map[id] ?? 0) + 1;
         });
@@ -374,7 +457,7 @@ const SubmitTicket: React.FC = () => {
       supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
       supabase
         .from("user_accounts")
-        .select("id, full_name, role")
+        .select("id, full_name, role, avatar_url")
         .eq("is_active", true)
         .eq("is_archived", false)
         .eq("role", "IT Technician")
@@ -479,7 +562,8 @@ const SubmitTicket: React.FC = () => {
 
   const counts = useMemo(() => ({
     total:      reports.length,
-    open:       reports.filter(r => r.status === "Pending").length,
+    pending:    reports.filter(r => r.status === "Pending").length,
+    assigned:   reports.filter(r => r.status === "Assigned").length,
     inProgress: reports.filter(r => r.status === "In Progress").length,
     resolved:   reports.filter(r => r.status === "Resolved").length,
   }), [reports]);
@@ -531,7 +615,7 @@ const SubmitTicket: React.FC = () => {
     if (modalMode === "add") {
       const { data: row, error } = await supabase
         .from("file_reports")
-        .insert({ ...payload, status: "Pending" })
+        .insert({ ...payload, status: form.assigned_to.length > 0 ? "Assigned" : "Pending" })
         .select("id, ticket_number")
         .single();
       if (error) { setFormErrors({ title: friendlyError(error.message) }); setSubmitting(false); return; }
@@ -707,13 +791,14 @@ const TicketRowSkeleton: React.FC = () => (
         </div>
 
         {/* Stat cards */}
-        <div className="ticket-stat-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.2rem"}}>
+        <div className="ticket-stat-cards" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginBottom: "1.2rem"}}>
           {loading ? (
           [0,1,2,3].map(i => <StatCardSkeletonTicket key={i} />)
           ) : (
           [
             { label: "Total Tickets", value: counts.total,      color: BRAND,     icon: <Ticket size={16} /> },
-            { label: "Assigned",       value: counts.open,       color: "#475569", icon: <FileText size={16} /> },
+            { label: "Pending",        value: counts.pending,    color: "#475569", icon: <AlertCircle size={16} /> },
+            { label: "Assigned",       value: counts.assigned,   color: "#1d4ed8", icon: <FileText size={16} /> },
             { label: "In Progress",   value: counts.inProgress, color: "#a16207", icon: <Loader size={16} /> },
             { label: "Resolved",      value: counts.resolved,   color: "#15803d", icon: <CheckCircle size={16} /> },
 
@@ -792,7 +877,7 @@ const TicketRowSkeleton: React.FC = () => (
                         </span>
                       </td>
                       <td style={{ padding: "0.75rem 1rem", maxWidth: 180 }}>
-                        <TechnicianCell names={r.technician_names ?? []} />
+                        <TechnicianCell ids={r.assigned_to ?? []} userMap={userMap} />
                       </td>
                       <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={r.status} /></td>
                       <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
