@@ -133,7 +133,7 @@ const emptyForm = (): FormState => ({
 
 const buildMonthOptions = (rows: OutgoingUnitRow[]): string[] => {
   const set = new Set<string>();
-  rows.forEach(r => { if (r.date_released) set.add(r.date_released.slice(0, 7)); });
+  rows.forEach(row => { if (row.date_released) set.add(row.date_released.slice(0, 7)); });
   return Array.from(set).sort((a, b) => b.localeCompare(a));
 };
 
@@ -194,44 +194,44 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   };
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleOutsideClick = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node))
         setExportMenuOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
   const userMap = useMemo(() => {
-    const m: Record<string, UserOption> = {};
-    itStaff.forEach(u => { m[u.id] = u; });
-    return m;
+    const userById: Record<string, UserOption> = {};
+    itStaff.forEach(user => { userById[user.id] = user; });
+    return userById;
   }, [itStaff]);
 
   const deptMap = useMemo(() => {
-    const m: Record<string, DepartmentOption> = {};
-    departments.forEach(d => { m[d.id] = d; });
-    return m;
+    const departmentById: Record<string, DepartmentOption> = {};
+    departments.forEach(department => { departmentById[department.id] = department; });
+    return departmentById;
   }, [departments]);
 
   const deptDisplayMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    departments.forEach((d) => {
-      const parentName = d.parent_id ? (deptMap[d.parent_id]?.name ?? "") : "";
-      m[d.id] = parentName ? `${parentName} - ${d.name}` : d.name;
+    const departmentLabelById: Record<string, string> = {};
+    departments.forEach((department) => {
+      const parentName = department.parent_id ? (deptMap[department.parent_id]?.name ?? "") : "";
+      departmentLabelById[department.id] = parentName ? `${parentName} - ${department.name}` : department.name;
     });
-    return m;
+    return departmentLabelById;
   }, [departments, deptMap]);
 
   const monthOptions        = useMemo(() => buildMonthOptions(rows), [rows]);
   const resolvedMonthFilter = exportMonth || null;
   const outgoingKeys = useMemo(() => {
-    const s = new Set<string>();
-    rows.forEach((r) => {
-      const key = makeOutgoingMatchKey(r.unit_name, r.department_id);
-      s.add(key);
+    const outgoingKeySet = new Set<string>();
+    rows.forEach((row) => {
+      const key = makeOutgoingMatchKey(row.unit_name, row.department_id);
+      outgoingKeySet.add(key);
     });
-    return s;
+    return outgoingKeySet;
   }, [rows]);
 
   const availableIncomingSources = useMemo(() => {
@@ -271,7 +271,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
   useEffect(() => {
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel("outgoing_units_realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "outgoing_units" }, (payload) => {
         const newRow = payload.new as OutgoingUnitRow;
@@ -289,7 +289,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         setSelected(prev => prev?.id === updated.id ? updated : prev);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
   const rowsEnriched = useMemo(
@@ -302,11 +302,11 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rowsEnriched.filter(r => {
-      if (!q) return true;
-      return [r.unit_name, r.collected_by, r.release_notes, r.releaser_name, r.department_name]
-        .join(" ").toLowerCase().includes(q);
+    const query = search.trim().toLowerCase();
+    return rowsEnriched.filter(row => {
+      if (!query) return true;
+      return [row.unit_name, row.collected_by, row.release_notes, row.releaser_name, row.department_name]
+        .join(" ").toLowerCase().includes(query);
     });
   }, [rowsEnriched, search]);
 

@@ -48,9 +48,9 @@ const NotificationsPanel: React.FC = () => {
   }, [fetchRows]);
 
   useEffect(() => {
-    const onChange = () => fetchRows();
-    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChange);
+    const handleNotificationsChanged = () => fetchRows();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
   }, [fetchRows]);
 
   const markRead = async (id: string) => {
@@ -66,12 +66,12 @@ const NotificationsPanel: React.FC = () => {
 
   const markAllRead = async () => {
     if (!userId) return;
-    const unread = rows.filter(r => !r.read_at).map(r => r.id);
-    if (unread.length === 0) return;
+    const unreadNotificationIds = rows.filter(notification => !notification.read_at).map(notification => notification.id);
+    if (unreadNotificationIds.length === 0) return;
     await supabase
       .from("app_notifications")
       .update({ read_at: new Date().toISOString() })
-      .in("id", unread);
+      .in("id", unreadNotificationIds);
     dispatchNotificationsChanged();
     fetchRows();
   };
@@ -129,21 +129,21 @@ const NotificationsPanel: React.FC = () => {
           <div style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8" }}>No notifications yet.</div>
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {rows.map(r => (
+            {rows.map(notification => (
               <li
-                key={r.id}
-                onClick={() => { void handleSelectNotification(r); }}
+                key={notification.id}
+                onClick={() => { void handleSelectNotification(notification); }}
                 style={{
                   padding: "1rem 1.15rem",
                   borderBottom: "1px solid #f1f5f9",
                   background:
-                    selectedNotificationId === r.id
+                    selectedNotificationId === notification.id
                       ? "rgba(10,76,134,0.10)"
-                      : r.read_at
+                      : notification.read_at
                         ? "#fff"
                         : "rgba(10,76,134,0.04)",
                   borderLeft:
-                    selectedNotificationId === r.id
+                    selectedNotificationId === notification.id
                       ? `4px solid ${BRAND}`
                       : "4px solid transparent",
                   cursor: "pointer",
@@ -153,18 +153,18 @@ const NotificationsPanel: React.FC = () => {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      {r.type.replace(/_/g, " ")}
+                      {notification.type.replace(/_/g, " ")}
                     </div>
-                    <div style={{ fontWeight: 600, fontSize: 14, marginTop: 4 }}>{r.title}</div>
-                    {r.body ? <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>{r.body}</div> : null}
+                    <div style={{ fontWeight: 600, fontSize: 14, marginTop: 4 }}>{notification.title}</div>
+                    {notification.body ? <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>{notification.body}</div> : null}
                     <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
-                      {new Date(r.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
+                      {new Date(notification.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
                     </div>
                   </div>
-                  {!r.read_at && (
+                  {!notification.read_at && (
                     <button
                       type="button"
-                      onClick={() => markRead(r.id)}
+                      onClick={() => markRead(notification.id)}
                       style={{
                         flexShrink: 0,
                         fontSize: 11,

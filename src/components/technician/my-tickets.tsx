@@ -129,7 +129,7 @@ const MyTickets: React.FC = () => {
 
   // ── State ────────────────────────────────────────────────────────────────
   const [rows, setRows]                     = useState<TicketRow[]>([]);
-  const [depts, setDepts]                   = useState<DeptMap>({});
+  const [departmentNameById, setDepartmentNameById] = useState<DeptMap>({});
   const [loading, setLoading]               = useState(true);
   const [search, setSearch]                 = useState("");
   const [selected, setSelected]             = useState<TicketRow | null>(null);
@@ -173,7 +173,7 @@ const MyTickets: React.FC = () => {
     if (!userId) { setRows([]); setLoading(false); return; }
     setLoading(true);
     setRows([]);
-    const [{ data: tix, error: e1 }, { data: dlist }] = await Promise.all([
+    const [{ data: tickets, error: ticketsError }, { data: departmentRows }] = await Promise.all([
       supabase
         .from("file_reports")
         .select("id, ticket_number, title, status, employee_name, department_id, issue_type, date_submitted, assigned_to, action_taken, started_at, completed_at")
@@ -182,16 +182,16 @@ const MyTickets: React.FC = () => {
         .order("date_submitted", { ascending: false }),
       supabase.from("departments").select("id, name"),
     ]);
-    if (e1) { showToast(e1.message, "error"); setRows([]); }
+    if (ticketsError) { showToast(ticketsError.message, "error"); setRows([]); }
     else {
-      setRows((tix ?? []).map((r: any) => ({
-        ...r,
-        assigned_to: Array.isArray(r.assigned_to) ? r.assigned_to : [],
+      setRows((tickets ?? []).map((ticketRow: any) => ({
+        ...ticketRow,
+        assigned_to: Array.isArray(ticketRow.assigned_to) ? ticketRow.assigned_to : [],
       })));
     }
-    const dm: DeptMap = {};
-    (dlist ?? []).forEach((d: { id: string; name: string }) => { dm[d.id] = d.name; });
-    setDepts(dm);
+    const departmentMap: DeptMap = {};
+    (departmentRows ?? []).forEach((department: { id: string; name: string }) => { departmentMap[department.id] = department.name; });
+    setDepartmentNameById(departmentMap);
     setLoading(false);
     dispatchNavBadgesChanged();
   };
@@ -200,12 +200,12 @@ const MyTickets: React.FC = () => {
 
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel(`my_tickets_sync_${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchAll(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchAll(); })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { void supabase.removeChannel(realtimeChannel); };
   }, [userId]);
 
   // ── Notification focus: highlight row only, no modal ─────────────────────
@@ -221,11 +221,11 @@ const MyTickets: React.FC = () => {
 
   // ── Filtered rows ────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r =>
-      [r.title, r.employee_name, r.ticket_number ?? "", r.issue_type, r.status]
-        .join(" ").toLowerCase().includes(q)
+    const query = search.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter(ticketRow =>
+      [ticketRow.title, ticketRow.employee_name, ticketRow.ticket_number ?? "", ticketRow.issue_type, ticketRow.status]
+        .join(" ").toLowerCase().includes(query)
     );
   }, [rows, search]);
 
@@ -577,7 +577,7 @@ const MyTickets: React.FC = () => {
                       <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.employee_name}</td>
 
                       {/* Office */}
-                      <td style={{ padding: "0.75rem 1rem", fontSize: 12 }}>{depts[r.department_id] ?? "—"}</td>
+                      <td style={{ padding: "0.75rem 1rem", fontSize: 12 }}>{departmentNameById[r.department_id] ?? "—"}</td>
 
                       {/* Status badge */}
                       <td style={{ padding: "0.75rem 1rem" }}>
@@ -781,7 +781,7 @@ const MyTickets: React.FC = () => {
                     <div style={{ background: "#f8fafc", borderRadius: 10, padding: "0.65rem 0.85rem", border: "1px solid #f1f5f9" }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Office</div>
                       <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
-                        <Building2 size={12} color={BRAND} /> {depts[selected.department_id] ?? "—"}
+                          <Building2 size={12} color={BRAND} /> {departmentNameById[selected.department_id] ?? "—"}
                       </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

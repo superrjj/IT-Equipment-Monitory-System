@@ -52,15 +52,15 @@ const TicketStatusBadge: React.FC<{ status: string }> = ({ status }) => {
     "In Progress": { bg: "rgba(10,76,134,0.10)",   color: "#0a4c86", icon: <CircleDot size={10} /> },
     "Resolved":    { bg: "rgba(22,163,74,0.12)",   color: "#15803d", icon: <CheckCircle2 size={10} /> },
   };
-  const s = map[status] ?? { bg: "rgba(100,116,139,0.12)", color: "#475569", icon: null };
+  const badgeStyle = map[status] ?? { bg: "rgba(100,116,139,0.12)", color: "#475569", icon: null };
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       padding: "2px 10px", borderRadius: 999, fontSize: 11,
       fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
-      background: s.bg, color: s.color,
+      background: badgeStyle.bg, color: badgeStyle.color,
     }}>
-      {s.icon} {status === "Pending" ? "Assigned" : status}
+      {badgeStyle.icon} {status === "Pending" ? "Assigned" : status}
     </span>
   );
 };
@@ -72,12 +72,12 @@ const IssueTypeBadge: React.FC<{ type: string }> = ({ type }) => {
     Software: { bg: "rgba(14,165,233,0.10)", color: "#0369a1" },
     Internet: { bg: "rgba(249,115,22,0.10)", color: "#c2410c" },
   };
-  const s = map[type] ?? { bg: "rgba(100,116,139,0.12)", color: "#475569" };
+  const badgeStyle = map[type] ?? { bg: "rgba(100,116,139,0.12)", color: "#475569" };
   return (
     <span style={{
       padding: "2px 8px", borderRadius: 999, fontSize: 10,
       fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-      background: s.bg, color: s.color,
+      background: badgeStyle.bg, color: badgeStyle.color,
     }}>
       {type}
     </span>
@@ -210,32 +210,32 @@ const Departments: React.FC = () => {
 
   // ── Filtered + paginated ─────────────────────────────────────────────────────
   const childrenByParent = useMemo(() => {
-    const m: Record<string, Department[]> = {};
-    departments.forEach((d) => {
-      if (!d.parent_id) return;
-      if (!m[d.parent_id]) m[d.parent_id] = [];
-      m[d.parent_id].push(d);
+    const childrenMap: Record<string, Department[]> = {};
+    departments.forEach((department) => {
+      if (!department.parent_id) return;
+      if (!childrenMap[department.parent_id]) childrenMap[department.parent_id] = [];
+      childrenMap[department.parent_id].push(department);
     });
-    return m;
+    return childrenMap;
   }, [departments]);
 
   const searchable = (d: Department) =>
     `${d.name} ${d.description ?? ""} ${d.location ?? ""}`.toLowerCase();
 
-  const q = search.trim().toLowerCase();
+  const query = search.trim().toLowerCase();
   const roots = useMemo(
     () => departments.filter((d) => !d.parent_id || !departments.some((x) => x.id === d.parent_id)),
     [departments]
   );
 
   const filtered = useMemo(() => {
-    if (!q) return roots;
+    if (!query) return roots;
     return roots.filter((parent) => {
-      const parentMatch = searchable(parent).includes(q);
-      const childMatch = (childrenByParent[parent.id] ?? []).some((c) => searchable(c).includes(q));
+      const parentMatch = searchable(parent).includes(query);
+      const childMatch = (childrenByParent[parent.id] ?? []).some((childDepartment) => searchable(childDepartment).includes(query));
       return parentMatch || childMatch;
     });
-  }, [q, roots, childrenByParent]);
+  }, [query, roots, childrenByParent]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -550,17 +550,17 @@ const TableRowSkeleton: React.FC = () => (
                    Array.from({ length: PAGE_SIZE }).map((_, i) => <TableRowSkeleton key={i} />)
                 ) : paginated.length === 0 ? (
                   <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No departments found.</td></tr>
-                ) : paginated.flatMap((d) => {
-                  const children = (childrenByParent[d.id] ?? []).filter((c) => !q || searchable(c).includes(q) || searchable(d).includes(q));
-                  const isExpanded = !!expandedParents[d.id];
+                ) : paginated.flatMap((department) => {
+                  const children = (childrenByParent[department.id] ?? []).filter((childDepartment) => !query || searchable(childDepartment).includes(query) || searchable(department).includes(query));
+                  const isExpanded = !!expandedParents[department.id];
                   const baseRow = (
-                    <tr key={d.id} className="dept-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
+                    <tr key={department.id} className="dept-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
                       <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "#0f172a" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {children.length > 0 && (
                             <button
                               type="button"
-                              onClick={() => setExpandedParents((prev) => ({ ...prev, [d.id]: !prev[d.id] }))}
+                              onClick={() => setExpandedParents((prev) => ({ ...prev, [department.id]: !prev[department.id] }))}
                               style={{ border: "none", background: "transparent", cursor: "pointer", color: "#64748b", display: "inline-flex", alignItems: "center", padding: 0 }}
                               title={isExpanded ? "Hide branches" : "Show branches"}
                             >
@@ -568,7 +568,7 @@ const TableRowSkeleton: React.FC = () => (
                             </button>
                           )}
                           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <span>{d.name}</span>
+                            <span>{department.name}</span>
                             <span style={{ fontSize: 10, color: "#0a4c86", fontWeight: 600 }}>
                               {children.length > 0 ? `${children.length} branch${children.length > 1 ? "es" : ""}` : "Main Office"}
                             </span>
@@ -576,25 +576,25 @@ const TableRowSkeleton: React.FC = () => (
                         </div>
                       </td>
                       <td style={{ padding: "0.75rem 1rem", color: "#475569", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {d.description || <span style={{ color: "#cbd5e1" }}>—</span>}
+                        {department.description || <span style={{ color: "#cbd5e1" }}>—</span>}
                       </td>
                       <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>
-                        {d.location || <span style={{ color: "#cbd5e1" }}>—</span>}
+                        {department.location || <span style={{ color: "#cbd5e1" }}>—</span>}
                       </td>
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: "rgba(10,76,134,0.08)", color: brandBlue }}>
-                          <Ticket size={11} /> {d.ticket_count ?? 0}
+                          <Ticket size={11} /> {department.ticket_count ?? 0}
                         </span>
                       </td>
                       <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                        {fmtDate(d.created_at)}
+                        {fmtDate(department.created_at)}
                       </td>
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           {[
-                            { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(d),     color: brandBlue  },
-                            { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(d),     color: brandBlue  },
-                            { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(d), color: "#dc2626" },
+                            { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(department),     color: brandBlue  },
+                            { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(department),     color: brandBlue  },
+                            { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(department), color: "#dc2626" },
                           ].map((btn, i) => (
                             <button key={i} title={btn.title} className="icon-btn icon-btn-ou" onClick={btn.fn}
                               style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
@@ -607,31 +607,31 @@ const TableRowSkeleton: React.FC = () => (
                   );
 
                   const childRows = isExpanded
-                    ? children.map((c) => (
-                        <tr key={`${d.id}-${c.id}`} style={{ background: "#f8fbff", borderBottom: "1px solid #edf2f7" }}>
+                    ? children.map((childDepartment) => (
+                        <tr key={`${department.id}-${childDepartment.id}`} style={{ background: "#f8fbff", borderBottom: "1px solid #edf2f7" }}>
                           <td style={{ padding: "0.65rem 1rem 0.65rem 2.2rem", color: "#1f2937", fontWeight: 600 }}>
-                            {d.name} - {c.name}
+                            {department.name} - {childDepartment.name}
                           </td>
                           <td style={{ padding: "0.65rem 1rem", color: "#64748b", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {c.description || <span style={{ color: "#cbd5e1" }}>—</span>}
+                            {childDepartment.description || <span style={{ color: "#cbd5e1" }}>—</span>}
                           </td>
                           <td style={{ padding: "0.65rem 1rem", color: "#64748b" }}>
-                            {c.location || <span style={{ color: "#cbd5e1" }}>—</span>}
+                            {childDepartment.location || <span style={{ color: "#cbd5e1" }}>—</span>}
                           </td>
                           <td style={{ padding: "0.65rem 1rem" }}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: "rgba(100,116,139,0.10)", color: "#334155" }}>
-                              <Ticket size={11} /> {c.ticket_count ?? 0}
+                              <Ticket size={11} /> {childDepartment.ticket_count ?? 0}
                             </span>
                           </td>
                           <td style={{ padding: "0.65rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                            {fmtDate(c.created_at)}
+                            {fmtDate(childDepartment.created_at)}
                           </td>
                           <td style={{ padding: "0.65rem 1rem" }}>
                             <div style={{ display: "flex", gap: 6 }}>
                               {[
-                                { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(c),     color: brandBlue  },
-                                { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(c),     color: brandBlue  },
-                                { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(c), color: "#dc2626" },
+                                { icon: <Eye size={14} />,    title: "View tickets",  fn: () => openView(childDepartment),     color: brandBlue  },
+                                { icon: <Pencil size={14} />, title: "Edit",          fn: () => openEdit(childDepartment),     color: brandBlue  },
+                                { icon: <Trash2 size={14} />, title: "Delete",        fn: () => handleDelete(childDepartment), color: "#dc2626" },
                               ].map((btn, i) => (
                                 <button key={i} title={btn.title} className="icon-btn icon-btn-ou" onClick={btn.fn}
                                   style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #e8edf2", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: btn.color, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>

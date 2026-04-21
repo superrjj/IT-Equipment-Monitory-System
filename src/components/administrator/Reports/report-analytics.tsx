@@ -18,8 +18,8 @@ function hashDeptColor(name: string): string {
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const h = Math.abs(hash) % 360;
-  return `hsl(${h}, 65%, 48%)`;
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 48%)`;
 }
 
 const ISSUE_DONUT_COLORS: Record<string, string> = {
@@ -474,7 +474,7 @@ function displayFileReportStatus(s: string): string {
 type DonutSeg = { label: string; value: number; color: string };
 
 const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
-  const total = segments.reduce((s, d) => s + d.value, 0);
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
   const cx = 60, cy = 60, r = 48, strokeW = 14;
   const circ = 2 * Math.PI * r;
 
@@ -492,7 +492,7 @@ const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
   const circles = segments.map((seg, i) => {
     const dash = (seg.value / total) * circ;
     const gap = circ - dash;
-    const offset = segments.slice(0, i).reduce((sum, s) => sum + (s.value / total) * circ + 1.5, 0);
+    const offset = segments.slice(0, i).reduce((sum, segment) => sum + (segment.value / total) * circ + 1.5, 0);
     return (
       <circle
         key={seg.label + i}
@@ -530,21 +530,21 @@ const PeriodDropdown: React.FC<{
   onChange: (key: string) => void;
 }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selected = PERIOD_OPTIONS.find(o => o.key === value);
-  const groups = Array.from(new Set(PERIOD_OPTIONS.map(o => o.group)));
+  const selectedOption = PERIOD_OPTIONS.find(option => option.key === value);
+  const groups = Array.from(new Set(PERIOD_OPTIONS.map(option => option.group)));
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
   return (
-    <div className="ra-period-dropdown" ref={ref}>
+    <div className="ra-period-dropdown" ref={dropdownRef}>
       <button
         type="button"
         className={`ra-period-btn${open ? " open" : ""}`}
@@ -552,26 +552,26 @@ const PeriodDropdown: React.FC<{
       >
         <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
           <Calendar size={12} strokeWidth={2.2} />
-          {selected?.label ?? "Select period"}
+          {selectedOption?.label ?? "Select period"}
         </span>
         <ChevronDown size={13} strokeWidth={2.2} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
       </button>
 
       {open && (
         <div className="ra-period-menu">
-          {groups.map((group, gi) => (
+          {groups.map((group, groupIndex) => (
             <div key={group}>
-              {gi > 0 && <div className="ra-period-divider" />}
+              {groupIndex > 0 && <div className="ra-period-divider" />}
               <div className="ra-period-group-label">{group}</div>
-              {PERIOD_OPTIONS.filter(o => o.group === group).map(opt => (
+              {PERIOD_OPTIONS.filter(option => option.group === group).map(option => (
                 <button
-                  key={opt.key}
+                  key={option.key}
                   type="button"
-                  className={`ra-period-option${value === opt.key ? " selected" : ""}`}
-                  onClick={() => { onChange(opt.key); setOpen(false); }}
+                  className={`ra-period-option${value === option.key ? " selected" : ""}`}
+                  onClick={() => { onChange(option.key); setOpen(false); }}
                 >
                   <span className="ra-period-dot" />
-                  {opt.label}
+                  {option.label}
                 </button>
               ))}
             </div>
@@ -609,17 +609,17 @@ const ReportAnalytics: React.FC = () => {
         .lte("date_submitted", toISO(end));
     }
 
-    const [{ data: depts, error: deptErr }, { data: reports, error: repErr }] = await Promise.all([
+    const [{ data: departments, error: departmentError }, { data: reports, error: reportsError }] = await Promise.all([
       supabase.from("departments").select("id, name").order("name"),
       reportsQuery,
     ]);
 
-    if (deptErr) { setLoadError(deptErr.message); setTickets([]); setLoading(false); return; }
-    if (repErr) { setLoadError(repErr.message); setTickets([]); setLoading(false); return; }
+    if (departmentError) { setLoadError(departmentError.message); setTickets([]); setLoading(false); return; }
+    if (reportsError) { setLoadError(reportsError.message); setTickets([]); setLoading(false); return; }
 
-    const map: Record<string, string> = {};
-    (depts ?? []).forEach((d: { id: string; name: string }) => { map[d.id] = d.name; });
-    setDeptNameById(map);
+    const departmentNameById: Record<string, string> = {};
+    (departments ?? []).forEach((dept: { id: string; name: string }) => { departmentNameById[dept.id] = dept.name; });
+    setDeptNameById(departmentNameById);
     setTickets((reports ?? []) as FileReportRow[]);
     setLoading(false);
   }, [activePeriod]);
@@ -627,12 +627,12 @@ const ReportAnalytics: React.FC = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel(`report_analytics_sync_${activePeriod}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchData(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchData(); })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { void supabase.removeChannel(realtimeChannel); };
   }, [activePeriod, fetchData]);
 
   const stats = useMemo(() => {
@@ -711,7 +711,7 @@ const ReportAnalytics: React.FC = () => {
       .filter(s => s.value > 0);
   }, [tickets]);
 
-  const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
+  const donutTotal = donutData.reduce((sum, segment) => sum + segment.value, 0);
 
   const recentTickets = useMemo(() => {
     return tickets.slice(0, 8).map(t => ({

@@ -44,10 +44,10 @@ function isValidEmail(email: string) {
 }
 
 function validateUsername(username: string) {
-  const u = username.trim();
-  if (u.length < 3) return "Username must be at least 3 characters.";
-  if (u.length > 32) return "Username must be at most 32 characters.";
-  if (!/^[A-Za-z0-9_]+$/.test(u)) return "Username can only contain letters, numbers, and underscore.";
+  const trimmedUsername = username.trim();
+  if (trimmedUsername.length < 3) return "Username must be at least 3 characters.";
+  if (trimmedUsername.length > 32) return "Username must be at most 32 characters.";
+  if (!/^[A-Za-z0-9_]+$/.test(trimmedUsername)) return "Username can only contain letters, numbers, and underscore.";
   return "";
 }
 
@@ -228,7 +228,7 @@ export default function UserAccounts() {
   useEffect(() => { fetchUsers(); }, [sortField, sortDir]);
 
   useEffect(() => {
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel("user_accounts_sync")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_accounts" }, (payload) => {
         const newRow = payload.new as UserAccount;
@@ -246,7 +246,7 @@ export default function UserAccounts() {
         setSelected(prev => prev?.id === updated.id ? updated : prev);
       })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { void supabase.removeChannel(realtimeChannel); };
   }, []);
 
   const toggleSort = (field: SortField) => {
@@ -262,9 +262,9 @@ export default function UserAccounts() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r => [r.username, r.full_name, r.email, r.role].some(v => v.toLowerCase().includes(q)));
+    const query = search.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter(userAccount => [userAccount.username, userAccount.full_name, userAccount.email, userAccount.role].some(value => value.toLowerCase().includes(query)));
   }, [rows, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -280,36 +280,37 @@ export default function UserAccounts() {
   };
 
   const openAdd = () => { closeModal(); setModalMode("add"); };
-  const openEdit = (u: UserAccount) => {
-    closeModal(); setSelected(u);
-    setForm({ username: u.username, full_name: u.full_name, email: u.email, role: u.role, is_active: u.is_active, password: "", confirmPassword: "" });
+  const openEdit = (userAccount: UserAccount) => {
+    closeModal(); setSelected(userAccount);
+    setForm({ username: userAccount.username, full_name: userAccount.full_name, email: userAccount.email, role: userAccount.role, is_active: userAccount.is_active, password: "", confirmPassword: "" });
     setModalMode("edit");
   };
 
   const checkUniqueness = async (username: string, email: string, excludeId?: string) => {
-    const uq = supabase.from("user_accounts").select("id").ilike("username", username.trim());
-    if (excludeId) uq.neq("id", excludeId);
-    const { data: uData, error: uErr } = await uq.limit(1);
-    if (uErr) return { field: "username" as keyof UserFormErrors, msg: uErr.message };
-    if (uData && uData.length > 0) return { field: "username" as keyof UserFormErrors, msg: "Username already exists." };
-    const eq = supabase.from("user_accounts").select("id").ilike("email", email.trim());
-    if (excludeId) eq.neq("id", excludeId);
-    const { data: eData, error: eErr } = await eq.limit(1);
-    if (eErr) return { field: "email" as keyof UserFormErrors, msg: eErr.message };
-    if (eData && eData.length > 0) return { field: "email" as keyof UserFormErrors, msg: "Email already exists." };
+    const usernameQuery = supabase.from("user_accounts").select("id").ilike("username", username.trim());
+    if (excludeId) usernameQuery.neq("id", excludeId);
+    const { data: existingUsernameRows, error: usernameQueryError } = await usernameQuery.limit(1);
+    if (usernameQueryError) return { field: "username" as keyof UserFormErrors, msg: usernameQueryError.message };
+    if (existingUsernameRows && existingUsernameRows.length > 0) return { field: "username" as keyof UserFormErrors, msg: "Username already exists." };
+
+    const emailQuery = supabase.from("user_accounts").select("id").ilike("email", email.trim());
+    if (excludeId) emailQuery.neq("id", excludeId);
+    const { data: existingEmailRows, error: emailQueryError } = await emailQuery.limit(1);
+    if (emailQueryError) return { field: "email" as keyof UserFormErrors, msg: emailQueryError.message };
+    if (existingEmailRows && existingEmailRows.length > 0) return { field: "email" as keyof UserFormErrors, msg: "Email already exists." };
     return null;
   };
 
   const validateForm = async (): Promise<UserFormErrors> => {
     const errors: UserFormErrors = {};
-    const uErr = validateUsername(form.username);
-    if (uErr) errors.username = uErr;
+    const usernameError = validateUsername(form.username);
+    if (usernameError) errors.username = usernameError;
     if (!form.full_name.trim()) errors.full_name = "Full name is required.";
     if (!form.email.trim()) errors.email = "Email is required.";
     else if (!isValidEmail(form.email.trim())) errors.email = "Email is invalid.";
     if (modalMode === "add" || (modalMode === "edit" && resetPw)) {
-      const pErr = validatePassword(form.password);
-      if (pErr) errors.password = pErr;
+      const passwordError = validatePassword(form.password);
+      if (passwordError) errors.password = passwordError;
       else if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match.";
     }
     if (!errors.username && !errors.email) {
@@ -568,53 +569,53 @@ const UserRowSkeleton: React.FC = () => (
                  Array.from({ length: PAGE_SIZE }).map((_, i) => <UserRowSkeleton key={i} />)
               ) : paginated.length === 0 ? (
                  <tr><td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No users found.</td></tr>
-              ) : paginated.map(u => (
-                <tr key={u.id} className="ua-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
+              ) : paginated.map(userAccount => (
+                <tr key={userAccount.id} className="ua-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
 
                   {/* User — avatar + name + email */}
                   <td style={{ padding: "0.75rem 1rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Avatar name={u.full_name} avatarUrl={getAvatarUrl(u.id, u.avatar_url)} size={36} />
+                      <Avatar name={userAccount.full_name} avatarUrl={getAvatarUrl(userAccount.id, userAccount.avatar_url)} size={36} />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a" }}>{u.full_name}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{u.email}</div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a" }}>{userAccount.full_name}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{userAccount.email}</div>
                       </div>
                     </div>
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem", color: "#475569", fontWeight: 500 }}>
-                    @{u.username}
+                    @{userAccount.username}
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem" }}>
                     <span style={{
                       display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 999,
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
-                      background: u.role === "Administrator" ? "rgba(10,76,134,0.10)" : "rgba(124,58,237,0.09)",
-                      color: u.role === "Administrator" ? "#0a4c86" : "#6d28d9",
-                    }}>{u.role}</span>
+                      background: userAccount.role === "Administrator" ? "rgba(10,76,134,0.10)" : "rgba(124,58,237,0.09)",
+                      color: userAccount.role === "Administrator" ? "#0a4c86" : "#6d28d9",
+                    }}>{userAccount.role}</span>
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem" }}>
-                    <button onClick={() => toggleActive(u)} style={{
-                      border: "1px solid " + (u.is_active ? "#bbf7d0" : "#fecaca"),
-                      background: u.is_active ? "#dcfce7" : "#fee2e2",
-                      color: u.is_active ? "#166534" : "#b91c1c",
+                    <button onClick={() => toggleActive(userAccount)} style={{
+                      border: "1px solid " + (userAccount.is_active ? "#bbf7d0" : "#fecaca"),
+                      background: userAccount.is_active ? "#dcfce7" : "#fee2e2",
+                      color: userAccount.is_active ? "#166534" : "#b91c1c",
                       padding: "2px 10px", borderRadius: 999, cursor: "pointer",
                       fontWeight: 700, fontSize: 11, letterSpacing: "0.06em",
                       textTransform: "uppercase", fontFamily: "'Poppins', sans-serif",
-                    }}>{u.is_active ? "Active" : "Inactive"}</button>
+                    }}>{userAccount.is_active ? "Active" : "Inactive"}</button>
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                    {fmtDate(u.created_at)}
+                    {fmtDate(userAccount.created_at)}
                   </td>
 
                   <td style={{ padding: "0.75rem 1rem" }}>
                     <div style={{ display: "flex", gap: 6 }}>
                       {[
-                        { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(u),        color: BRAND      },
-                        { icon: <Trash2 size={14} />, title: "Archive", fn: () => setDeleteTarget(u), color: "#dc2626" },
+                        { icon: <Pencil size={14} />, title: "Edit",   fn: () => openEdit(userAccount),        color: BRAND      },
+                        { icon: <Trash2 size={14} />, title: "Archive", fn: () => setDeleteTarget(userAccount), color: "#dc2626" },
                       ].map((btn, i) => (
                         <button key={i} title={btn.title} className="icon-btn-ua" onClick={btn.fn}
                           style={{

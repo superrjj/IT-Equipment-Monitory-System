@@ -131,19 +131,19 @@ const pieSlicePercentPlugin: Plugin<"pie"> = {
   id: "pieSlicePercentLabels",
   afterDatasetsDraw(chart) {
     const ctx = chart.ctx;
-    const ds = chart.data.datasets[0];
-    const data = (ds?.data ?? []) as number[];
-    const total = data.reduce((a, b) => a + (Number(b) || 0), 0);
+    const dataset = chart.data.datasets[0];
+    const datasetValues = (dataset?.data ?? []) as number[];
+    const total = datasetValues.reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (total <= 0) return;
     const meta = chart.getDatasetMeta(0);
     meta.data.forEach((element: unknown, i: number) => {
-      const raw = Number(data[i]) || 0;
-      if (raw <= 0) return;
-      const pct = Math.round((raw / total) * 100);
-      const arc = element as { tooltipPosition?: () => { x: number; y: number } };
-      if (typeof arc.tooltipPosition !== "function") return;
-      const { x, y } = arc.tooltipPosition();
-      const label = `${pct}%`;
+      const sliceValue = Number(datasetValues[i]) || 0;
+      if (sliceValue <= 0) return;
+      const percent = Math.round((sliceValue / total) * 100);
+      const arcElement = element as { tooltipPosition?: () => { x: number; y: number } };
+      if (typeof arcElement.tooltipPosition !== "function") return;
+      const { x, y } = arcElement.tooltipPosition();
+      const label = `${percent}%`;
       ctx.save();
       ctx.font = "bold 12px 'DM Sans', system-ui, sans-serif";
       ctx.textAlign = "center";
@@ -269,7 +269,7 @@ const WeeklyMixedChart: React.FC<{ weeklyTickets: number[] }> = ({ weeklyTickets
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<{ destroy: () => void; update: () => void } | null>(null);
-  const total = data.reduce((s, d) => s + d.value, 0);
+  const total = data.reduce((sum, datum) => sum + datum.value, 0);
   const legendItems = data.map((item) => ({
     ...item,
     pct: total > 0 ? Math.round((item.value / total) * 100) : 0,
@@ -375,7 +375,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
 // ── Recurring Issue List ───────────────────────────────────────────────────────
 const RecurringIssueList: React.FC<{ issueBreakdown: IssueCount[] }> = ({ issueBreakdown }) => {
   const items = issueBreakdown.slice(0, 3);
-  const total = items.reduce((s, i) => s + i.count, 0);
+  const total = items.reduce((sum, item) => sum + item.count, 0);
   const iconFor = (type: string) => {
     const t = type.toLowerCase();
     if (t.includes("network") || t.includes("internet")) return <Wifi size={18} color="#0a4c86" />;
@@ -543,12 +543,12 @@ function getDeptColor(name: string): string {
 const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<{ destroy: () => void; update: () => void } | null>(null);
-  const total = deptRows.reduce((s, d) => s + d.tickets, 0);
+  const totalTickets = deptRows.reduce((sum, dept) => sum + dept.tickets, 0);
   const legendItems = deptRows.map((row) => ({
     label: row.name,
     value: row.tickets,
     color: getDeptColor(row.name),
-    pct: total > 0 ? Math.round((row.tickets / total) * 100) : 0,
+    pct: totalTickets > 0 ? Math.round((row.tickets / totalTickets) * 100) : 0,
   }));
   useEffect(() => {
     if (!canvasRef.current || deptRows.length === 0) return;
@@ -588,7 +588,7 @@ const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
               callbacks: {
                 label: (item) => {
                   const raw = Number(item.raw) || 0;
-                  const pct = total > 0 ? Math.round((raw / total) * 100) : 0;
+                  const pct = totalTickets > 0 ? Math.round((raw / totalTickets) * 100) : 0;
                   return ` ${raw} (${pct}%)`;
                 },
               },
@@ -599,7 +599,7 @@ const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
       chartRef.current.update();
     });
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null; };
-  }, [deptRows, total]);
+  }, [deptRows, totalTickets]);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) minmax(180px, 1fr)", gap: 12, alignItems: "center" }}>
       <div style={{ position: "relative", width: "100%", height: 240, minHeight: 240 }}><canvas ref={canvasRef} /></div>
@@ -618,7 +618,7 @@ const DeptPieChart: React.FC<{ deptRows: DeptRow[] }> = ({ deptRows }) => {
           ))}
         </div>
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e2e8f0", fontSize: 12, color: "#94a3b8" }}>
-          Total: <strong style={{ color: "#0f172a" }}>{total}</strong>
+          Total: <strong style={{ color: "#0f172a" }}>{totalTickets}</strong>
         </div>
       </div>
     </div>
@@ -643,10 +643,10 @@ const TechAvatar: React.FC<{ tech: TechStat; index: number; size?: number; fontS
 };
 
 // ── Leaderboard Cards ─────────────────────────────────────────────────────────
-const CardsView: React.FC<{ techs: TechStat[] }> = ({ techs }) => {
+const CardsView: React.FC<{ technicians: TechStat[] }> = ({ technicians }) => {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
-      {techs.map((tech, i) => {
+      {technicians.map((tech, i) => {
         const total = tech.resolved + tech.inProgress + tech.pending;
         return (
           <div key={tech.id} style={{
@@ -702,9 +702,9 @@ function buildDashData(
   incoming:  any[],
   outgoing:  any[],
   accounts:  any[],
-  depts:     any[],
-  techs:     any[],
-  feedbacks: any[],
+  departments: any[],
+  technicians: any[],
+  ticketFeedbacks: any[],
 ): DashData {
   const nowYear = new Date().getFullYear();
   const monthlyCount = (rows: any[], key: string): number[] => {
@@ -742,7 +742,7 @@ function buildDashData(
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count);
 
-  const deptRows: DeptRow[] = (depts ?? [])
+  const deptRows: DeptRow[] = (departments ?? [])
     .map((dept: any) => ({ name: dept.name, tickets: tickets.filter(t => t.department_id === dept.id).length, repairs: 0 }))
     .filter((d: DeptRow) => d.tickets > 0)
     .sort((a: DeptRow, b: DeptRow) => b.tickets - a.tickets)
@@ -750,29 +750,29 @@ function buildDashData(
 
   // ── Per-technician feedback ───────────────────────────────────────────────
   const techRatingsMap: Record<string, number[]> = {};
-  feedbacks.forEach((fb: any) => {
-    const ticket = tickets.find(t => String(t.id) === String(fb.report_id));
+  ticketFeedbacks.forEach((feedback: any) => {
+    const ticket = tickets.find(t => String(t.id) === String(feedback.report_id));
     if (!ticket) return;
     const assigned: string[] = Array.isArray(ticket.assigned_to)
       ? ticket.assigned_to.map(String)
       : ticket.assigned_to ? [String(ticket.assigned_to)] : [];
     assigned.forEach(techId => {
       if (!techRatingsMap[techId]) techRatingsMap[techId] = [];
-      techRatingsMap[techId].push(Number(fb.rating));
+      techRatingsMap[techId].push(Number(feedback.rating));
     });
   });
 
-  const techLeaderboard: TechStat[] = (techs ?? [])
-    .map((tech: any) => {
-      const techIdStr = String(tech.id);
+  const techLeaderboard: TechStat[] = (technicians ?? [])
+    .map((technician: any) => {
+      const techIdStr = String(technician.id);
       const ratings   = techRatingsMap[techIdStr] ?? [];
       const avgRating = ratings.length > 0
         ? ratings.reduce((a, b) => a + b, 0) / ratings.length
         : 0;
       return {
-        id:           tech.id,
-        full_name:    tech.full_name,
-        avatar_url:   tech.avatar_url ?? "",
+        id:           technician.id,
+        full_name:    technician.full_name,
+        avatar_url:   technician.avatar_url ?? "",
         resolved:     tickets.filter(t => isAssigned(t.assigned_to, techIdStr) && t.status === "Resolved").length,
         inProgress:   tickets.filter(t => isAssigned(t.assigned_to, techIdStr) && t.status === "In Progress").length,
         pending:      tickets.filter(t => isAssigned(t.assigned_to, techIdStr) && t.status === "Pending").length,
@@ -782,9 +782,9 @@ function buildDashData(
     })
     .sort((a: TechStat, b: TechStat) => b.avgRating - a.avgRating || b.resolved - a.resolved);
 
-  const totalFeedbacks    = feedbacks.length;
+  const totalFeedbacks    = ticketFeedbacks.length;
   const avgFeedbackRating = totalFeedbacks > 0
-    ? Math.round((feedbacks.reduce((s: number, f: any) => s + Number(f.rating), 0) / totalFeedbacks) * 10) / 10
+    ? Math.round((ticketFeedbacks.reduce((sum: number, feedback: any) => sum + Number(feedback.rating), 0) / totalFeedbacks) * 10) / 10
     : 0;
 
   return {
@@ -836,19 +836,24 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   const [refreshed, setRefreshed] = useState(false);
   const [pieAnimKey, setPieAnimKey] = useState(0);
 
-  const ticketsRef   = useRef<any[]>([]);
-  const incomingRef  = useRef<any[]>([]);
-  const outgoingRef  = useRef<any[]>([]);
-  const accountsRef  = useRef<any[]>([]);
-  const deptsRef     = useRef<any[]>([]);
-  const techsRef     = useRef<any[]>([]);
-  const feedbacksRef = useRef<any[]>([]);
+  const ticketsRef = useRef<any[]>([]);
+  const incomingUnitsRef = useRef<any[]>([]);
+  const outgoingUnitsRef = useRef<any[]>([]);
+  const userAccountsRef = useRef<any[]>([]);
+  const departmentsRef = useRef<any[]>([]);
+  const techniciansRef = useRef<any[]>([]);
+  const ticketFeedbacksRef = useRef<any[]>([]);
 
   const recomputeRef = useRef<() => void>(() => {});
   recomputeRef.current = () =>
     setData(buildDashData(
-      ticketsRef.current, incomingRef.current, outgoingRef.current,
-      accountsRef.current, deptsRef.current, techsRef.current, feedbacksRef.current,
+      ticketsRef.current,
+      incomingUnitsRef.current,
+      outgoingUnitsRef.current,
+      userAccountsRef.current,
+      departmentsRef.current,
+      techniciansRef.current,
+      ticketFeedbacksRef.current,
     ));
 
   const upsertById = useCallback((rows: any[], next: any) => {
@@ -864,9 +869,9 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
       { data: incoming },
       { data: outgoing },
       { data: accounts },
-      { data: depts },
-      { data: techs },
-      { data: feedbacks },
+      { data: departments },
+      { data: technicians },
+      { data: ticketFeedbacks },
     ] = await Promise.all([
       supabase.from("file_reports").select("status, issue_type, date_submitted, department_id, id, assigned_to"),
       supabase.from("incoming_units").select("id, date_received"),
@@ -876,13 +881,13 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
       supabase.from("user_accounts").select("id, full_name, avatar_url, updated_at").eq("role", "IT Technician").eq("is_active", true).eq("is_archived", false).order("full_name"),
       supabase.from("ticket_feedback").select("id, report_id, rating"),
     ]);
-    ticketsRef.current   = tickets   ?? [];
-    incomingRef.current  = incoming  ?? [];
-    outgoingRef.current  = outgoing  ?? [];
-    accountsRef.current  = accounts  ?? [];
-    deptsRef.current     = depts     ?? [];
-    techsRef.current     = (techs ?? []).map(stampAvatar);
-    feedbacksRef.current = feedbacks ?? [];
+    ticketsRef.current = tickets ?? [];
+    incomingUnitsRef.current = incoming ?? [];
+    outgoingUnitsRef.current = outgoing ?? [];
+    userAccountsRef.current = accounts ?? [];
+    departmentsRef.current = departments ?? [];
+    techniciansRef.current = (technicians ?? []).map(stampAvatar);
+    ticketFeedbacksRef.current = ticketFeedbacks ?? [];
     recomputeRef.current();
     setLoading(false);
   }, []);
@@ -890,17 +895,17 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const channel = supabase.channel(`dashboard_${Date.now()}`)
+    const realtimeChannel = supabase.channel(`dashboard_${Date.now()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" },
-        ({ new: n }) => { ticketsRef.current = upsertById(ticketsRef.current, n); recomputeRef.current(); })
+        ({ new: newRow }) => { ticketsRef.current = upsertById(ticketsRef.current, newRow); recomputeRef.current(); })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "file_reports" },
-        ({ new: n }) => { ticketsRef.current = upsertById(ticketsRef.current, n); recomputeRef.current(); })
+        ({ new: updatedRow }) => { ticketsRef.current = upsertById(ticketsRef.current, updatedRow); recomputeRef.current(); })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "file_reports" },
-        ({ old: o }) => { ticketsRef.current = ticketsRef.current.filter(r => r.id !== (o as any).id); recomputeRef.current(); })
+        ({ old: deletedRow }) => { ticketsRef.current = ticketsRef.current.filter(r => r.id !== (deletedRow as any).id); recomputeRef.current(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "ticket_feedback" },
         () => { void load(); })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(realtimeChannel); };
   }, [upsertById, load]);
 
   const handleRefresh = async () => {
@@ -1031,7 +1036,7 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           />
           {data.techLeaderboard.length === 0
             ? <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "1.5rem 0" }}>No technician data yet.</p>
-            : <CardsView techs={data.techLeaderboard} />}
+            : <CardsView technicians={data.techLeaderboard} />}
         </div>
 
         {/* ── Mid row ── */}
@@ -1146,12 +1151,12 @@ const Dashboard: React.FC = () => {
       .eq("status", "Pending")
       .eq("is_archived", false);
     if (error) return;
-    const n = (data ?? []).filter((row: { assigned_to: unknown }) => {
+    const unassignedPendingCount = (data ?? []).filter((row: { assigned_to: unknown }) => {
       const a = row.assigned_to;
       const arr = Array.isArray(a) ? a : [];
       return arr.length === 0;
     }).length;
-    setAssignJobBadgeCount(n);
+    setAssignJobBadgeCount(unassignedPendingCount);
   }, [userRole]);
 
   /** Open (non-resolved) tickets assigned to this technician — matches My Tickets list. */
@@ -1179,7 +1184,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (userRole !== "Administrator" && userRole !== "IT Technician") return;
-    const ch = supabase
+    const navBadgesChannel = supabase
       .channel(`adm_nav_badges_${Date.now()}`)
       .on(
         "postgres_changes",
@@ -1190,22 +1195,22 @@ const Dashboard: React.FC = () => {
         }
       )
       .subscribe();
-    const onEvt = () => {
+    const handleBadgesChangedEvent = () => {
       void refreshAssignJobPendingBadge();
       void refreshMyTicketsBadge();
     };
-    window.addEventListener(NAV_BADGES_CHANGED_EVENT, onEvt);
+    window.addEventListener(NAV_BADGES_CHANGED_EVENT, handleBadgesChangedEvent);
     return () => {
-      window.removeEventListener(NAV_BADGES_CHANGED_EVENT, onEvt);
-      void supabase.removeChannel(ch);
+      window.removeEventListener(NAV_BADGES_CHANGED_EVENT, handleBadgesChangedEvent);
+      void supabase.removeChannel(navBadgesChannel);
     };
   }, [userRole, refreshAssignJobPendingBadge, refreshMyTicketsBadge]);
 
   useEffect(() => {
-    const token  = localStorage.getItem("session_token");
-    const role   = localStorage.getItem("session_user_role") || "";
-    const roleOk = role === "Administrator" || role === "IT Technician" || role === "Employee";
-    if (!token || !roleOk) {
+    const sessionToken  = localStorage.getItem("session_token");
+    const sessionRole   = localStorage.getItem("session_user_role") || "";
+    const isAllowedRole = sessionRole === "Administrator" || sessionRole === "IT Technician" || sessionRole === "Employee";
+    if (!sessionToken || !isAllowedRole) {
       ["session_token","session_user_id","session_user_full_name","session_user_role","session_expires_at"]
         .forEach(k => localStorage.removeItem(k));
       navigate("/");

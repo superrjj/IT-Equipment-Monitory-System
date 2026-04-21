@@ -360,16 +360,16 @@ function relativeTime(iso: string): string {
 
 // ── Single notification item ───────────────────────────────────────────────────
 const NotifItem: React.FC<{
-  n: NotificationRow;
-  onOpen: (n: NotificationRow) => void;
-}> = ({ n, onOpen }) => {
-  const isUnread = !n.read_at;
+  notification: NotificationRow;
+  onOpen: (notification: NotificationRow) => void;
+}> = ({ notification, onOpen }) => {
+  const isUnread = !notification.read_at;
 
   return (
     <button
       type="button"
       className="notif-item"
-      onClick={() => onOpen(n)}
+      onClick={() => onOpen(notification)}
       style={{
         width: "100%", textAlign: "left", border: "none",
         background: isUnread ? "#eff6ff" : "#fafafa",
@@ -380,7 +380,7 @@ const NotifItem: React.FC<{
       }}
     >
       {/* Left: actor avatar */}
-      <NotifAvatar actor={n.actor} />
+      <NotifAvatar actor={notification.actor} />
 
       {/* Right: content */}
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -391,29 +391,29 @@ const NotifItem: React.FC<{
           textTransform: "uppercase", letterSpacing: "0.07em",
           marginBottom: 2,
         }}>
-          {formatNotifType(n.type)}
+          {formatNotifType(notification.type)}
         </div>
 
         {/* Actor name + title */}
         <div style={{ fontSize: 13, fontWeight: isUnread ? 700 : 600, color: "#0f172a", lineHeight: 1.4 }}>
-          {n.actor?.full_name && (
+          {notification.actor?.full_name && (
             <span style={{ color: brandBlue, fontWeight: 700 }}>
-              {n.actor.full_name}{" "}
+              {notification.actor.full_name}{" "}
             </span>
           )}
           <span style={{ color: isUnread ? "#0f172a" : "#475569" }}>
-            {n.title}
+            {notification.title}
           </span>
         </div>
 
         {/* Body */}
-        {n.body && (
+        {notification.body && (
           <div style={{
             fontSize: 12, color: "#64748b", marginTop: 3, lineHeight: 1.5,
             overflow: "hidden", display: "-webkit-box",
             WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any,
           }}>
-            {n.body}
+            {notification.body}
           </div>
         )}
 
@@ -422,7 +422,7 @@ const NotifItem: React.FC<{
           fontSize: 11, marginTop: 5, fontWeight: 600,
           color: isUnread ? "#3b82f6" : "#94a3b8",
         }}>
-          {relativeTime(n.created_at)}
+          {relativeTime(notification.created_at)}
         </div>
       </div>
 
@@ -491,12 +491,12 @@ const Header: React.FC<HeaderProps> = ({
 
   // ── Unread count ───────────────────────────────────────────────────────────
   const refreshUnread = useCallback(async () => {
-    const uid = localStorage.getItem("session_user_id");
-    if (!uid) { setUnreadNotifications(0); return; }
+    const userId = localStorage.getItem("session_user_id");
+    if (!userId) { setUnreadNotifications(0); return; }
     const { count, error } = await supabase
       .from("app_notifications")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", uid)
+      .eq("user_id", userId)
       .is("read_at", null);
     if (error) setUnreadNotifications(0);
     else if (count !== null) setUnreadNotifications(count);
@@ -504,11 +504,11 @@ const Header: React.FC<HeaderProps> = ({
 
   useEffect(() => {
     refreshUnread();
-    const onEvt = () => refreshUnread();
-    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onEvt);
-    const t = setInterval(refreshUnread, 30000);
-    const uid = localStorage.getItem("session_user_id")?.trim();
-    const channel = uid
+    const handleNotificationsChanged = () => refreshUnread();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+    const refreshIntervalId = setInterval(refreshUnread, 30000);
+    const userId = localStorage.getItem("session_user_id")?.trim();
+    const realtimeChannel = userId
       ? supabase
           .channel("notif-badge-header")
           .on(
@@ -517,7 +517,7 @@ const Header: React.FC<HeaderProps> = ({
               event: "*",
               schema: "public",
               table: "app_notifications",
-              filter: `user_id=eq.${uid}`,
+              filter: `user_id=eq.${userId}`,
             },
             () => {
               refreshUnread();
@@ -526,32 +526,32 @@ const Header: React.FC<HeaderProps> = ({
           .subscribe()
       : null;
     return () => {
-      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onEvt);
-      clearInterval(t);
-      if (channel) void supabase.removeChannel(channel);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+      clearInterval(refreshIntervalId);
+      if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
     };
   }, [refreshUnread]);
 
   // ── Browser / OS push for new in-app notification rows ───────────────────────
   useEffect(() => {
     if (!onNotificationNavigate) return;
-    const uid = localStorage.getItem("session_user_id")?.trim();
-    if (!uid) return;
+    const userId = localStorage.getItem("session_user_id")?.trim();
+    if (!userId) return;
 
-    const channel = supabase
-      .channel(`browser_push_${uid}_${Date.now()}`)
+    const browserPushChannel = supabase
+      .channel(`browser_push_${userId}_${Date.now()}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "app_notifications",
-          filter: `user_id=eq.${uid}`,
+          filter: `user_id=eq.${userId}`,
         },
         (payload: { new?: Record<string, unknown> }) => {
           const row = payload.new;
           if (!row || typeof row !== "object") return;
-          if (!isNotificationOwnedByUser(row.user_id, uid)) return;
+          if (!isNotificationOwnedByUser(row.user_id, userId)) return;
           const type = typeof row.type === "string" ? row.type : "";
           if (!shouldShowBrowserPushForRole(type, userRole)) return;
           const title = typeof row.title === "string" ? row.title : "Notification";
@@ -563,14 +563,14 @@ const Header: React.FC<HeaderProps> = ({
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(browserPushChannel);
     };
   }, [onNotificationNavigate, userRole]);
 
   // ── Fetch notifications (with actor join) ──────────────────────────────────
   const fetchNotifications = useCallback(async () => {
-    const uid = localStorage.getItem("session_user_id")?.trim();
-    if (!uid) {
+    const userId = localStorage.getItem("session_user_id")?.trim();
+    if (!userId) {
       setNotifs([]);
       return;
     }
@@ -584,7 +584,7 @@ const Header: React.FC<HeaderProps> = ({
     const withActorRes = await supabase
       .from("app_notifications")
       .select(withActor)
-      .eq("user_id", uid)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(40);
     const data = withActorRes.error
@@ -594,7 +594,7 @@ const Header: React.FC<HeaderProps> = ({
             .select(
               "id, type, title, body, entity_type, entity_id, read_at, created_at"
             )
-            .eq("user_id", uid)
+            .eq("user_id", userId)
             .order("created_at", { ascending: false })
             .limit(40)
         ).data
@@ -658,13 +658,13 @@ const Header: React.FC<HeaderProps> = ({
   }, [refreshUnread]);
 
   const markAllAsRead = useCallback(async () => {
-    const uid = localStorage.getItem("session_user_id");
-    if (!uid) return;
+    const userId = localStorage.getItem("session_user_id");
+    if (!userId) return;
     setMarkingAll(true);
     await supabase
       .from("app_notifications")
       .update({ read_at: new Date().toISOString() })
-      .eq("user_id", uid)
+      .eq("user_id", userId)
       .is("read_at", null);
     setNotifs(prev => prev.map(n => n.read_at ? n : { ...n, read_at: new Date().toISOString() }));
     setUnreadNotifications(0);
@@ -892,8 +892,8 @@ const Header: React.FC<HeaderProps> = ({
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 6px 8px" }}>
                           New · {unreadList.length}
                         </div>
-                        {unreadList.map(n => (
-                          <NotifItem key={n.id} n={n} onOpen={openNotification} />
+                        {unreadList.map(notification => (
+                          <NotifItem key={notification.id} notification={notification} onOpen={openNotification} />
                         ))}
                       </>
                     )}
@@ -904,8 +904,8 @@ const Header: React.FC<HeaderProps> = ({
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", padding: "8px 6px 8px" }}>
                           Earlier
                         </div>
-                        {readList.map(n => (
-                          <NotifItem key={n.id} n={n} onOpen={openNotification} />
+                        {readList.map(notification => (
+                          <NotifItem key={notification.id} notification={notification} onOpen={openNotification} />
                         ))}
                       </>
                     )}

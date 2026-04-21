@@ -42,11 +42,11 @@ type DepartmentOption = { id: string; name: string };
 const BRAND = "#0a4c86";
 const PAGE_SIZE = 10;
 
-const getAvatarUrl = (u: UserOption): string | null => {
-  if (u.avatar_url) return u.avatar_url;
+const getAvatarUrl = (user: UserOption): string | null => {
+  if (user.avatar_url) return user.avatar_url;
   const base = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   if (!base) return null;
-  return `${base}/storage/v1/object/public/profile-avatar/${u.id}/avatar.jpg`;
+  return `${base}/storage/v1/object/public/profile-avatar/${user.id}/avatar.jpg`;
 };
 
 const initials = (name: string): string =>
@@ -70,8 +70,8 @@ function isUnassignedTicket(t: TicketRow): boolean {
 /** Shown in the Status column: unassigned tickets always read as Pending. */
 function displayTicketRowStatus(t: TicketRow): string {
   if (isUnassignedTicket(t)) return "Pending";
-  const s = String(t.status ?? "Pending");
-  return s === "Pending" ? "Assigned" : s;
+  const status = String(t.status ?? "Pending");
+  return status === "Pending" ? "Assigned" : status;
 }
 
 function friendlyError(msg: string): string {
@@ -92,15 +92,15 @@ const statusMeta: Record<string, { bg: string; color: string; dot: string }> = {
 };
 
 const TicketStatusBadge: React.FC<{ label: string }> = ({ label }) => {
-  const s = statusMeta[label] ?? statusMeta.Pending;
+  const badgeStyle = statusMeta[label] ?? statusMeta.Pending;
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 5,
       padding: "2px 9px", borderRadius: 999, fontSize: 11,
       fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-      background: s.bg, color: s.color,
+      background: badgeStyle.bg, color: badgeStyle.color,
     }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: badgeStyle.dot, flexShrink: 0 }} />
       {label}
     </span>
   );
@@ -196,10 +196,10 @@ const TechnicianPicker: React.FC<{
     }}>
       {users.length === 0 ? (
         <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>No active technicians found.</div>
-      ) : users.map(u => {
-        const active = selected.includes(u.id);
+      ) : users.map(user => {
+        const active = selected.includes(user.id);
         return (
-          <button key={u.id} type="button" onClick={() => toggle(u.id)}
+          <button key={user.id} type="button" onClick={() => toggle(user.id)}
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
@@ -220,7 +220,7 @@ const TechnicianPicker: React.FC<{
               )}
             </span>
             <span
-              title={u.full_name}
+              title={user.full_name}
               style={{
                 width: 24,
                 height: 24,
@@ -237,10 +237,10 @@ const TechnicianPicker: React.FC<{
                 flexShrink: 0,
               }}
             >
-              {getAvatarUrl(u) ? (
+              {getAvatarUrl(user) ? (
                 <img
-                  src={getAvatarUrl(u) ?? ""}
-                  alt={u.full_name}
+                  src={getAvatarUrl(user) ?? ""}
+                  alt={user.full_name}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -249,12 +249,12 @@ const TechnicianPicker: React.FC<{
                   }}
                 />
               ) : null}
-              <span style={{ display: getAvatarUrl(u) ? "none" : "inline" }}>{initials(u.full_name)}</span>
+              <span style={{ display: getAvatarUrl(user) ? "none" : "inline" }}>{initials(user.full_name)}</span>
             </span>
             <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? BRAND : "#374151", fontFamily: "'Poppins', sans-serif" }}>
-              {u.full_name}
+              {user.full_name}
             </span>
-            <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{u.role}</span>
+            <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{user.role}</span>
           </button>
         );
       })}
@@ -271,16 +271,16 @@ const TechnicianAvatarStack: React.FC<{
     return <span style={{ color: "#cbd5e1" }}>—</span>;
 
   const users = ids.map(id => userMap[id]).filter(Boolean) as UserOption[];
-  const shown = users.slice(0, compact ? 3 : 5);
-  const extra = users.length - shown.length;
+  const shownUsers = users.slice(0, compact ? 3 : 5);
+  const extra = users.length - shownUsers.length;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: compact ? "nowrap" : "wrap" }}>
       <div style={{ display: "flex", alignItems: "center", marginRight: 2 }}>
-        {shown.map((u, i) => (
+        {shownUsers.map((user, i) => (
           <span
-            key={u.id}
-            title={u.full_name}
+            key={user.id}
+            title={user.full_name}
             style={{
               width: 24,
               height: 24,
@@ -298,10 +298,10 @@ const TechnicianAvatarStack: React.FC<{
               boxShadow: "0 0 0 1px #cbd5e1",
             }}
           >
-            {getAvatarUrl(u) ? (
+            {getAvatarUrl(user) ? (
               <img
-                src={getAvatarUrl(u) ?? ""}
-                alt={u.full_name}
+                src={getAvatarUrl(user) ?? ""}
+                alt={user.full_name}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -310,11 +310,11 @@ const TechnicianAvatarStack: React.FC<{
                 }}
               />
             ) : null}
-            <span style={{ display: getAvatarUrl(u) ? "none" : "inline" }}>{initials(u.full_name)}</span>
+            <span style={{ display: getAvatarUrl(user) ? "none" : "inline" }}>{initials(user.full_name)}</span>
           </span>
         ))}
       </div>
-      {shown[0] && (
+      {shownUsers[0] && (
         <span
           style={{
             fontSize: 12,
@@ -325,9 +325,9 @@ const TechnicianAvatarStack: React.FC<{
             overflow: "hidden",
             textOverflow: "ellipsis",
           }}
-          title={shown[0].full_name}
+          title={shownUsers[0].full_name}
         >
-          {shown[0].full_name}
+          {shownUsers[0].full_name}
         </span>
       )}
       {extra > 0 && (
@@ -363,15 +363,15 @@ const Repairs: React.FC = () => {
   };
 
   const userMap = useMemo(() => {
-    const m: Record<string, UserOption> = {};
-    users.forEach(u => { m[u.id] = u; });
-    return m;
+    const userById: Record<string, UserOption> = {};
+    users.forEach(user => { userById[user.id] = user; });
+    return userById;
   }, [users]);
 
   const deptMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    departments.forEach(d => { m[d.id] = d.name; });
-    return m;
+    const departmentNameById: Record<string, string> = {};
+    departments.forEach(department => { departmentNameById[department.id] = department.name; });
+    return departmentNameById;
   }, [departments]);
 
   const fetchTickets = useCallback(async () => {
@@ -400,7 +400,7 @@ const Repairs: React.FC = () => {
   }, [sortField, sortDir]);
 
   const fetchUsersAndDepts = useCallback(async () => {
-    const [{ data: ua }, { data: depts }] = await Promise.all([
+    const [{ data: technicianUsers }, { data: departmentRows }] = await Promise.all([
       supabase
         .from("user_accounts")
         .select("id, full_name, role, avatar_url")
@@ -410,15 +410,15 @@ const Repairs: React.FC = () => {
         .order("full_name"),
       supabase.from("departments").select("id, name").eq("is_archived", false).order("name"),
     ]);
-    setUsers((ua ?? []) as UserOption[]);
-    setDepartments((depts ?? []) as DepartmentOption[]);
+    setUsers((technicianUsers ?? []) as UserOption[]);
+    setDepartments((departmentRows ?? []) as DepartmentOption[]);
   }, []);
 
   useEffect(() => { void fetchTickets(); }, [fetchTickets]);
   useEffect(() => { void fetchUsersAndDepts(); }, [fetchUsersAndDepts]);
 
   useEffect(() => {
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel("repairs_file_reports_queue")
       .on(
         "postgres_changes",
@@ -426,7 +426,7 @@ const Repairs: React.FC = () => {
         () => { void fetchTickets(); }
       )
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { void supabase.removeChannel(realtimeChannel); };
   }, [fetchTickets]);
 
   const ticketsWithNames = useMemo(() =>
@@ -439,17 +439,17 @@ const Repairs: React.FC = () => {
   [tickets, userMap]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
     return ticketsWithNames.filter(t => {
       const displayStatus = displayTicketRowStatus(t);
-      const matchSearch = !q || [
+      const matchSearch = !query || [
         t.ticket_number ?? "",
         t.title,
         t.employee_name,
         t.issue_type,
         ...(t.technician_names ?? []),
         deptMap[t.department_id] ?? "",
-      ].some(v => String(v).toLowerCase().includes(q));
+      ].some(v => String(v).toLowerCase().includes(query));
 
       const matchStatus =
         filterStatus === "All"

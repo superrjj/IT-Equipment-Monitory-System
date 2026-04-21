@@ -25,7 +25,7 @@ const RepairHistoryTechnician: React.FC = () => {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const run = async () => {
+    const loadRepairHistory = async () => {
       if (!userId) {
         setRows([]);
         setLoading(false);
@@ -45,31 +45,31 @@ const RepairHistoryTechnician: React.FC = () => {
       if (error) setRows([]);
       else {
         setRows(
-          (data ?? []).map((r: any) => ({
-            id: r.id,
-            problem: r.problem,
-            action_taken: r.action_taken,
-            completed_at: r.completed_at,
-            started_at: r.started_at,
-            ticket_number: r.file_reports?.ticket_number ?? null,
-            ticket_title: r.file_reports?.title ?? null,
+          (data ?? []).map((repairRow: any) => ({
+            id: repairRow.id,
+            problem: repairRow.problem,
+            action_taken: repairRow.action_taken,
+            completed_at: repairRow.completed_at,
+            started_at: repairRow.started_at,
+            ticket_number: repairRow.file_reports?.ticket_number ?? null,
+            ticket_title: repairRow.file_reports?.title ?? null,
           }))
         );
       }
       setLoading(false);
     };
-    run();
+    loadRepairHistory();
   }, [userId]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r =>
-      [r.ticket_number, r.ticket_title, r.problem, r.action_taken]
+    const query = search.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter(repairRow =>
+      [repairRow.ticket_number, repairRow.ticket_title, repairRow.problem, repairRow.action_taken]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(q)
+        .includes(query)
     );
   }, [rows, search]);
 
@@ -130,18 +130,18 @@ const RepairHistoryTechnician: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              filtered.map(r => (
-                <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+              filtered.map(repairRow => (
+                <tr key={repairRow.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: BRAND }}>
-                    {r.ticket_number ?? "—"}
-                    <div style={{ fontSize: 11, fontWeight: 400, color: "#64748b" }}>{r.ticket_title}</div>
+                    {repairRow.ticket_number ?? "—"}
+                    <div style={{ fontSize: 11, fontWeight: 400, color: "#64748b" }}>{repairRow.ticket_title}</div>
                   </td>
-                  <td style={{ padding: "0.75rem 1rem", maxWidth: 200 }}>{r.problem ?? "—"}</td>
+                  <td style={{ padding: "0.75rem 1rem", maxWidth: 200 }}>{repairRow.problem ?? "—"}</td>
                   <td style={{ padding: "0.75rem 1rem", whiteSpace: "nowrap", color: "#64748b" }}>
                     <CheckCircle size={14} color="#16a34a" style={{ verticalAlign: "middle", marginRight: 6 }} />
-                    {fmtDate(r.completed_at)}
+                    {fmtDate(repairRow.completed_at)}
                   </td>
-                  <td style={{ padding: "0.75rem 1rem", color: "#374151", maxWidth: 280 }}>{r.action_taken || "—"}</td>
+                  <td style={{ padding: "0.75rem 1rem", color: "#374151", maxWidth: 280 }}>{repairRow.action_taken || "—"}</td>
                 </tr>
               ))
             )}

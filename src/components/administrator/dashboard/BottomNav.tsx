@@ -94,17 +94,17 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
   const primaryLabels = isTechnician ? technicianPrimaryLabels : adminPrimaryLabels;
 
   const allItems = useMemo(
-    () => menuSections.flatMap(s => s.items),
+    () => menuSections.flatMap(section => section.items),
     [menuSections]
   );
 
   const drawerSections = useMemo(
     () => menuSections
-      .map(s => ({
-        ...s,
-        items: s.items.filter(item => !primaryLabels.slice(0, 4).includes(item.label)),
+      .map(section => ({
+        ...section,
+        items: section.items.filter(item => !primaryLabels.slice(0, 4).includes(item.label)),
       }))
-      .filter(s => s.items.length > 0),
+      .filter(section => section.items.length > 0),
     [menuSections, primaryLabels]
   );
 
@@ -113,13 +113,13 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
 
   useEffect(() => {
     if (!drawerOpen) return;
-    const handler = (e: MouseEvent) => {
+    const handleOutsideClick = (e: MouseEvent) => {
       if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
         setDrawerOpen(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [drawerOpen]);
 
   const handleNav = (label: string) => {
@@ -384,8 +384,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
           </button>
         </div>
 
-        {drawerSections.map((section, idx) => (
-          <div key={idx}>
+        {drawerSections.map((section, sectionIndex) => (
+          <div key={sectionIndex}>
             {section.heading && (
               <div className="bnav-drawer-heading">{section.heading}</div>
             )}
@@ -403,7 +403,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeLabel, onNavigate, userRole
                 </button>
               );
             })}
-            {idx < drawerSections.length - 1 && <div className="bnav-drawer-divider" />}
+            {sectionIndex < drawerSections.length - 1 && <div className="bnav-drawer-divider" />}
           </div>
         ))}
       </div>

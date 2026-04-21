@@ -336,20 +336,20 @@ const pieSlicePercentPlugin: Plugin<"pie"> = {
   id: "pieSlicePercentLabels",
   afterDatasetsDraw(chart) {
     const ctx = chart.ctx;
-    const ds = chart.data.datasets[0];
-    const data = (ds?.data ?? []) as number[];
-    const total = data.reduce((a, b) => a + (Number(b) || 0), 0);
+    const dataset = chart.data.datasets[0];
+    const datasetValues = (dataset?.data ?? []) as number[];
+    const total = datasetValues.reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (total <= 0) return;
 
     const meta = chart.getDatasetMeta(0);
     meta.data.forEach((element: unknown, i: number) => {
-      const raw = Number(data[i]) || 0;
-      if (raw <= 0) return;
-      const pct = Math.round((raw / total) * 100);
-      const arc = element as { tooltipPosition?: () => { x: number; y: number } };
-      if (typeof arc.tooltipPosition !== "function") return;
-      const { x, y } = arc.tooltipPosition();
-      const label = `${pct}%`;
+      const sliceValue = Number(datasetValues[i]) || 0;
+      if (sliceValue <= 0) return;
+      const percent = Math.round((sliceValue / total) * 100);
+      const arcElement = element as { tooltipPosition?: () => { x: number; y: number } };
+      if (typeof arcElement.tooltipPosition !== "function") return;
+      const { x, y } = arcElement.tooltipPosition();
+      const label = `${percent}%`;
       ctx.save();
       ctx.font = "bold 13px 'DM Sans', system-ui, sans-serif";
       ctx.textAlign = "center";
@@ -902,10 +902,10 @@ const TechnicianDashboardHome: React.FC = () => {
 
     try {
       const [
-        { data: myTix,     error: e1 },
-        { data: allTix,    error: e2 },
-        { data: techs,     error: e3 },
-        { data: feedbacks, error: e4 },
+        { data: myAssignedTickets, error: myTicketsError },
+        { data: allTickets,       error: allTicketsError },
+        { data: technicians,      error: techniciansError },
+        { data: ticketFeedbacks,  error: feedbacksError },
       ] = await Promise.all([
         supabase.from("file_reports").select("id, status, date_submitted").contains("assigned_to", [userId]),
         supabase.from("file_reports").select("id, status, assigned_to, date_submitted"),
@@ -918,25 +918,25 @@ const TechnicianDashboardHome: React.FC = () => {
         supabase.from("ticket_feedback").select("report_id, rating"),
       ]);
 
-      if (e1) console.error("myTix query error:", e1);
-      if (e2) console.error("allTix query error:", e2);
-      if (e3) console.error("techs query error:", e3);
-      if (e4) console.error("feedbacks query error:", e4);
+      if (myTicketsError) console.error("myAssignedTickets query error:", myTicketsError);
+      if (allTicketsError) console.error("allTickets query error:", allTicketsError);
+      if (techniciansError) console.error("technicians query error:", techniciansError);
+      if (feedbacksError) console.error("ticketFeedbacks query error:", feedbacksError);
 
-      const feedbackList      = feedbacks ?? [];
+      const feedbackList = ticketFeedbacks ?? [];
 
-      const t = myTix ?? [];
-      setMyTickets(t);
+      const assignedTickets = myAssignedTickets ?? [];
+      setMyTickets(assignedTickets);
       setTickets({
-        total:    t.length,
-        assigned: t.filter((x: any) => x.status === "Assigned").length,
-        inProg:   t.filter((x: any) => x.status === "In Progress").length,
-        resolved: t.filter((x: any) => x.status === "Resolved").length,
+        total:    assignedTickets.length,
+        assigned: assignedTickets.filter((ticketRow: any) => ticketRow.status === "Assigned").length,
+        inProg:   assignedTickets.filter((ticketRow: any) => ticketRow.status === "In Progress").length,
+        resolved: assignedTickets.filter((ticketRow: any) => ticketRow.status === "Resolved").length,
       });
 
       const techRatingsMap: Record<string, number[]> = {};
       feedbackList.forEach((fb: any) => {
-        const ticket = (allTix ?? []).find((tk: any) => String(tk.id) === String(fb.report_id));
+        const ticket = (allTickets ?? []).find((tk: any) => String(tk.id) === String(fb.report_id));
         if (!ticket) return;
         const assigned: string[] = Array.isArray(ticket.assigned_to)
           ? ticket.assigned_to.map(String)
@@ -953,10 +953,10 @@ const TechnicianDashboardHome: React.FC = () => {
         return String(assignedTo) === techId;
       };
 
-      const board: TechStat[] = (techs ?? [])
+      const board: TechStat[] = (technicians ?? [])
         .map(stampAvatar)
         .map((tech: any) => {
-          const techTickets = (allTix ?? []).filter((x: any) => isAssigned(x.assigned_to, String(tech.id)));
+          const techTickets = (allTickets ?? []).filter((ticketRow: any) => isAssigned(ticketRow.assigned_to, String(tech.id)));
           const ratings     = techRatingsMap[String(tech.id)] ?? [];
           const avgRating   = ratings.length > 0
             ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length

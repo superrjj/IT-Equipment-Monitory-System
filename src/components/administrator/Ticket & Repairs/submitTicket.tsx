@@ -69,11 +69,11 @@ const BRAND     = "#0D518C";
 const PAGE_SIZE = 6;
 const MAX_ACTIVE_TICKETS = 1;
 
-const getAvatarUrl = (u: UserOption): string | null => {
-  if (u.avatar_url) return u.avatar_url;
+const getAvatarUrl = (user: UserOption): string | null => {
+  if (user.avatar_url) return user.avatar_url;
   const base = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   if (!base) return null;
-  return `${base}/storage/v1/object/public/profile-avatar/${u.id}/avatar.jpg`;
+  return `${base}/storage/v1/object/public/profile-avatar/${user.id}/avatar.jpg`;
 };
 
 const initialsFromName = (name: string): string =>
@@ -293,16 +293,16 @@ const TechnicianPicker: React.FC<{
         <div style={{ padding: "0.5rem", fontSize: 12, color: "#94a3b8" }}>
           No active IT Technician found.
         </div>
-      ) : users.map(u => {
-        const isSelected  = selected.includes(u.id);
-        const rawCount    = loadMap[u.id] ?? 0;
+      ) : users.map(user => {
+        const isSelected  = selected.includes(user.id);
+        const rawCount    = loadMap[user.id] ?? 0;
 
         // ── FIX: subtract 1 for anyone originally on this ticket,
         //    regardless of whether they're currently checked or not.
         //    Previously this only applied when isSelected === true,
         //    so deselecting a technician instantly made them "Unavailable"
         //    because rawCount jumped back above MAX_ACTIVE_TICKETS.
-        const wasOriginallyAssigned = !!editingTicketId && originalAssigned.includes(u.id);
+        const wasOriginallyAssigned = !!editingTicketId && originalAssigned.includes(user.id);
         const activeCount = wasOriginallyAssigned
           ? Math.max(0, rawCount - 1)
           : rawCount;
@@ -311,11 +311,11 @@ const TechnicianPicker: React.FC<{
 
         return (
           <button
-            key={u.id}
+            key={user.id}
             type="button"
             disabled={isOverloaded}
-            title={isOverloaded ? `${u.full_name} has reached the max of ${MAX_ACTIVE_TICKETS} active tickets` : undefined}
-            onClick={() => !isOverloaded && toggle(u.id)}
+            title={isOverloaded ? `${user.full_name} has reached the max of ${MAX_ACTIVE_TICKETS} active tickets` : undefined}
+            onClick={() => !isOverloaded && toggle(user.id)}
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
@@ -340,7 +340,7 @@ const TechnicianPicker: React.FC<{
               )}
             </span>
             <span
-              title={u.full_name}
+              title={user.full_name}
               style={{
                 width: 24,
                 height: 24,
@@ -357,10 +357,10 @@ const TechnicianPicker: React.FC<{
                 flexShrink: 0,
               }}
             >
-              {getAvatarUrl(u) ? (
+              {getAvatarUrl(user) ? (
                 <img
-                  src={getAvatarUrl(u) ?? ""}
-                  alt={u.full_name}
+                  src={getAvatarUrl(user) ?? ""}
+                  alt={user.full_name}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -369,14 +369,14 @@ const TechnicianPicker: React.FC<{
                   }}
                 />
               ) : null}
-              <span style={{ display: getAvatarUrl(u) ? "none" : "inline" }}>{initialsFromName(u.full_name)}</span>
+              <span style={{ display: getAvatarUrl(user) ? "none" : "inline" }}>{initialsFromName(user.full_name)}</span>
             </span>
             <span style={{
               fontSize: 13, fontWeight: isSelected ? 600 : 400,
               color: isSelected ? BRAND : isOverloaded ? "#94a3b8" : "#374151",
               fontFamily: "'Poppins', sans-serif", flex: 1,
             }}>
-              {u.full_name}
+              {user.full_name}
             </span>
             {isOverloaded && (
               <span style={{
@@ -427,17 +427,17 @@ const SubmitTicket: React.FC = () => {
   };
 
   const userMap = useMemo(() => {
-    const m: Record<string, UserOption> = {};
-    itStaff.forEach(u => { m[u.id] = u; });
-    return m;
+    const userById: Record<string, UserOption> = {};
+    itStaff.forEach(user => { userById[user.id] = user; });
+    return userById;
   }, [itStaff]);
 
   const technicianLoadMap = useMemo(() => {
     const map: Record<string, number> = {};
-    reports.forEach(r => {
-      if (r.status === "Pending" || r.status === "Assigned" || r.status === "In Progress") {
-        (r.assigned_to ?? []).forEach(id => {
-          map[id] = (map[id] ?? 0) + 1;
+    reports.forEach(report => {
+      if (report.status === "Pending" || report.status === "Assigned" || report.status === "In Progress") {
+        (report.assigned_to ?? []).forEach(technicianId => {
+          map[technicianId] = (map[technicianId] ?? 0) + 1;
         });
       }
     });
@@ -473,7 +473,7 @@ const SubmitTicket: React.FC = () => {
   useEffect(() => { fetchAll(); }, []);
 
   useEffect(() => {
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel("file_reports_realtime", { config: { broadcast: { self: false } } })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "file_reports" }, (payload) => {
         const newRow = payload.new as FileReport;
@@ -503,7 +503,7 @@ const SubmitTicket: React.FC = () => {
         );
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
   useEffect(() => {
@@ -513,21 +513,21 @@ const SubmitTicket: React.FC = () => {
   }, [selected]);
 
   const reportsWithNames = useMemo(() =>
-    reports.map(r => ({
-      ...r,
-      technician_names: (r.assigned_to ?? [])
-        .map(id => userMap[id]?.full_name)
+    reports.map(report => ({
+      ...report,
+      technician_names: (report.assigned_to ?? [])
+        .map(technicianId => userMap[technicianId]?.full_name)
         .filter(Boolean) as string[],
     })),
   [reports, userMap]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
     return reportsWithNames
-      .filter(r => {
-        const matchSearch    = !q || [r.title, r.employee_name, r.issue_type, ...(r.technician_names ?? [])].some(v => v.toLowerCase().includes(q));
-        const matchIssueType = filterIssueType === "All" || r.issue_type === filterIssueType;
-        const matchStatus    = filterStatus    === "All" || r.status      === filterStatus;
+      .filter(report => {
+        const matchSearch    = !query || [report.title, report.employee_name, report.issue_type, ...(report.technician_names ?? [])].some(v => v.toLowerCase().includes(query));
+        const matchIssueType = filterIssueType === "All" || report.issue_type === filterIssueType;
+        const matchStatus    = filterStatus    === "All" || report.status      === filterStatus;
         return matchSearch && matchIssueType && matchStatus;
       })
       .sort((a, b) => {

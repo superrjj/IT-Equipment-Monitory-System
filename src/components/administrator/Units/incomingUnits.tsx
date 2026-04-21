@@ -132,7 +132,7 @@ const emptyForm = (): FormState => ({
 
 const buildMonthOptions = (rows: IncomingUnitRow[]): string[] => {
   const set = new Set<string>();
-  rows.forEach(r => { if (r.date_received) set.add(r.date_received.slice(0, 7)); });
+  rows.forEach(row => { if (row.date_received) set.add(row.date_received.slice(0, 7)); });
   return Array.from(set).sort((a, b) => b.localeCompare(a));
 };
 
@@ -184,33 +184,33 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   };
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleOutsideClick = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node))
         setExportMenuOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
   const userMap = useMemo(() => {
-    const m: Record<string, UserOption> = {};
-    itStaff.forEach(u => { m[u.id] = u; });
-    return m;
+    const userById: Record<string, UserOption> = {};
+    itStaff.forEach(user => { userById[user.id] = user; });
+    return userById;
   }, [itStaff]);
 
   const deptMap = useMemo(() => {
-    const m: Record<string, DepartmentOption> = {};
-    departments.forEach(d => { m[d.id] = d; });
-    return m;
+    const departmentById: Record<string, DepartmentOption> = {};
+    departments.forEach(department => { departmentById[department.id] = department; });
+    return departmentById;
   }, [departments]);
 
   const deptDisplayMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    departments.forEach((d) => {
-      const parentName = d.parent_id ? (deptMap[d.parent_id]?.name ?? "") : "";
-      m[d.id] = parentName ? `${parentName} - ${d.name}` : d.name;
+    const departmentLabelById: Record<string, string> = {};
+    departments.forEach((department) => {
+      const parentName = department.parent_id ? (deptMap[department.parent_id]?.name ?? "") : "";
+      departmentLabelById[department.id] = parentName ? `${parentName} - ${department.name}` : department.name;
     });
-    return m;
+    return departmentLabelById;
   }, [departments, deptMap]);
 
   const monthOptions = useMemo(() => buildMonthOptions(rows), [rows]);
@@ -242,7 +242,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   useEffect(() => { fetchAll(); }, [sortField, sortDir]);
 
   useEffect(() => {
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel("incoming_units_realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "incoming_units" }, (payload) => {
         const newRow = payload.new as IncomingUnitRow;
@@ -260,7 +260,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
         setSelected(prev => prev?.id === updated.id ? updated : prev);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
   useEffect(() => {
@@ -272,10 +272,10 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   }, [selected]);
 
   const rowsEnriched = useMemo((): EnrichedRow[] =>
-    rows.map(r => ({
-      ...r,
-      receiver_name:   r.received_by_user_id ? (userMap[r.received_by_user_id]?.full_name ?? "—") : "—",
-      department_name: r.department_id       ? (deptDisplayMap[r.department_id]            ?? "—") : "—",
+    rows.map(row => ({
+      ...row,
+      receiver_name:   row.received_by_user_id ? (userMap[row.received_by_user_id]?.full_name ?? "—") : "—",
+      department_name: row.department_id       ? (deptDisplayMap[row.department_id]            ?? "—") : "—",
     })),
     [rows, userMap, deptDisplayMap]
   );
@@ -306,11 +306,11 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
   );
 
   const filtered = useMemo((): EnrichedRow[] => {
-    const q = search.trim().toLowerCase();
-    return rowsSorted.filter(r => {
-      if (!q) return true;
-      return [r.unit_name, r.reported_by, r.contact_number ?? "", r.issue_description, r.receiver_name, r.department_name]
-        .join(" ").toLowerCase().includes(q);
+    const query = search.trim().toLowerCase();
+    return rowsSorted.filter(row => {
+      if (!query) return true;
+      return [row.unit_name, row.reported_by, row.contact_number ?? "", row.issue_description, row.receiver_name, row.department_name]
+        .join(" ").toLowerCase().includes(query);
     });
   }, [rowsSorted, search]);
 

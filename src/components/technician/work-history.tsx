@@ -26,7 +26,7 @@ const WorkHistory: React.FC = () => {
   const isAdmin  = userRole === "Administrator";
 
   const [rows, setRows]               = useState<TicketRow[]>([]);
-  const [depts, setDepts]             = useState<DeptMap>({});
+  const [departmentNameById, setDepartmentNameById] = useState<DeptMap>({});
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [selected, setSelected]       = useState<TicketRow | null>(null);
@@ -44,12 +44,12 @@ const WorkHistory: React.FC = () => {
   };
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleOutsideClick = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node))
         setExportMenuOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
   const fetchAll = async () => {
@@ -65,20 +65,20 @@ const WorkHistory: React.FC = () => {
       query = query.contains("assigned_to", [userId]);
     }
 
-    const [{ data: tix, error }, { data: dlist }] = await Promise.all([
+    const [{ data: tickets, error }, { data: departmentRows }] = await Promise.all([
       query,
       supabase.from("departments").select("id, name"),
     ]);
 
     if (error) { showToast(error.message, "error"); setRows([]); }
-    else setRows((tix ?? []).map((r: any) => ({
-      ...r,
-      assigned_to: Array.isArray(r.assigned_to) ? r.assigned_to : [],
+    else setRows((tickets ?? []).map((ticketRow: any) => ({
+      ...ticketRow,
+      assigned_to: Array.isArray(ticketRow.assigned_to) ? ticketRow.assigned_to : [],
     })));
 
     const dm: DeptMap = {};
-    (dlist ?? []).forEach((d: any) => { dm[d.id] = d.name; });
-    setDepts(dm);
+    (departmentRows ?? []).forEach((department: any) => { dm[department.id] = department.name; });
+    setDepartmentNameById(dm);
     setLoading(false);
   };
 
@@ -86,11 +86,11 @@ const WorkHistory: React.FC = () => {
 
   useEffect(() => {
     const key = isAdmin ? "work_history_admin" : `work_history_${userId}`;
-    const ch  = supabase.channel(key)
+    const realtimeChannel  = supabase.channel(key)
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" },  () => void fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" },   () => void fetchAll())
       .subscribe();
-    return () => { void supabase.removeChannel(ch); };
+    return () => { void supabase.removeChannel(realtimeChannel); };
   }, [userId, isAdmin]);
 
   const availableMonths = useMemo(() => {
@@ -102,10 +102,10 @@ const WorkHistory: React.FC = () => {
   const resolvedMonthFilter = exportMonth || null;
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
     return rows.filter(r => {
-      const matchSearch = !q || [r.title, r.employee_name, r.ticket_number ?? "", r.issue_type]
-        .join(" ").toLowerCase().includes(q);
+      const matchSearch = !query || [r.title, r.employee_name, r.ticket_number ?? "", r.issue_type]
+        .join(" ").toLowerCase().includes(query);
       const matchMonth = selectedMonth === "All" || getMonthYear(r.completed_at) === selectedMonth;
       return matchSearch && matchMonth;
     });
@@ -116,7 +116,7 @@ const WorkHistory: React.FC = () => {
     if (rows.length === 0) { showToast("No records to export.", "error"); return; }
     setExporting("excel");
     try {
-      exportToExcel(rows, depts, resolvedMonthFilter ? [resolvedMonthFilter] : []);
+      exportToExcel(rows, departmentNameById, resolvedMonthFilter ? [resolvedMonthFilter] : []);
       showToast(resolvedMonthFilter ? `Excel exported for ${resolvedMonthFilter}.` : "Excel file downloaded!", "success");
     } catch {
       showToast("Failed to export Excel.", "error");
@@ -130,7 +130,7 @@ const WorkHistory: React.FC = () => {
     if (rows.length === 0) { showToast("No records to export.", "error"); return; }
     setExporting("word");
     try {
-      await exportToWord(rows, depts, resolvedMonthFilter ? [resolvedMonthFilter] : []);
+      await exportToWord(rows, departmentNameById, resolvedMonthFilter ? [resolvedMonthFilter] : []);
       showToast(resolvedMonthFilter ? `Word exported for ${resolvedMonthFilter}.` : "Word document downloaded!", "success");
     } catch {
       showToast("Failed to export Word document.", "error");
@@ -381,7 +381,7 @@ const WorkHistory: React.FC = () => {
                       </td>
                       <td style={{ padding: "0.75rem 1rem", maxWidth: 200 }}>{r.title}</td>
                       <td style={{ padding: "0.75rem 1rem", color: "#475569" }}>{r.employee_name}</td>
-                      <td style={{ padding: "0.75rem 1rem", fontSize: 12 }}>{depts[r.department_id] ?? "—"}</td>
+                      <td style={{ padding: "0.75rem 1rem", fontSize: 12 }}>{departmentNameById[r.department_id] ?? "—"}</td>
                       <td style={{ padding: "0.75rem 1rem", fontSize: 12, color: "#475569" }}>{r.issue_type}</td>
                       <td style={{ padding: "0.75rem 1rem", color: "#059669", fontWeight: 500, whiteSpace: "nowrap" }}>
                         {fmtDate(r.completed_at)}
@@ -434,7 +434,7 @@ const WorkHistory: React.FC = () => {
               <div style={{ fontSize: 13, color: "#374151", display: "flex", flexDirection: "column", gap: 10 }}>
                 <div>
                   <User size={12} style={{ marginRight: 6, verticalAlign: "middle" }} />
-                  {selected.employee_name} · {depts[selected.department_id] ?? "—"}
+                  {selected.employee_name} · {departmentNameById[selected.department_id] ?? "—"}
                 </div>
                 <div>
                   <BadgeAlert size={12} style={{ marginRight: 6, verticalAlign: "middle" }} />

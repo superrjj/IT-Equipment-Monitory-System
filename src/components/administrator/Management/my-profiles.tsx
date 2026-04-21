@@ -9,7 +9,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { CrudAlertToast } from "@/components/ui/crud-alert-toast";
 
 const BUCKET = "profile-avatar";
-const Blue = "#0a4c86";
+const brandBlue = "#0a4c86";
 const PW_RULES = [
   { id: "len", label: "At least 8 characters", test: (p: string) => p.length >= 8 },
   { id: "upper", label: "One uppercase letter (A-Z)", test: (p: string) => /[A-Z]/.test(p) },
@@ -770,7 +770,7 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
           {/* Header */}
           <div className="pm-header">
             <div>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: Blue, letterSpacing: 1, fontFamily: '"Poppins", sans-serif' }}>
+                      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: brandBlue, letterSpacing: 1, fontFamily: '"Poppins", sans-serif' }}>
                 My Profile
               </h2>
             </div>
@@ -1021,14 +1021,14 @@ export const ProfileModal: React.FC<Props> = ({ open, onClose, onAvatarChange })
                 onMouseUp={stopDrag}
                 onMouseLeave={stopDrag}
                 onTouchStart={(e) => {
-                  const t = e.touches[0];
-                  if (!t) return;
-                  startDrag(t.clientX, t.clientY);
+                  const firstTouch = e.touches[0];
+                  if (!firstTouch) return;
+                  startDrag(firstTouch.clientX, firstTouch.clientY);
                 }}
                 onTouchMove={(e) => {
-                  const t = e.touches[0];
-                  if (!t) return;
-                  onDragMove(t.clientX, t.clientY);
+                  const firstTouch = e.touches[0];
+                  if (!firstTouch) return;
+                  onDragMove(firstTouch.clientX, firstTouch.clientY);
                 }}
                 onTouchEnd={stopDrag}
               >

@@ -232,10 +232,10 @@ function getPeriodRange(key: string): { start: Date; end: Date } {
   };
 
   useEffect(() => {
-    const run = async () => {
+    const loadActivityLog = async () => {
       setLoading(true);
       const { start, end } = getPeriodRange(period);
-      let q = supabase
+      let activityLogQuery = supabase
         .from("activity_log")
         .select(`id, action, entity_type, entity_id, meta, created_at,
           actor:user_accounts!activity_log_actor_user_id_fkey(full_name, avatar_url)`)
@@ -245,12 +245,12 @@ function getPeriodRange(key: string): { start: Date; end: Date } {
         .limit(isAdmin ? 50 : 25);
 
       if (!isAdmin && userId) {
-        q = q.eq("actor_user_id", userId);
+        activityLogQuery = activityLogQuery.eq("actor_user_id", userId);
       } else if (!isAdmin && !userId) {
         setRows([]); setLoading(false); return;
       }
 
-      const { data, error } = await q;
+      const { data, error } = await activityLogQuery;
       if (error) { console.error(error); setRows([]); setLoading(false); return; }
 
       const rawRows = (data ?? []).map((r: any) => ({
@@ -277,12 +277,12 @@ function getPeriodRange(key: string): { start: Date; end: Date } {
       setLoading(false);
     };
 
-    run();
-    const channel = supabase
+    loadActivityLog();
+    const realtimeChannel = supabase
       .channel(`activity_log_sync_${isAdmin ? "admin" : userId ?? "guest"}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, () => { void run(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, () => { void loadActivityLog(); })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { void supabase.removeChannel(realtimeChannel); };
   }, [isAdmin, userId, period]);
 
   const grouped = rows.reduce<{ label: string; items: Row[] }[]>((acc, row) => {
