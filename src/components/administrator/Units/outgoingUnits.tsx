@@ -71,15 +71,17 @@ function sanitize(val: string): string {
     .trim();
 }
 
-function validateForm(form: FormState): FieldErrors {
+function validateForm(form: FormState, mode: "add" | "edit"): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!form.date_released) {
     errors.date_released = "Release date is required.";
-  } else {
+  } else if (mode === "add") {
     const today = new Date().toISOString().slice(0, 10);
     if (form.date_released !== today)
-      errors.date_released = "Release date must be today or earlier.";
+      errors.date_released = "Release date must be today's date.";
+  } else if (Number.isNaN(Date.parse(form.date_released))) {
+    errors.date_released = "Enter a valid date.";
   }
 
   const unit = form.unit_name.trim();
@@ -363,7 +365,7 @@ const OutgoingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
 
   const handleSubmit = async () => {
-    const errors = validateForm(form);
+    const errors = validateForm(form, modalMode === "edit" ? "edit" : "add");
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setSubmitting(true);
 
@@ -805,8 +807,7 @@ const OutgoingRowSkeleton: React.FC = () => (
                   <input
                     type="date"
                     value={form.date_released}
-                    min={today}
-                    max={today}
+                    {...(modalMode === "add" ? { min: today, max: today } : {})}
                     onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={e => { setForm(f => ({ ...f, date_released: e.target.value })); clearError("date_released"); }}
                     style={{ ...inputStyle(!!fieldErrors.date_released), cursor: "pointer" }}

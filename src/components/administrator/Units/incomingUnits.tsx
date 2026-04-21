@@ -65,15 +65,17 @@ function sanitize(val: string): string {
     .trim();
 }
 
-function validateForm(form: FormState): FieldErrors {
+function validateForm(form: FormState, mode: "add" | "edit"): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!form.date_received) {
     errors.date_received = "Date received is required.";
-  } else {
+  } else if (mode === "add") {
     const today = new Date().toISOString().slice(0, 10);
     if (form.date_received !== today)
       errors.date_received = "Date received must be today's date.";
+  } else if (Number.isNaN(Date.parse(form.date_received))) {
+    errors.date_received = "Enter a valid date.";
   }
 
   const unit = form.unit_name.trim();
@@ -366,7 +368,7 @@ const IncomingUnits: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) =
     setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
 
   const handleSubmit = async () => {
-    const errors = validateForm(form);
+    const errors = validateForm(form, modalMode === "edit" ? "edit" : "add");
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setSubmitting(true);
 
@@ -805,8 +807,7 @@ const IncomingRowSkeleton: React.FC = () => (
                   <input
                     type="date"
                     value={form.date_received}
-                    min={today}
-                    max={today}
+                    {...(modalMode === "add" ? { min: today, max: today } : {})}
                     onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={e => { setForm(f => ({ ...f, date_received: e.target.value })); clearError("date_received"); }}
                     style={{ ...inputStyle(!!fieldErrors.date_received), cursor: "pointer" }}
