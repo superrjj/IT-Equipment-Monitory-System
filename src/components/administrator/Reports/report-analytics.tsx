@@ -8,6 +8,7 @@ import {
   Calendar,
   Loader,
   ChevronDown,
+  Star,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 
@@ -471,6 +472,50 @@ function displayFileReportStatus(s: string): string {
   return s === "Pending" ? "Assigned" : s;
 }
 
+/** Star row from `ticket_feedback.rating` (1–5). */
+const TicketRatingStars: React.FC<{ rating: number | null | undefined }> = ({ rating }) => {
+  const value = typeof rating === "number" && Number.isFinite(rating) ? Math.min(5, Math.max(1, Math.round(rating))) : null;
+  if (value == null) {
+    return <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>—</span>;
+  }
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 1 }} title={`${rating}/5`}>
+      {[1, 2, 3, 4, 5].map(starIndex => (
+        <Star
+          key={starIndex}
+          size={13}
+          strokeWidth={starIndex <= value ? 0 : 1.5}
+          fill={starIndex <= value ? "#f59e0b" : "none"}
+          color={starIndex <= value ? "#f59e0b" : "#cbd5e1"}
+        />
+      ))}
+    </span>
+  );
+};
+
+async function fetchRatingByReportIds(reportIds: string[]): Promise<Record<string, number>> {
+  if (reportIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("ticket_feedback")
+    .select("report_id, rating")
+    .in("report_id", reportIds);
+  if (error || !data?.length) return {};
+  const sums: Record<string, { sum: number; count: number }> = {};
+  for (const row of data as { report_id: string; rating: number }[]) {
+    const id = String(row.report_id);
+    const r = Number(row.rating);
+    if (!Number.isFinite(r)) continue;
+    if (!sums[id]) sums[id] = { sum: 0, count: 0 };
+    sums[id].sum += r;
+    sums[id].count += 1;
+  }
+  const out: Record<string, number> = {};
+  Object.entries(sums).forEach(([id, { sum, count }]) => {
+    out[id] = count > 0 ? Math.round((sum / count) * 10) / 10 : sum;
+  });
+  return out;
+}
+
 type DonutSeg = { label: string; value: number; color: string };
 
 const DonutChart: React.FC<{ segments: DonutSeg[] }> = ({ segments }) => {
@@ -590,6 +635,7 @@ const ReportAnalytics: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tickets, setTickets] = useState<FileReportRow[]>([]);
   const [deptNameById, setDeptNameById] = useState<Record<string, string>>({});
+  const [ratingByReportId, setRatingByReportId] = useState<Record<string, number>>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -614,13 +660,16 @@ const ReportAnalytics: React.FC = () => {
       reportsQuery,
     ]);
 
-    if (departmentError) { setLoadError(departmentError.message); setTickets([]); setLoading(false); return; }
-    if (reportsError) { setLoadError(reportsError.message); setTickets([]); setLoading(false); return; }
+    if (departmentError) { setLoadError(departmentError.message); setTickets([]); setRatingByReportId({}); setLoading(false); return; }
+    if (reportsError) { setLoadError(reportsError.message); setTickets([]); setRatingByReportId({}); setLoading(false); return; }
 
     const departmentNameById: Record<string, string> = {};
     (departments ?? []).forEach((dept: { id: string; name: string }) => { departmentNameById[dept.id] = dept.name; });
     setDeptNameById(departmentNameById);
-    setTickets((reports ?? []) as FileReportRow[]);
+    const reportList = (reports ?? []) as FileReportRow[];
+    setTickets(reportList);
+    const recentIds = reportList.slice(0, 8).map(t => t.id);
+    setRatingByReportId(recentIds.length > 0 ? await fetchRatingByReportIds(recentIds) : {});
     setLoading(false);
   }, [activePeriod]);
 
@@ -631,6 +680,7 @@ const ReportAnalytics: React.FC = () => {
       .channel(`report_analytics_sync_${activePeriod}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "file_reports" }, () => { void fetchData(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => { void fetchData(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ticket_feedback" }, () => { void fetchData(); })
       .subscribe();
     return () => { void supabase.removeChannel(realtimeChannel); };
   }, [activePeriod, fetchData]);
@@ -721,8 +771,9 @@ const ReportAnalytics: React.FC = () => {
       dept: deptNameById[t.department_id] ?? "—",
       status: t.status,
       date: fmtTableDate(t.date_submitted),
+      rating: ratingByReportId[t.id],
     }));
-  }, [tickets, deptNameById]);
+  }, [tickets, deptNameById, ratingByReportId]);
 
   const Skeleton: React.FC<{
   width?: string | number; height?: number; radius?: number;
@@ -765,6 +816,7 @@ const TableRowSkeletonRA: React.FC = () => (
     <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width="85%" height={12} radius={4} /></td>
     <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width="70%" height={12} radius={4} /></td>
     <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width={70} height={22} radius={999} /></td>
+    <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width={72} height={12} radius={4} /></td>
     <td style={{ padding: "0.6rem 1.2rem" }}><Skeleton width={80} height={11} radius={4} /></td>
   </tr>
 );
@@ -826,7 +878,7 @@ const TableRowSkeletonRA: React.FC = () => (
                 <table className="ra-table">
                   <thead>
                     <tr style={{ background: "#f0f5fb", borderBottom: "1px solid #dde6f0" }}>
-                      {["Ticket ID","Title","Department","Status","Date"].map(h => (
+                      {["Ticket ID", "Title", "Department", "Status", "Rating", "Date"].map(h => (
                         <th key={h}>{h}</th>
                       ))}
                     </tr>
@@ -923,7 +975,7 @@ const TableRowSkeletonRA: React.FC = () => (
                 <table className="ra-table">
                   <thead>
                     <tr>
-                      {["Ticket ID", "Title", "Department", "Status", "Date"].map(h => (
+                      {["Ticket ID", "Title", "Department", "Status", "Rating", "Date"].map(h => (
                         <th key={h}>{h}</th>
                       ))}
                     </tr>
@@ -931,7 +983,7 @@ const TableRowSkeletonRA: React.FC = () => (
                   <tbody>
                     {recentTickets.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>
+                        <td colSpan={6} style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>
                           No tickets in this period.
                         </td>
                       </tr>
@@ -945,6 +997,9 @@ const TableRowSkeletonRA: React.FC = () => (
                             <td style={{ color: "#6b7280" }}>{t.dept}</td>
                             <td>
                               <span className="ra-badge" style={{ background: bg, color }}>{displayFileReportStatus(t.status)}</span>
+                            </td>
+                            <td style={{ verticalAlign: "middle" }}>
+                              <TicketRatingStars rating={t.rating} />
                             </td>
                             <td style={{ color: "#94a3b8", fontSize: 12 }}>{t.date}</td>
                           </tr>

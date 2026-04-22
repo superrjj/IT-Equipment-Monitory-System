@@ -19,10 +19,11 @@ import ActivityLogPanel from "../../technician/activity-log-panel";
 import UserShell from "../../user/UserShell.tsx";
 import WorkHistory from "../../technician/work-history";
 import {
-  Ticket, Clock, CircleArrowDown,
+  Ticket, CircleArrowDown,
   CircleArrowUp, TrendingUp, Activity,
-  BarChart3, AlertTriangle, RefreshCw, ArrowUpRight, Trophy, Star,
+  BarChart3, AlertTriangle, RefreshCw, Trophy, Star,
   Wifi, KeyRound, HardDrive, Wrench, Users,
+  Timer, CheckCircle2,
 } from "lucide-react";
 
 // ── Shared card style — matches header exactly ────────────────────────────────
@@ -72,56 +73,111 @@ function isAssigned(assignedTo: any, techId: string): boolean {
   return String(assignedTo) === String(techId);
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
+/** Link / accent — matches reference KPI row (blue action text). */
+const KPI_LINK_COLOR = "#2563eb";
+
+// ── KPI Card (reference layout: tinted icon tile, label + value, sub, divider, “View … →”) ──
 const KPI: React.FC<{
   label: string;
   value: number | string;
   sub?: string;
   icon: React.ReactNode;
-  accent: string;
+  iconBg: string;
+  iconColor: string;
   delay?: number;
+  linkText?: string;
   onClick?: () => void;
-}> = ({ label, value, sub, accent, delay = 0, onClick }) => {
+}> = ({ label, value, sub, icon, iconBg, iconColor, delay = 0, linkText, onClick }) => {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
   }, [delay]);
 
+  const showLink = Boolean(linkText && onClick);
+  const displayValue = visible ? value : typeof value === "number" ? 0 : "—";
+
   return (
     <div
-      onClick={onClick}
       style={{
-        ...CARD,
         background: "#ffffff",
-        border: "1px solid #edf2f7",
-        display: "flex", flexDirection: "column", gap: "0.7rem",
-        position: "relative", overflow: "hidden",
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(14px)",
-        transition: `opacity 0.45s ease ${delay}ms, transform 0.45s ease ${delay}ms`,
-        boxShadow: "0 1px 6px rgba(15,23,42,0.05)",
-        cursor: onClick ? "pointer" : "default",
-        padding: "1.15rem 1.15rem 1rem",
+        border: "1px solid #e5e7eb",
         borderRadius: 12,
+        padding: "1rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: `opacity 0.4s ease ${delay}ms, transform 0.4s ease ${delay}ms`,
+        boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
       }}
     >
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: "12px 12px 0 0" }} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-          {label}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: sub ? 8 : 4 }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            flexShrink: 0,
+            background: iconBg,
+            color: iconColor,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {icon}
         </div>
-        {onClick && (
-          <ArrowUpRight size={14} color="#cbd5e1" />
-        )}
-      </div>
-      <div>
-        <div style={{ fontSize: 42, fontWeight: 800, color: "#0a3f74", lineHeight: 1, letterSpacing: "-1.2px", fontFamily: "'DM Sans', sans-serif" }}>
-          {visible ? value : typeof value === "number" ? 0 : "—"}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "#6b7280", lineHeight: 1.3 }}>{label}</div>
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 700,
+              color: "#111827",
+              lineHeight: 1.15,
+              letterSpacing: "-0.5px",
+              fontFamily: "'DM Sans', sans-serif",
+              marginTop: 2,
+            }}
+          >
+            {displayValue}
+          </div>
         </div>
-        {sub && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6, fontWeight: 600 }}>{sub}</div>}
-        <div style={{ marginTop: 10, width: "52%", height: 4, borderRadius: 999, background: `${accent}33` }} />
       </div>
+      {sub ? (
+        <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12, lineHeight: 1.4 }}>{sub}</div>
+      ) : (
+        <div style={{ marginBottom: 12 }} />
+      )}
+      {showLink && (
+        <>
+          <div style={{ height: 1, background: "#f3f4f6", marginBottom: 10 }} />
+          <button
+            type="button"
+            onClick={onClick}
+            style={{
+              alignSelf: "flex-start",
+              border: "none",
+              background: "none",
+              padding: 0,
+              margin: 0,
+              fontSize: 13,
+              fontWeight: 600,
+              color: KPI_LINK_COLOR,
+              cursor: "pointer",
+              fontFamily: "'DM Sans', sans-serif",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            {linkText}
+            <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>→</span>
+          </button>
+        </>
+      )}
     </div>
   );
 };
@@ -490,17 +546,28 @@ const Skeleton: React.FC<{
   }} />
 );
 
-// ── KPI skeleton ──────────────────────────────────────────────────────────────
+// ── KPI skeleton (matches KPI card layout) ───────────────────────────────────
 const KpiSkeleton: React.FC = () => (
-  <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: "0.7rem", position: "relative", overflow: "hidden", padding: "1.3rem 1.4rem" }}>
-    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#e2e8f0", borderRadius: "18px 18px 0 0" }} />
-    <div style={{ display: "flex", justifyContent: "space-between" }}>
-      <Skeleton width={38} height={38} radius={12} />
-      <Skeleton width={14} height={14} radius={4} />
+  <div
+    style={{
+      background: "#ffffff",
+      border: "1px solid #e5e7eb",
+      borderRadius: 12,
+      padding: "1rem",
+      display: "flex",
+      flexDirection: "column",
+    }}
+  >
+    <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
+      <Skeleton width={40} height={40} radius={10} />
+      <div style={{ flex: 1 }}>
+        <Skeleton width="70%" height={12} radius={4} style={{ marginBottom: 8 }} />
+        <Skeleton width="45%" height={26} radius={6} />
+      </div>
     </div>
-    <Skeleton width="55%" height={32} radius={6} />
-    <Skeleton width="70%" height={10} radius={4} />
-    <Skeleton width="50%" height={10} radius={4} />
+    <Skeleton width="85%" height={10} radius={4} style={{ marginBottom: 12 }} />
+    <div style={{ height: 1, background: "#f3f4f6", marginBottom: 10 }} />
+    <Skeleton width={110} height={12} radius={4} />
   </div>
 );
 
@@ -924,9 +991,12 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         <Skeleton width={90} height={34} radius={10} />
       </div>
 
-      {/* KPI grid skeleton */}
-      <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
-        {[0,1,2,3,4,5].map(i => <KpiSkeleton key={i} />)}
+      {/* KPI skeleton — 5 ticket cards + 2 unit cards */}
+      <div className="dash-kpi-row-primary" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "0.85rem", marginBottom: "0.85rem" }}>
+        {[0, 1, 2, 3, 4].map(i => <KpiSkeleton key={i} />)}
+      </div>
+      <div className="dash-kpi-row-units" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.85rem", marginBottom: "1.2rem" }}>
+        {[0, 1].map(i => <KpiSkeleton key={`u-${i}`} />)}
       </div>
 
       {/* Mid row skeleton */}
@@ -963,6 +1033,15 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
 
   if (!data) return null;
 
+  const resolutionRatePct =
+    data.totalTickets > 0
+      ? Math.round((data.resolvedTickets / data.totalTickets) * 100)
+      : 0;
+  const satisfactionPct =
+    data.totalFeedbacks > 0
+      ? Math.round((data.avgFeedbackRating / 5) * 100)
+      : null;
+
   const donutData = [
     { label: "Assigned",     value: data.pendingTickets,    color: "#f59e0b" },
     { label: "In Progress", value: data.inProgressTickets, color: "#3b82f6" },
@@ -976,13 +1055,19 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
         .dash-new *, .dash-new { box-sizing: border-box; }
         .dash-new { font-family: 'DM Sans', sans-serif; }
         .refresh-btn:hover { background: #f1f5f9 !important; }
+        @media (max-width: 1280px) {
+          .dash-kpi-row-primary { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        }
         @media (max-width: 1100px) {
-          .dash-kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .dash-kpi-row-primary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .dash-kpi-row-units { grid-template-columns: 1fr !important; }
           .dash-mid-grid { grid-template-columns: 1fr !important; }
           .dash-bot-grid { grid-template-columns: 1fr !important; }
           .dash-ua-grid { grid-template-columns: 1fr !important; }
         }
-        @media (max-width: 580px) { .dash-kpi-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 580px) {
+          .dash-kpi-row-primary { grid-template-columns: 1fr !important; }
+        }
         @keyframes skShimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
       `}</style>
 
@@ -1009,21 +1094,87 @@ const DashboardHome: React.FC<{ onNavigate: (label: string) => void }> = ({ onNa
           </button>
         </div>
 
-        {/* ── KPI Grid ── */}
-        <div className="dash-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.85rem", marginBottom: "1.2rem" }}>
-          <KPI label="Total Tickets"      value={data.totalTickets}      icon={<Ticket size={17} />}          accent="#0a4c86" delay={0}   sub="All time submissions" onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="Assigned"            value={data.pendingTickets}    icon={<Clock size={17} />}           accent="#0a4c86" delay={60}  sub="38 Pending Pickup"      onClick={() => onNavigate("Submit Ticket")} />
-          <KPI label="In Progress"        value={data.inProgressTickets} icon={<Activity size={17} />}        accent="#ffd7af" delay={120} sub="Current active"        onClick={() => onNavigate("Submit Ticket")} />
+        {/* ── KPI rows (ticket row = reference design) ── */}
+        <div className="dash-kpi-row-primary" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "0.85rem", marginBottom: "0.85rem" }}>
           <KPI
-            label="Avg Feedback Rating"
-            value={data.totalFeedbacks > 0 ? `${data.avgFeedbackRating} ★` : "—"}
-            icon={<Star size={17} />}
-            accent="#0a4c86"
-            delay={180}
-            sub="98% Satisfaction"
+            label="Total Tickets"
+            value={data.totalTickets}
+            sub="All time submissions"
+            icon={<Ticket size={18} strokeWidth={2} />}
+            iconBg="#eff6ff"
+            iconColor="#1d4ed8"
+            delay={0}
+            linkText="View all tickets"
+            onClick={() => onNavigate("Submit Ticket")}
           />
-          <KPI label="Incoming Units"     value={data.incomingUnits}     icon={<CircleArrowDown size={17} />} accent="#7b8396" delay={240} sub="New Hardware batch"    onClick={() => onNavigate("Incoming Units")} />
-          <KPI label="Outgoing Units"     value={data.outgoingUnits}     icon={<CircleArrowUp size={17} />}   accent="#b91c1c" delay={300} sub="Decommissioned"    onClick={() => onNavigate("Outgoing Units")} />
+          <KPI
+            label="Assigned"
+            value={data.pendingTickets}
+            sub={`${data.pendingTickets} pending pickup`}
+            icon={<Users size={18} strokeWidth={2} />}
+            iconBg="#f0fdf4"
+            iconColor="#15803d"
+            delay={60}
+            linkText="View assigned"
+            onClick={() => onNavigate("Submit Ticket")}
+          />
+          <KPI
+            label="In Progress"
+            value={data.inProgressTickets}
+            sub="Currently active"
+            icon={<Timer size={18} strokeWidth={2} />}
+            iconBg="#fff7ed"
+            iconColor="#c2410c"
+            delay={120}
+            linkText="View in progress"
+            onClick={() => onNavigate("Submit Ticket")}
+          />
+          <KPI
+            label="Resolved"
+            value={data.resolvedTickets}
+            sub={`${resolutionRatePct}% resolution rate`}
+            icon={<CheckCircle2 size={18} strokeWidth={2} />}
+            iconBg="#ecfdf5"
+            iconColor="#15803d"
+            delay={180}
+            linkText="View resolved"
+            onClick={() => onNavigate("Work History")}
+          />
+          <KPI
+            label="Satisfaction"
+            value={satisfactionPct !== null ? `${satisfactionPct}%` : "—"}
+            sub={data.totalFeedbacks > 0 ? "Average feedback rating" : "No feedback submitted yet"}
+            icon={<Star size={18} strokeWidth={2} />}
+            iconBg="#f5f3ff"
+            iconColor="#6d28d9"
+            delay={240}
+            linkText="View feedback"
+            onClick={() => onNavigate("Reports & Analytics")}
+          />
+        </div>
+        <div className="dash-kpi-row-units" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.85rem", marginBottom: "1.2rem" }}>
+          <KPI
+            label="Incoming Units"
+            value={data.incomingUnits}
+            sub="New hardware batch"
+            icon={<CircleArrowDown size={18} strokeWidth={2} />}
+            iconBg="#f1f5f9"
+            iconColor="#475569"
+            delay={300}
+            linkText="View incoming"
+            onClick={() => onNavigate("Incoming Units")}
+          />
+          <KPI
+            label="Outgoing Units"
+            value={data.outgoingUnits}
+            sub="Released after service"
+            icon={<CircleArrowUp size={18} strokeWidth={2} />}
+            iconBg="#fef2f2"
+            iconColor="#b91c1c"
+            delay={360}
+            linkText="View outgoing"
+            onClick={() => onNavigate("Outgoing Units")}
+          />
         </div>
 
         {/* ── Leaderboard ── */}
