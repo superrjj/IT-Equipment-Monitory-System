@@ -21,6 +21,7 @@ type ProfileInfo = {
   full_name: string;
   department_id: string;
 };
+type SubmitStep = 1 | 2 | 3;
 
 const ISSUE_TYPES: IssueType[] = ["Hardware", "Software", "Internet"];
 
@@ -42,6 +43,7 @@ const UserSubmitTicket: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [highlightProblem, setHighlightProblem] = useState(false);
+  const [currentStep, setCurrentStep] = useState<SubmitStep>(1);
 
   const showToast = useCallback((msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -89,27 +91,51 @@ const UserSubmitTicket: React.FC = () => {
     void loadProfile();
   }, [showToast]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const validateProblem = () => {
     setToast(null);
     setHighlightProblem(false);
 
     if (!profile?.full_name || !profile.department_id) {
       showToast("Your account is missing employee or department information.", "error");
-      return;
+      return false;
     }
 
     const cleanTitle = title.trim();
     if (!cleanTitle) {
       showToast("Please enter the issue/problem before submitting.", "error");
       setHighlightProblem(true);
-      return;
+      return false;
     }
     if (cleanTitle.length < 5 || cleanTitle.length > 150) {
       showToast("Problem must be 5 to 150 characters.", "error");
       setHighlightProblem(true);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1 && !validateProblem()) return;
+    setCurrentStep(prev => Math.min(3, prev + 1) as SubmitStep);
+  };
+
+  const handlePrevStep = () => {
+    setCurrentStep(prev => Math.max(1, prev - 1) as SubmitStep);
+  };
+
+  const resetForm = () => {
+    setTitle("");
+    setIssueType("Hardware");
+    setToast(null);
+    setHighlightProblem(false);
+    setCurrentStep(1);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateProblem()) return;
+    const cleanTitle = title.trim();
+    if (!profile) return;
 
     setSubmitting(true);
 
@@ -128,8 +154,7 @@ const UserSubmitTicket: React.FC = () => {
 
       if (insertError) throw insertError;
 
-      setTitle("");
-      setIssueType("Hardware");
+      resetForm();
       showToast("Your ticket has been recorded. IT will review it shortly.", "success");
     } catch {
       showToast("Something went wrong while submitting your ticket. Please try again.", "error");
@@ -170,21 +195,23 @@ const UserSubmitTicket: React.FC = () => {
           display: flex;
           align-items: flex-start;
           justify-content: center;
-          padding: 0 0 1rem;
+          padding: 0.6rem 0.75rem 1rem;
         }
         .ust-backdrop {
           width: 100%;
-          max-width: 980px;
-          border-radius: 20px;
-          background: linear-gradient(145deg, rgba(10,76,134,0.06) 0%, rgba(15,23,42,0.04) 100%);
-          padding: 1rem;
+          max-width: 1120px;
+          border-radius: 16px;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 8px 28px rgba(15, 23, 42, 0.07), 0 1px 5px rgba(15, 23, 42, 0.05);
+          padding: 0;
           box-sizing: border-box;
         }
         .ust-modal {
-          background: #ffffff;
-          border-radius: 18px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 8px 24px rgba(15,23,42,0.07), 0 1px 4px rgba(15,23,42,0.04);
+          background: transparent;
+          border-radius: 16px;
+          border: none;
+          box-shadow: none;
           overflow: hidden;
           display: flex;
           flex-wrap: wrap;
@@ -195,65 +222,136 @@ const UserSubmitTicket: React.FC = () => {
           to { opacity: 1; transform: translateY(0); }
         }
         .ust-modal-left {
-          flex: 1 1 420px;
+          flex: 1 1 620px;
           min-width: 0;
-          padding: 1.5rem 1.6rem 1.4rem;
+          padding: 1.1rem 1rem 1rem;
           border-right: 1px solid #f1f5f9;
         }
         .ust-modal-right {
-          flex: 0 1 300px;
-          min-width: 260px;
-          background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-          padding: 1.5rem 1.35rem;
+          flex: 0 0 330px;
+          min-width: 300px;
+          background: #f8fafc;
+          padding: 1.05rem 1rem;
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 0.8rem;
         }
         .ust-modal-head {
-          margin-bottom: 1.15rem;
+          margin-bottom: 0.9rem;
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
         }
         .ust-modal-title {
-          font-size: 16px;
+          font-size: 33px;
           font-weight: 700;
           margin: 0;
-          letter-spacing: 0.06em;
+          letter-spacing: 0;
           color: ${BRAND};
-          text-transform: uppercase;
+          text-transform: none;
         }
         .ust-modal-sub {
           font-size: 12px;
           color: #64748b;
-          margin: 6px 0 0;
+          margin: 4px 0 0;
           line-height: 1.5;
         }
-        .ust-issue-pills {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .ust-issue-pill {
+        .ust-title-icon {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          background: #e8f0fb;
+          color: ${BRAND};
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 8px 14px;
-          border-radius: 999px;
+          justify-content: center;
+          flex-shrink: 0;
+          margin-top: 1px;
+          border: 1px solid #d8e5f8;
+        }
+        .ust-stepper {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin: 0.4rem 0 0.95rem;
+        }
+        .ust-stepper-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          color: #94a3b8;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .ust-stepper-dot {
+          width: 19px;
+          height: 19px;
+          border-radius: 50%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 10px;
+          color: #ffffff;
+          background: #cbd5e1;
+          flex-shrink: 0;
+        }
+        .ust-stepper-sep {
+          height: 1px;
+          background: #dbe3ef;
+          flex: 1;
+          min-width: 40px;
+        }
+        .ust-stepper-item--active {
+          color: #0a4c86;
+          font-weight: 700;
+        }
+        .ust-stepper-item--active .ust-stepper-dot {
+          background: ${BRAND};
+        }
+        .ust-stepper-item--completed {
+          color: #475569;
+          font-weight: 600;
+        }
+        .ust-stepper-item--completed .ust-stepper-dot {
+          background: #2563eb;
+        }
+        .ust-stepper-sep--completed {
+          background: #93c5fd;
+        }
+        .ust-issue-pills {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .ust-issue-pill {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          gap: 7px;
+          min-height: 74px;
+          padding: 8px 10px;
+          border-radius: 8px;
           border: 1.5px solid #e2e8f0;
-          background: #f8fafc;
+          background: #ffffff;
           cursor: pointer;
-          font-size: 12px;
+          font-size: 11px;
           font-family: 'Poppins', sans-serif;
           font-weight: 600;
           color: #64748b;
           transition: all 0.15s;
-          white-space: nowrap;
+          white-space: normal;
         }
         .ust-issue-pill:hover {
-          border-color: #94a3b8;
-          background: #f1f5f9;
+          border-color: #b8cbe4;
+          background: #f8fbff;
         }
         .ust-pill--hw.ust-issue-pill--active {
           border-color: #0a4c86;
-          background: rgba(10,76,134,0.08);
+          background: rgba(10,76,134,0.06);
           color: #0a4c86;
         }
         .ust-pill--sw.ust-issue-pill--active {
@@ -273,16 +371,28 @@ const UserSubmitTicket: React.FC = () => {
           padding: 0.5rem 0.75rem;
           border-radius: 8px;
           border: 1px solid #e2e8f0;
-          background: #f1f5f9;
+          background: #f8fafc;
           font-size: 13px;
           color: #475569;
+        }
+        .ust-inline-tip {
+          margin-top: 0.7rem;
+          padding: 0.45rem 0.6rem;
+          border-radius: 8px;
+          background: #eff6ff;
+          border: 1px solid #dbeafe;
+          font-size: 11px;
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          gap: 6px;
         }
         .ust-footer {
           display: flex;
           gap: 8px;
           justify-content: flex-end;
-          margin-top: 1.15rem;
-          padding-top: 1rem;
+          margin-top: 0.9rem;
+          padding-top: 0.8rem;
           border-top: 1px solid #f1f5f9;
           flex-wrap: wrap;
         }
@@ -315,9 +425,9 @@ const UserSubmitTicket: React.FC = () => {
         }
         .ust-right-card {
           background: #fff;
-          border-radius: 14px;
+          border-radius: 10px;
           border: 1px solid #e2e8f0;
-          padding: 1rem;
+          padding: 0.8rem;
           box-shadow: 0 2px 10px rgba(15,23,42,0.04);
         }
         .ust-right-title {
@@ -333,7 +443,7 @@ const UserSubmitTicket: React.FC = () => {
           display: flex;
           gap: 10px;
           margin-bottom: 10px;
-          font-size: 12px;
+          font-size: 11px;
           color: #475569;
           line-height: 1.45;
         }
@@ -356,7 +466,20 @@ const UserSubmitTicket: React.FC = () => {
           line-height: 1.55;
           padding-left: 2px;
         }
-        @media (max-width: 860px) {
+        @media (max-width: 1080px) {
+          .ust-modal-title {
+            font-size: 26px;
+          }
+          .ust-modal-left {
+            padding: 1rem 0.9rem 0.9rem;
+          }
+          .ust-modal-right {
+            flex-basis: 300px;
+            min-width: 280px;
+            padding: 0.9rem;
+          }
+        }
+        @media (max-width: 900px) {
           .ust-modal-left {
             border-right: none;
             border-bottom: 1px solid #f1f5f9;
@@ -364,6 +487,27 @@ const UserSubmitTicket: React.FC = () => {
           .ust-modal-right {
             flex: 1 1 100%;
             min-width: 0;
+          }
+        }
+        @media (max-width: 700px) {
+          .ust-modal-title {
+            font-size: 22px;
+          }
+          .ust-issue-pills {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .ust-stepper {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+          .ust-stepper-sep {
+            display: none;
+          }
+        }
+        @media (max-width: 560px) {
+          .ust-issue-pills {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
@@ -377,16 +521,27 @@ const UserSubmitTicket: React.FC = () => {
                 <div className="ust-modal">
                   <div className="ust-modal-left">
                     <div className="ust-modal-head">
-                      <Skeleton width={200} height={16} radius={6} />
-                      <Skeleton width="100%" height={12} radius={4} style={{ marginTop: 10 }} />
-                      <Skeleton width="88%" height={12} radius={4} style={{ marginTop: 8 }} />
+                      <Skeleton width={38} height={38} radius={10} />
+                      <div style={{ flex: 1 }}>
+                        <Skeleton width={200} height={16} radius={6} />
+                        <Skeleton width="100%" height={12} radius={4} style={{ marginTop: 10 }} />
+                        <Skeleton width="88%" height={12} radius={4} style={{ marginTop: 8 }} />
+                      </div>
+                    </div>
+                    <div className="ust-stepper" style={{ marginBottom: "0.85rem" }}>
+                      {[0, 1, 2].map(i => (
+                        <div className="ust-stepper-item" key={i}>
+                          <Skeleton width={17} height={17} radius={9} />
+                          <Skeleton width={74} height={10} radius={4} />
+                        </div>
+                      ))}
                     </div>
                     <div style={{ marginBottom: "0.85rem" }}>
                       <Skeleton width={72} height={12} radius={4} style={{ marginBottom: 8 }} />
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        <Skeleton width={108} height={38} radius={999} />
-                        <Skeleton width={108} height={38} radius={999} />
-                        <Skeleton width={108} height={38} radius={999} />
+                        <Skeleton width={108} height={74} radius={8} />
+                        <Skeleton width={108} height={74} radius={8} />
+                        <Skeleton width={108} height={74} radius={8} />
                       </div>
                     </div>
                     <div style={{ marginBottom: "0.85rem" }}>
@@ -443,60 +598,101 @@ const UserSubmitTicket: React.FC = () => {
                 <div className="ust-modal">
               <div className="ust-modal-left">
                 <div className="ust-modal-head">
-                  <h2 className="ust-modal-title">Submit New Ticket</h2>
-                  <p className="ust-modal-sub">
-                    Pick issue type, describe the problem. Your name and
-                    office are filled from your account.
-                  </p>
+                  <span className="ust-title-icon">
+                    <Ticket size={18} />
+                  </span>
+                  <div>
+                    <h2 className="ust-modal-title" style={{fontSize: 20, fontFamily: "'Poppins', sans-serif", letterSpacing: 1 }}>Submit New Ticket</h2>
+                    <p className="ust-modal-sub">
+                      Tell us what&apos;s happening so we can help you resolve it quickly.
+                    </p>
+                  </div>
+                </div>
+                <div className="ust-stepper" aria-label="Submission steps">
+                  <div
+                    className={`ust-stepper-item${currentStep === 1 ? " ust-stepper-item--active" : ""}${currentStep > 1 ? " ust-stepper-item--completed" : ""}`}
+                  >
+                    <span className="ust-stepper-dot">1</span>
+                    <span>Describe issue</span>
+                  </div>
+                  <span className={`ust-stepper-sep${currentStep > 1 ? " ust-stepper-sep--completed" : ""}`} />
+                  <div
+                    className={`ust-stepper-item${currentStep === 2 ? " ust-stepper-item--active" : ""}${currentStep > 2 ? " ust-stepper-item--completed" : ""}`}
+                  >
+                    <span className="ust-stepper-dot">2</span>
+                    <span>Review details</span>
+                  </div>
+                  <span className={`ust-stepper-sep${currentStep > 2 ? " ust-stepper-sep--completed" : ""}`} />
+                  <div className={`ust-stepper-item${currentStep === 3 ? " ust-stepper-item--active" : ""}`}>
+                    <span className="ust-stepper-dot">3</span>
+                    <span>Submit ticket</span>
+                  </div>
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                  <div style={{ marginBottom: "0.85rem" }}>
-                    <label style={labelStyle}>
-                      Issue type <span style={{ color: "#dc2626" }}>*</span>
-                    </label>
-                    <div className="ust-issue-pills">
-                      {ISSUE_TYPES.map(type => {
-                        const cfg = ISSUE_TYPE_CONFIG[type];
-                        const active = issueType === type;
-                        return (
-                          <button
-                            key={type}
-                            type="button"
-                            className={`ust-issue-pill ${cfg.activeClass}${active ? " ust-issue-pill--active" : ""}`}
-                            onClick={() => setIssueType(type)}
-                            disabled={submitting}
-                          >
-                            {cfg.icon}
-                            {type}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  {currentStep === 1 && (
+                    <>
+                      <div style={{ marginBottom: "0.85rem" }}>
+                        <label style={labelStyle}>
+                          Issue type <span style={{ color: "#dc2626" }}>*</span>
+                        </label>
+                        <div className="ust-issue-pills">
+                          {ISSUE_TYPES.map(type => {
+                            const cfg = ISSUE_TYPE_CONFIG[type];
+                            const active = issueType === type;
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                className={`ust-issue-pill ${cfg.activeClass}${active ? " ust-issue-pill--active" : ""}`}
+                                onClick={() => setIssueType(type)}
+                                disabled={submitting}
+                              >
+                                {cfg.icon}
+                                {type}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                  <div style={{ marginBottom: "0.85rem" }}>
-                    <label style={labelStyle}>
-                      Problem <span style={{ color: "#dc2626" }}>*</span>
-                    </label>
-                    <input
-                      value={title}
-                      onChange={e => {
-                        setTitle(e.target.value);
-                        setHighlightProblem(false);
-                      }}
-                      placeholder="Brief description of the issue"
-                      maxLength={150}
-                      disabled={submitting}
-                      style={{
-                        ...inputStyle,
-                        borderColor: highlightProblem ? "#fca5a5" : "#e2e8f0",
-                      }}
-                    />
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>{title.length}/150</span>
+                      <div style={{ marginBottom: "0.85rem" }}>
+                        <label style={labelStyle}>
+                          Problem <span style={{ color: "#dc2626" }}>*</span>
+                        </label>
+                        <input
+                          value={title}
+                          onChange={e => {
+                            setTitle(e.target.value);
+                            setHighlightProblem(false);
+                          }}
+                          placeholder="Brief description of the issue"
+                          maxLength={150}
+                          disabled={submitting}
+                          style={{
+                            ...inputStyle,
+                            borderColor: highlightProblem ? "#fca5a5" : "#e2e8f0",
+                          }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                          <span style={{ fontSize: 11, color: "#94a3b8" }}>{title.length}/150</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {currentStep !== 1 && (
+                    <div style={{ marginBottom: "0.85rem", border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc", padding: "0.85rem 0.9rem" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                        Ticket details
+                      </div>
+                      <div style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}>
+                        <strong style={{ color: "#0f172a" }}>Issue type:</strong> {issueType}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.5 }}>
+                        <strong style={{ color: "#0f172a" }}>Problem:</strong> {title.trim() || "—"}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div
                     style={{
@@ -520,24 +716,34 @@ const UserSubmitTicket: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                  <div className="ust-inline-tip">
+                    <Lightbulb size={13} color={BRAND} />
+                    Tip: Provide as much detail as possible to help our technicians resolve your issue faster.
+                  </div>
 
                   <div className="ust-footer">
                     <button
                       type="button"
                       className="ust-btn-secondary"
-                      onClick={() => {
-                        setTitle("");
-                        setIssueType("Hardware");
-                        setToast(null);
-                        setHighlightProblem(false);
-                      }}
+                      onClick={currentStep === 1 ? resetForm : handlePrevStep}
                       disabled={submitting}
                     >
-                      Clear
+                      {currentStep === 1 ? "Clear" : "Back"}
                     </button>
-                    <button type="submit" className="ust-btn-primary" disabled={submitting}>
-                      {submitting ? "Saving…" : "Submit Ticket"}
-                    </button>
+                    {currentStep < 3 ? (
+                      <button
+                        type="button"
+                        className="ust-btn-primary"
+                        disabled={submitting}
+                        onClick={handleNextStep}
+                      >
+                        {currentStep === 1 ? "Review Details" : "Proceed to Submit"}
+                      </button>
+                    ) : (
+                      <button type="submit" className="ust-btn-primary" disabled={submitting}>
+                        {submitting ? "Saving…" : "Submit Ticket"}
+                      </button>
+                    )}
                   </div>
                 </form>
               </div>
